@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm run build"
+buildCommand = "NODE_ENV=production npm ci && rm -rf .next && npm run build"
 
 [deploy]
 startCommand = "npx prisma migrate deploy && npm run start"
