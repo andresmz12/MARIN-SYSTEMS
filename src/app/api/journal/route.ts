@@ -1,0 +1,63 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const date = searchParams.get('date')
+  const month = searchParams.get('month')
+
+  const where: Record<string, unknown> = { userId: session.user.id }
+
+  if (date) {
+    where.date = {
+      gte: new Date(`${date}T00:00:00-05:00`),
+      lte: new Date(`${date}T23:59:59-05:00`),
+    }
+  } else if (month) {
+    const [year, m] = month.split('-').map(Number)
+    where.date = {
+      gte: new Date(year, m - 1, 1),
+      lte: new Date(year, m, 0, 23, 59, 59),
+    }
+  }
+
+  const entries = await prisma.journalEntry.findMany({
+    where,
+    orderBy: { date: 'desc' },
+  })
+
+  return NextResponse.json(entries)
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+  const { date, mood, content, tags } = body
+
+  if (!date || !mood || !content) {
+    return NextResponse.json({ error: 'Fecha, estado de ánimo y contenido son requeridos' }, { status: 400 })
+  }
+
+  const entryDate = new Date(`${date}T12:00:00-05:00`)
+
+  const entry = await prisma.journalEntry.upsert({
+    where: { userId_date: { userId: session.user.id, date: entryDate } },
+    update: { mood: parseInt(mood), content, tags: tags || [] },
+    create: {
+      userId: session.user.id,
+      date: entryDate,
+      mood: parseInt(mood),
+      content,
+      tags: tags || [],
+    },
+  })
+
+  return NextResponse.json(entry, { status: 201 })
+}
