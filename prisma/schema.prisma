@@ -12,6 +12,7 @@ model User {
   email            String              @unique
   passwordHash     String
   name             String
+  calendarToken    String?             @unique
   createdAt        DateTime            @default(now())
   trades           Trade[]
   habits           Habit[]
