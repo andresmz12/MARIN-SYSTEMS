@@ -221,6 +221,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {navLink('/habitos', 'Hábitos', mainNavItems[1].icon)}
           {navLink('/agenda', 'Agenda', mainNavItems[2].icon)}
           {navLink('/journal', 'Journal', mainNavItems[3].icon)}
+          {navLink('/metas', 'Metas', mainNavItems[4].icon)}
         </nav>
 
         {/* Bottom */}
