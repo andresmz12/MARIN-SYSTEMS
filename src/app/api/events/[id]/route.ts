@@ -23,6 +23,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       notes: body.notes ?? event.notes,
       isForexNews: body.isForexNews !== undefined ? Boolean(body.isForexNews) : event.isForexNews,
       forexPair: body.forexPair ?? event.forexPair,
+      completed: body.completed !== undefined ? Boolean(body.completed) : event.completed,
     },
   })
 
