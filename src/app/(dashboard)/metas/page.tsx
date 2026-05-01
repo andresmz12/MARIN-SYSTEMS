@@ -329,10 +329,7 @@ export default function MetasPage() {
       </div>
 
       {/* Create / Edit modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)}>
-        <h2 className="text-lg font-bold text-white mb-5">
-          {editGoal ? 'Editar meta' : 'Nueva meta'}
-        </h2>
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editGoal ? 'Editar meta' : 'Nueva meta'}>
         <div className="space-y-4">
           <div>
             <label className="label">Título *</label>
