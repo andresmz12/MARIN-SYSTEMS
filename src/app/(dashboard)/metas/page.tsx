@@ -7,6 +7,9 @@ interface SubGoal {
   id: string
   title: string
   completed: boolean
+  daily: boolean
+  todayDone: boolean
+  totalDays: number
 }
 
 interface Goal {
@@ -28,11 +31,11 @@ export default function MetasPage() {
   const [form, setForm] = useState(emptyGoalForm)
   const [saving, setSaving] = useState(false)
 
-  // sub-goal input per goal
   const [subInputs, setSubInputs] = useState<Record<string, string>>({})
+  const [subDailyFlags, setSubDailyFlags] = useState<Record<string, boolean>>({})
 
   async function loadGoals() {
-    const res = await fetch('/api/goals')
+    const res = await fetch('/api/goals', { cache: 'no-store' })
     if (res.ok) setGoals(await res.json())
     setLoading(false)
   }
@@ -101,12 +104,14 @@ export default function MetasPage() {
   async function addSubGoal(goalId: string) {
     const title = (subInputs[goalId] ?? '').trim()
     if (!title) return
+    const daily = subDailyFlags[goalId] ?? false
     await fetch(`/api/goals/${goalId}/subgoals`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, daily }),
     })
     setSubInputs(s => ({ ...s, [goalId]: '' }))
+    setSubDailyFlags(s => ({ ...s, [goalId]: false }))
     loadGoals()
   }
 
@@ -119,20 +124,25 @@ export default function MetasPage() {
     loadGoals()
   }
 
+  async function toggleTodayComplete(goalId: string, subId: string) {
+    await fetch(`/api/goals/${goalId}/subgoals/${subId}/complete`, { method: 'POST' })
+    loadGoals()
+  }
+
   async function deleteSubGoal(goalId: string, subId: string) {
     await fetch(`/api/goals/${goalId}/subgoals/${subId}`, { method: 'DELETE' })
     loadGoals()
   }
 
   const progress = (goal: Goal) => {
-    if (!goal.subGoals.length) return goal.completed ? 100 : 0
-    return Math.round((goal.subGoals.filter(s => s.completed).length / goal.subGoals.length) * 100)
+    const nonDaily = goal.subGoals.filter(s => !s.daily)
+    if (!nonDaily.length) return goal.completed ? 100 : 0
+    return Math.round((nonDaily.filter(s => s.completed).length / nonDaily.length) * 100)
   }
 
   const daysLeft = (deadline: string | null) => {
     if (!deadline) return null
-    const diff = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000)
-    return diff
+    return Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000)
   }
 
   if (loading) {
@@ -238,8 +248,7 @@ export default function MetasPage() {
                   )}
 
                   <div className="flex items-center gap-3 mt-2 flex-wrap">
-                    {/* Progress */}
-                    {goal.subGoals.length > 0 && (
+                    {goal.subGoals.filter(s => !s.daily).length > 0 && (
                       <div className="flex items-center gap-2 flex-1 min-w-[120px]">
                         <div className="flex-1 h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
                           <div
@@ -251,7 +260,6 @@ export default function MetasPage() {
                       </div>
                     )}
 
-                    {/* Deadline */}
                     {days !== null && (
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         days < 0
@@ -272,23 +280,52 @@ export default function MetasPage() {
                 <div className="ml-8 space-y-1.5">
                   {goal.subGoals.map(sub => (
                     <div key={sub.id} className="flex items-center gap-2 group">
-                      <button
-                        onClick={() => toggleSubGoal(goal.id, sub)}
-                        className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                          sub.completed
-                            ? 'bg-green-500 border-green-500'
-                            : 'border-gray-600 hover:border-blue-500'
-                        }`}
-                      >
-                        {sub.completed && (
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                      <span className={`text-sm flex-1 ${sub.completed ? 'line-through text-gray-600' : 'text-gray-300'}`}>
-                        {sub.title}
-                      </span>
+                      {sub.daily ? (
+                        <>
+                          {/* Daily sub-goal: today toggle + day counter */}
+                          <button
+                            onClick={() => toggleTodayComplete(goal.id, sub.id)}
+                            className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                              sub.todayDone
+                                ? 'bg-green-500 border-green-500'
+                                : 'border-gray-600 hover:border-green-500'
+                            }`}
+                          >
+                            {sub.todayDone && (
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                          <span className="text-sm flex-1 text-gray-300">{sub.title}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 flex-shrink-0">
+                            Diaria
+                          </span>
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            {sub.totalDays} {sub.totalDays === 1 ? 'día' : 'días'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => toggleSubGoal(goal.id, sub)}
+                            className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                              sub.completed
+                                ? 'bg-green-500 border-green-500'
+                                : 'border-gray-600 hover:border-blue-500'
+                            }`}
+                          >
+                            {sub.completed && (
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                          <span className={`text-sm flex-1 ${sub.completed ? 'line-through text-gray-600' : 'text-gray-300'}`}>
+                            {sub.title}
+                          </span>
+                        </>
+                      )}
                       <button
                         onClick={() => deleteSubGoal(goal.id, sub.id)}
                         className="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-600 hover:text-red-400 transition-all"
@@ -304,23 +341,34 @@ export default function MetasPage() {
 
               {/* Add sub-goal input */}
               {!goal.completed && (
-                <div className="ml-8 flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Agregar submeta..."
-                    value={subInputs[goal.id] ?? ''}
-                    onChange={e => setSubInputs(s => ({ ...s, [goal.id]: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && addSubGoal(goal.id)}
-                    className="flex-1 bg-transparent text-sm text-gray-400 placeholder-gray-600 border-b border-[#2a2a2a] focus:border-blue-500 focus:outline-none py-1 transition-colors"
-                  />
-                  <button
-                    onClick={() => addSubGoal(goal.id)}
-                    className="p-1 rounded text-gray-600 hover:text-blue-400 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </button>
+                <div className="ml-8 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Agregar submeta..."
+                      value={subInputs[goal.id] ?? ''}
+                      onChange={e => setSubInputs(s => ({ ...s, [goal.id]: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && addSubGoal(goal.id)}
+                      className="flex-1 bg-transparent text-sm text-gray-400 placeholder-gray-600 border-b border-[#2a2a2a] focus:border-blue-500 focus:outline-none py-1 transition-colors"
+                    />
+                    <button
+                      onClick={() => addSubGoal(goal.id)}
+                      className="p-1 rounded text-gray-600 hover:text-blue-400 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer w-fit">
+                    <input
+                      type="checkbox"
+                      checked={subDailyFlags[goal.id] ?? false}
+                      onChange={e => setSubDailyFlags(s => ({ ...s, [goal.id]: e.target.checked }))}
+                      className="w-3.5 h-3.5 accent-blue-500"
+                    />
+                    <span className="text-xs text-gray-500">Diaria / Recurrente</span>
+                  </label>
                 </div>
               )}
             </div>

@@ -10,11 +10,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const goal = await prisma.goal.findFirst({ where: { id: params.id, userId: session.user.id } })
   if (!goal) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
-  const { title } = await req.json()
+  const { title, daily } = await req.json()
   if (!title) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
   const subGoal = await prisma.subGoal.create({
-    data: { goalId: params.id, title },
+    data: { goalId: params.id, title, daily: Boolean(daily) },
   })
 
   return NextResponse.json(subGoal, { status: 201 })

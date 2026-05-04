@@ -133,10 +133,22 @@ model Goal {
 }
 
 model SubGoal {
+  id          String            @id @default(cuid())
+  goalId      String
+  title       String
+  completed   Boolean           @default(false)
+  daily       Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  goal        Goal              @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  completions GoalCompletion[]
+}
+
+model GoalCompletion {
   id        String   @id @default(cuid())
-  goalId    String
-  title     String
-  completed Boolean  @default(false)
+  subGoalId String
+  date      String
   createdAt DateTime @default(now())
-  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  subGoal   SubGoal  @relation(fields: [subGoalId], references: [id], onDelete: Cascade)
+
+  @@unique([subGoalId, date])
 }

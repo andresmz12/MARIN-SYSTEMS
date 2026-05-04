@@ -78,7 +78,7 @@ export default function AgendaPage() {
     const future = new Date()
     future.setDate(future.getDate() + 60)
     const to = future.toISOString().split('T')[0]
-    const res = await fetch(`/api/events?from=${from}&to=${to}`)
+    const res = await fetch(`/api/events?from=${from}&to=${to}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
   }, [weekDates[0].str])
 
