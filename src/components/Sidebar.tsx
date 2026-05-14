@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const navItems = [
   {
@@ -29,8 +29,21 @@ const tradingItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const [tradingOpen, setTradingOpen] = useState(pathname.startsWith('/trading'))
+  const [activeCompanies, setActiveCompanies] = useState<number | null>(null)
+  const [showCompanyTooltip, setShowCompanyTooltip] = useState(false)
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+
+  useEffect(() => {
+    fetch('/api/companies')
+      .then((r) => r.json())
+      .then((data: Array<{ status: string }>) => {
+        if (Array.isArray(data)) {
+          setActiveCompanies(data.filter((c) => c.status === 'activa').length)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <aside className="fixed left-0 top-0 h-full w-60 bg-[#111] border-r border-[#2a2a2a] flex flex-col z-30">
@@ -51,6 +64,44 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+
+        {/* NEGOCIOS section */}
+        <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold px-3 pt-1 pb-0.5">Negocios</p>
+
+        {/* Empresas */}
+        <div className="relative">
+          <Link
+            href="/empresas"
+            onMouseEnter={() => setShowCompanyTooltip(true)}
+            onMouseLeave={() => setShowCompanyTooltip(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              pathname.startsWith('/empresas')
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
+            }`}
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Empresas
+            {activeCompanies !== null && activeCompanies > 0 && (
+              <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-medium">
+                {activeCompanies}
+              </span>
+            )}
+          </Link>
+          {showCompanyTooltip && activeCompanies !== null && (
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg text-xs text-gray-300 whitespace-nowrap z-50 shadow-xl pointer-events-none">
+              {activeCompanies} empresa{activeCompanies !== 1 ? 's' : ''} activa{activeCompanies !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+
+        <div className="pt-2">
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold px-3 pb-0.5">Personal</p>
+        </div>
+
         {/* Dashboard */}
         <Link
           href="/dashboard"

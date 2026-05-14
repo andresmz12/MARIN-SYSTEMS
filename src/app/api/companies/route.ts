@@ -1,0 +1,44 @@
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const companies = await prisma.company.findMany({
+    where: { userId: session.user.id },
+    include: {
+      tasks: { where: { status: { not: 'completada' } }, select: { id: true, status: true, priority: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  return NextResponse.json(companies)
+}
+
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+  const { name, description, emoji, color, status, industry } = body
+
+  if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+
+  const company = await prisma.company.create({
+    data: {
+      userId: session.user.id,
+      name,
+      description: description || null,
+      emoji: emoji || '🏢',
+      color: color || '#2563eb',
+      status: status || 'activa',
+      industry: industry || null,
+    },
+    include: { tasks: true },
+  })
+
+  return NextResponse.json(company, { status: 201 })
+}

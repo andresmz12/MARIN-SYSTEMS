@@ -38,6 +38,19 @@ interface Event {
   isForexNews: boolean
 }
 
+interface UrgentTask {
+  id: string
+  title: string
+  priority: string
+  status: string
+  company: {
+    id: string
+    name: string
+    color: string
+    emoji: string
+  }
+}
+
 const MOOD_LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente']
 const MOOD_COLORS = ['', 'text-red-400', 'text-orange-400', 'text-yellow-400', 'text-green-400', 'text-emerald-400']
 
@@ -51,6 +64,7 @@ export default function DashboardPage() {
   const [habits, setHabits] = useState<Habit[]>([])
   const [completions, setCompletions] = useState<HabitCompletion[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
+  const [urgentTasks, setUrgentTasks] = useState<UrgentTask[]>([])
   const [saving, setSaving] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
@@ -62,12 +76,13 @@ export default function DashboardPage() {
   }, [])
 
   async function loadData() {
-    const [stateRes, tradesRes, habitsRes, completionsRes, eventsRes] = await Promise.all([
+    const [stateRes, tradesRes, habitsRes, completionsRes, eventsRes, companiesRes] = await Promise.all([
       fetch(`/api/daily-state?date=${today}`),
       fetch(`/api/trades?date=${today}`),
       fetch('/api/habits'),
       fetch(`/api/habits/complete?date=${today}`),
       fetch(`/api/events?from=${today}`),
+      fetch('/api/companies'),
     ])
 
     if (stateRes.ok) {
@@ -80,6 +95,18 @@ export default function DashboardPage() {
     if (eventsRes.ok) {
       const events = await eventsRes.json()
       setUpcomingEvents(events.slice(0, 5))
+    }
+    if (companiesRes.ok) {
+      const companies: Array<{ id: string; name: string; color: string; emoji: string; tasks: Array<{ id: string; title: string; priority: string; status: string }> }> = await companiesRes.json()
+      const urgent: UrgentTask[] = []
+      for (const c of companies) {
+        for (const t of c.tasks) {
+          if (t.priority === 'alta' && t.status !== 'completada') {
+            urgent.push({ id: t.id, title: t.title, priority: t.priority, status: t.status, company: { id: c.id, name: c.name, color: c.color, emoji: c.emoji } })
+          }
+        }
+      }
+      setUrgentTasks(urgent.slice(0, 6))
     }
   }
 
@@ -242,6 +269,42 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Urgent Company Tasks */}
+      {urgentTasks.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse inline-block" />
+              Tareas urgentes de empresas
+            </p>
+            <Link href="/empresas" className="text-xs text-blue-400 hover:text-blue-300">Ver empresas →</Link>
+          </div>
+          <div className="space-y-2">
+            {urgentTasks.map((task) => (
+              <Link
+                key={task.id}
+                href={`/empresas/${task.company.id}`}
+                className="flex items-center gap-3 py-1.5 hover:bg-[#1a1a1a] rounded-lg px-1 transition-colors group"
+              >
+                <div
+                  className="w-1.5 h-8 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: task.company.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-200 truncate">{task.title}</p>
+                  <p className="text-xs text-gray-600">
+                    {task.company.emoji} {task.company.name}
+                  </p>
+                </div>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 flex-shrink-0">
+                  {task.status === 'en-progreso' ? 'En progreso' : 'Pendiente'}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
