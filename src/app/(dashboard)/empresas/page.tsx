@@ -14,9 +14,15 @@ interface Company {
 interface CanvasNote {
   id: string; text: string; x: number; y: number; colorIdx: number
 }
+interface Connection {
+  id: string
+  from: string   // 'center' | company.id
+  to: string
+  label: string
+  cp?: { x: number; y: number }
+}
 
 type Positions = Record<string, { x: number; y: number }>
-type CtrlPoints = Record<string, { x: number; y: number }>
 
 const EMOJIS = ['🏢', '📊', '🧾', '🧹', '📦', '🏠', '💼', '🚀', '🌎', '💰', '🛒', '📱', '🎯', '⚡', '🔧']
 const COLORS = [
@@ -45,12 +51,15 @@ const NOTE_COLORS = [
 const POS_KEY = 'marin-empresa-positions'
 const CENTER_KEY = 'marin-center-pos'
 const NOTES_KEY = 'marin-canvas-notes'
-const LABELS_KEY = 'marin-line-labels'
-const CTRL_KEY = 'marin-line-controls'
+const CONNS_KEY = 'marin-connections'
 
 function getNodePos(index: number, total: number, cx: number, cy: number, radius: number) {
   const angle = (2 * Math.PI * index) / total - Math.PI / 2
   return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) }
+}
+
+function bezierMid(x1: number, y1: number, cpx: number, cpy: number, x2: number, y2: number) {
+  return { x: 0.25 * x1 + 0.5 * cpx + 0.25 * x2, y: 0.25 * y1 + 0.5 * cpy + 0.25 * y2 }
 }
 
 function ls<T>(key: string, fallback: T): T {
@@ -58,14 +67,6 @@ function ls<T>(key: string, fallback: T): T {
 }
 function lsSet(key: string, val: unknown) {
   try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* noop */ }
-}
-
-// Point at t=0.5 on a quadratic bezier
-function bezierMid(x1: number, y1: number, cpx: number, cpy: number, x2: number, y2: number) {
-  return {
-    x: 0.25 * x1 + 0.5 * cpx + 0.25 * x2,
-    y: 0.25 * y1 + 0.5 * cpy + 0.25 * y2,
-  }
 }
 
 export default function EmpresasPage() {
@@ -81,12 +82,17 @@ export default function EmpresasPage() {
   const [dims, setDims] = useState({ w: 800, h: 580 })
   const [positions, setPositions] = useState<Positions>({})
   const [centerPos, setCenterPos] = useState({ x: 400, y: 290 })
-  const [ctrlPoints, setCtrlPoints] = useState<CtrlPoints>({})
-  const [draggingCtrl, setDraggingCtrl] = useState<string | null>(null)
   const [canvasNotes, setCanvasNotes] = useState<CanvasNote[]>([])
-  const [lineLabels, setLineLabels] = useState<Record<string, string>>({})
-  const [editingLabel, setEditingLabel] = useState<string | null>(null)
-  const [hoveredLine, setHoveredLine] = useState<string | null>(null)
+
+  // Connection system
+  const [connections, setConnections] = useState<Connection[]>([])
+  const [connectMode, setConnectMode] = useState(false)
+  const [connectFrom, setConnectFrom] = useState<string | null>(null)
+  const [hoveredConn, setHoveredConn] = useState<string | null>(null)
+  const [editingConn, setEditingConn] = useState<string | null>(null)
+  const [draggingConnCtrl, setDraggingConnCtrl] = useState<string | null>(null)
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+
   const [form, setForm] = useState({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
   const [saving, setSaving] = useState(false)
 
@@ -97,8 +103,7 @@ export default function EmpresasPage() {
   useEffect(() => {
     loadCompanies()
     setCanvasNotes(ls<CanvasNote[]>(NOTES_KEY, []))
-    setLineLabels(ls<Record<string, string>>(LABELS_KEY, {}))
-    setCtrlPoints(ls<CtrlPoints>(CTRL_KEY, {}))
+    setConnections(ls<Connection[]>(CONNS_KEY, []))
     const onResize = () => { setIsMobile(window.innerWidth < 768); updateDims() }
     onResize()
     window.addEventListener('resize', onResize)
@@ -122,21 +127,50 @@ export default function EmpresasPage() {
     setPositions(next)
   }, [companies.length, dims.w, dims.h])
 
-  // Set default ctrl points only for companies that don't have one yet
+  // Ensure each company has a default center→company connection
   useEffect(() => {
-    if (!companies.length || !Object.keys(positions).length) return
-    setCtrlPoints((prev) => {
-      const next = { ...prev }
-      let changed = false
-      companies.forEach((c) => {
-        const pos = positions[c.id]
-        if (!pos || next[c.id]) return
-        next[c.id] = { x: (centerPos.x + pos.x) / 2, y: (centerPos.y + pos.y) / 2 }
-        changed = true
-      })
-      return changed ? next : prev
+    if (!companies.length) return
+    setConnections((prev) => {
+      const connectedIds = new Set(
+        prev.filter((c) => c.from === 'center' || c.to === 'center')
+          .map((c) => (c.from === 'center' ? c.to : c.from))
+      )
+      const toAdd = companies
+        .filter((c) => !connectedIds.has(c.id))
+        .map((c) => ({ id: `default-${c.id}`, from: 'center', to: c.id, label: '' }))
+      if (!toAdd.length) return prev
+      const next = [...prev, ...toAdd]
+      lsSet(CONNS_KEY, next)
+      return next
     })
-  }, [companies.length, positions, centerPos])
+  }, [companies.length])
+
+  // Node helpers
+  function getNodeCenter(id: string): { x: number; y: number } | null {
+    if (id === 'center') return centerPos
+    return positions[id] ?? null
+  }
+  function getNodeRadius(id: string): number {
+    return id === 'center' ? 55 : 44
+  }
+  function getNodeColor(id: string): string {
+    if (id === 'center') return '#3b82f6'
+    return companies.find((c) => c.id === id)?.color ?? '#6b7280'
+  }
+  function getConnEndpoints(conn: Connection) {
+    const from = getNodeCenter(conn.from)
+    const to = getNodeCenter(conn.to)
+    if (!from || !to) return null
+    const dx = to.x - from.x; const dy = to.y - from.y
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1
+    const nx = dx / dist; const ny = dy / dist
+    return {
+      x1: from.x + nx * getNodeRadius(conn.from),
+      y1: from.y + ny * getNodeRadius(conn.from),
+      x2: to.x - nx * getNodeRadius(conn.to),
+      y2: to.y - ny * getNodeRadius(conn.to),
+    }
+  }
 
   async function loadCompanies() {
     setLoading(true)
@@ -166,7 +200,6 @@ export default function EmpresasPage() {
   function handleNodeDragEnd(id: string, newX: number, newY: number) {
     setPositions((prev) => { const u = { ...prev, [id]: { x: newX, y: newY } }; lsSet(POS_KEY, u); return u })
   }
-
   function handleCenterDragEnd(newX: number, newY: number) {
     const pos = { x: newX, y: newY }; setCenterPos(pos); lsSet(CENTER_KEY, pos)
   }
@@ -175,18 +208,42 @@ export default function EmpresasPage() {
     const note: CanvasNote = { id: Date.now().toString(), text: '', x: centerPos.x - 80, y: centerPos.y - 60, colorIdx: 0 }
     setCanvasNotes((prev) => { const u = [...prev, note]; lsSet(NOTES_KEY, u); return u })
   }
-
   function updateNote(id: string, updates: Partial<CanvasNote>) {
     setCanvasNotes((prev) => { const u = prev.map((n) => n.id === id ? { ...n, ...updates } : n); lsSet(NOTES_KEY, u); return u })
   }
-
   function deleteNote(id: string) {
     setCanvasNotes((prev) => { const u = prev.filter((n) => n.id !== id); lsSet(NOTES_KEY, u); return u })
   }
 
-  function saveLabel(id: string, text: string) {
-    setLineLabels((prev) => { const u = { ...prev, [id]: text.trim() }; lsSet(LABELS_KEY, u); return u })
-    setEditingLabel(null)
+  // Connect mode logic
+  function handleNodeConnect(id: string) {
+    if (!connectFrom) { setConnectFrom(id); return }
+    if (connectFrom === id) { setConnectFrom(null); return }
+    // Prevent duplicate
+    const exists = connections.some(
+      (c) => (c.from === connectFrom && c.to === id) || (c.from === id && c.to === connectFrom)
+    )
+    if (exists) { showToast('Ya existe una conexión entre estos nodos', 'error'); setConnectFrom(null); return }
+    const conn: Connection = { id: Date.now().toString(), from: connectFrom, to: id, label: '' }
+    setConnections((prev) => { const next = [...prev, conn]; lsSet(CONNS_KEY, next); return next })
+    setConnectFrom(null)
+  }
+
+  function toggleConnectMode() {
+    setConnectMode((v) => !v)
+    setConnectFrom(null)
+  }
+
+  function deleteConnection(id: string) {
+    setConnections((prev) => { const next = prev.filter((c) => c.id !== id); lsSet(CONNS_KEY, next); return next })
+  }
+
+  function saveConnLabel(id: string, text: string) {
+    setConnections((prev) => {
+      const next = prev.map((c) => c.id === id ? { ...c, label: text.trim() } : c)
+      lsSet(CONNS_KEY, next); return next
+    })
+    setEditingConn(null)
   }
 
   function resetPositions() {
@@ -194,15 +251,16 @@ export default function EmpresasPage() {
     const radius = Math.min(cx - 80, cy - 80, 220)
     const next: Positions = {}
     companies.forEach((c, i) => { next[c.id] = getNodePos(i, companies.length, cx, cy, radius) })
-    setPositions(next); setCenterPos({ x: cx, y: cy }); setCtrlPoints({})
-    try {
-      localStorage.removeItem(POS_KEY)
-      localStorage.removeItem(CENTER_KEY)
-      localStorage.removeItem(CTRL_KEY)
-    } catch { /* noop */ }
+    setPositions(next); setCenterPos({ x: cx, y: cy })
+    // Reset connection ctrl points
+    setConnections((prev) => {
+      const r = prev.map((c) => { const { cp: _cp, ...rest } = c; return rest })
+      lsSet(CONNS_KEY, r); return r
+    })
+    try { localStorage.removeItem(POS_KEY); localStorage.removeItem(CENTER_KEY) } catch { /* noop */ }
   }
 
-  // SVG control-point drag handlers
+  // SVG drag handlers for connection ctrl points
   function getSVGPoint(e: React.MouseEvent): { x: number; y: number } {
     if (!svgRef.current) return { x: 0, y: 0 }
     const rect = svgRef.current.getBoundingClientRect()
@@ -210,16 +268,26 @@ export default function EmpresasPage() {
   }
 
   function handleSVGMouseMove(e: React.MouseEvent) {
-    if (!draggingCtrl) return
     const pt = getSVGPoint(e)
-    setCtrlPoints((prev) => ({ ...prev, [draggingCtrl]: pt }))
+    setMousePos(pt)
+    if (!draggingConnCtrl) return
+    setConnections((prev) => prev.map((c) => c.id === draggingConnCtrl ? { ...c, cp: pt } : c))
   }
 
   function handleSVGMouseUp() {
-    if (!draggingCtrl) return
-    setCtrlPoints((prev) => { lsSet(CTRL_KEY, prev); return prev })
-    setDraggingCtrl(null)
+    if (!draggingConnCtrl) return
+    setConnections((prev) => { lsSet(CONNS_KEY, prev); return prev })
+    setDraggingConnCtrl(null)
   }
+
+  // Keyboard: ESC cancels connect mode
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setConnectFrom(null); setConnectMode(false); setEditingConn(null) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const activeCount = companies.filter((c) => c.status === 'activa').length
 
@@ -235,16 +303,26 @@ export default function EmpresasPage() {
     )
   }
 
+  // Find editing connection for label overlay
+  const editingConnObj = editingConn ? connections.find((c) => c.id === editingConn) : null
+  const editingConnEps = editingConnObj ? getConnEndpoints(editingConnObj) : null
+  const editingConnCp = editingConnEps
+    ? (editingConnObj?.cp ?? { x: (editingConnEps.x1 + editingConnEps.x2) / 2, y: (editingConnEps.y1 + editingConnEps.y2) / 2 })
+    : null
+  const editingConnMid = editingConnEps && editingConnCp
+    ? bezierMid(editingConnEps.x1, editingConnEps.y1, editingConnCp.x, editingConnCp.y, editingConnEps.x2, editingConnEps.y2)
+    : null
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold text-white">🗺️ Empresas</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             {companies.length} empresa{companies.length !== 1 ? 's' : ''} · {activeCount} activa{activeCount !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!isMobile && companies.length > 0 && (
             <>
               <button onClick={addNote} className="btn-secondary text-xs flex items-center gap-1.5">
@@ -252,6 +330,20 @@ export default function EmpresasPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
                 Nota
+              </button>
+              {/* Connect mode toggle */}
+              <button
+                onClick={toggleConnectMode}
+                className={`text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all ${
+                  connectMode
+                    ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_12px_#2563eb40]'
+                    : 'bg-[#1a1a1a] border-[#2a2a2a] text-gray-400 hover:text-gray-200 hover:border-[#444]'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                {connectFrom ? 'Selecciona destino…' : connectMode ? 'Conectando' : 'Conectar'}
               </button>
               <button onClick={resetPositions} className="btn-secondary text-xs flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -298,12 +390,12 @@ export default function EmpresasPage() {
           </div>
         ) : (
           <>
-            {/* SVG — curved arrows + control points + labels */}
+            {/* SVG layer — connections */}
             <svg
               ref={svgRef}
               width={dims.w} height={dims.h}
               className="absolute inset-0"
-              style={{ zIndex: 1, cursor: draggingCtrl ? 'crosshair' : 'default' }}
+              style={{ zIndex: 1, cursor: draggingConnCtrl ? 'crosshair' : connectMode ? 'crosshair' : 'default' }}
               onMouseMove={handleSVGMouseMove}
               onMouseUp={handleSVGMouseUp}
               onMouseLeave={handleSVGMouseUp}
@@ -313,28 +405,27 @@ export default function EmpresasPage() {
                   <stop offset="0%" stopColor="#2563eb" stopOpacity="0.12" />
                   <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
                 </radialGradient>
-                {companies.map((company) => (
-                  <marker key={company.id} id={`arrow-${company.id}`}
+                {/* Arrowhead markers per connection */}
+                {connections.map((conn) => (
+                  <marker key={conn.id} id={`arr-${conn.id}`}
                     markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
                     <path d="M0,0.5 L6,3.5 L0,6.5 Z"
-                      fill={company.color}
-                      fillOpacity={hoveredLine === company.id ? 0.9 : 0.55} />
+                      fill={getNodeColor(conn.to)}
+                      fillOpacity={hoveredConn === conn.id ? 0.9 : 0.6} />
                   </marker>
                 ))}
-                {companies.map((company) => {
-                  const pos = positions[company.id]
-                  if (!pos) return null
-                  const dx = pos.x - centerPos.x; const dy = pos.y - centerPos.y
-                  const dist = Math.sqrt(dx * dx + dy * dy) || 1
-                  const x1 = centerPos.x + (dx / dist) * 58
-                  const y1 = centerPos.y + (dy / dist) * 58
-                  const x2 = pos.x - (dx / dist) * 48
-                  const y2 = pos.y - (dy / dist) * 48
+                {/* Gradients per connection */}
+                {connections.map((conn) => {
+                  const eps = getConnEndpoints(conn)
+                  if (!eps) return null
                   return (
-                    <linearGradient key={company.id} id={`grad-${company.id}`}
-                      x1={x1} y1={y1} x2={x2} y2={y2} gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={hoveredLine === company.id ? 0.7 : 0.35} />
-                      <stop offset="100%" stopColor={company.color} stopOpacity={hoveredLine === company.id ? 0.9 : 0.5} />
+                    <linearGradient key={conn.id} id={`grd-${conn.id}`}
+                      x1={eps.x1} y1={eps.y1} x2={eps.x2} y2={eps.y2}
+                      gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor={getNodeColor(conn.from)}
+                        stopOpacity={hoveredConn === conn.id ? 0.8 : 0.4} />
+                      <stop offset="100%" stopColor={getNodeColor(conn.to)}
+                        stopOpacity={hoveredConn === conn.id ? 0.9 : 0.55} />
                     </linearGradient>
                   )
                 })}
@@ -342,129 +433,106 @@ export default function EmpresasPage() {
 
               <circle cx={centerPos.x} cy={centerPos.y} r={130} fill="url(#cglow)" />
 
-              {companies.map((company) => {
-                const pos = positions[company.id]
-                if (!pos) return null
-                const dx = pos.x - centerPos.x; const dy = pos.y - centerPos.y
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1
-                const nx = dx / dist; const ny = dy / dist
+              {/* Pending connection line while in connect mode */}
+              {connectFrom && (() => {
+                const from = getNodeCenter(connectFrom)
+                if (!from) return null
+                return (
+                  <line x1={from.x} y1={from.y} x2={mousePos.x} y2={mousePos.y}
+                    stroke={getNodeColor(connectFrom)} strokeWidth={1.5}
+                    strokeDasharray="6 4" strokeOpacity={0.5} strokeLinecap="round" />
+                )
+              })()}
 
-                const x1 = centerPos.x + nx * 58
-                const y1 = centerPos.y + ny * 58
-                const x2 = pos.x - nx * 48
-                const y2 = pos.y - ny * 48
-
-                const cp = ctrlPoints[company.id] || { x: (x1 + x2) / 2, y: (y1 + y2) / 2 }
+              {/* Render all connections */}
+              {connections.map((conn) => {
+                const eps = getConnEndpoints(conn)
+                if (!eps) return null
+                const { x1, y1, x2, y2 } = eps
+                const cp = conn.cp ?? { x: (x1 + x2) / 2, y: (y1 + y2) / 2 }
                 const pathD = `M ${x1} ${y1} Q ${cp.x} ${cp.y} ${x2} ${y2}`
-
                 const mid = bezierMid(x1, y1, cp.x, cp.y, x2, y2)
-                const label = lineLabels[company.id] || ''
-                const isHovered = hoveredLine === company.id
-                const isEditing = editingLabel === company.id
-                const isDraggingThis = draggingCtrl === company.id
+                const label = conn.label
+                const isHovered = hoveredConn === conn.id
+                const isEditing = editingConn === conn.id
+                const isDraggingThis = draggingConnCtrl === conn.id
+                const toColor = getNodeColor(conn.to)
 
                 return (
-                  <g key={company.id}>
+                  <g key={conn.id}>
                     {/* Glow on hover */}
                     {isHovered && (
-                      <path d={pathD}
-                        stroke={company.color} strokeWidth={8} strokeOpacity={0.1}
-                        fill="none" strokeLinecap="round" />
+                      <path d={pathD} stroke={toColor} strokeWidth={8}
+                        strokeOpacity={0.1} fill="none" strokeLinecap="round" />
                     )}
-
-                    {/* Main arrow curve */}
-                    <path
-                      d={pathD}
-                      stroke={`url(#grad-${company.id})`}
+                    {/* Main curve */}
+                    <path d={pathD}
+                      stroke={`url(#grd-${conn.id})`}
                       strokeWidth={isHovered || isDraggingThis ? 2 : 1.5}
                       strokeDasharray={isHovered || isDraggingThis ? 'none' : '7 4'}
-                      strokeLinecap="round"
-                      fill="none"
-                      markerEnd={`url(#arrow-${company.id})`}
-                      style={{ transition: 'stroke-width 0.15s' }}
-                    />
-
-                    {/* Invisible wide hit area */}
-                    <path d={pathD}
-                      stroke="transparent" strokeWidth={20} fill="none"
+                      strokeLinecap="round" fill="none"
+                      markerEnd={`url(#arr-${conn.id})`}
+                      style={{ transition: 'stroke-width 0.15s' }} />
+                    {/* Wide transparent hit area */}
+                    <path d={pathD} stroke="transparent" strokeWidth={20} fill="none"
                       style={{ cursor: 'pointer' }}
-                      onMouseEnter={() => !draggingCtrl && setHoveredLine(company.id)}
-                      onMouseLeave={() => !draggingCtrl && setHoveredLine(null)}
-                      onClick={() => !draggingCtrl && setEditingLabel(company.id)} />
+                      onMouseEnter={() => !draggingConnCtrl && !connectMode && setHoveredConn(conn.id)}
+                      onMouseLeave={() => !draggingConnCtrl && setHoveredConn(null)}
+                      onClick={() => { if (!draggingConnCtrl && !connectMode) setEditingConn(conn.id) }} />
 
-                    {/* Draggable control point handle (visible when hovered or dragging) */}
-                    {(isHovered || isDraggingThis) && (
+                    {/* Control point handle (on hover) */}
+                    {(isHovered || isDraggingThis) && !connectMode && (
                       <g>
-                        {/* Guide lines to endpoints */}
                         <line x1={x1} y1={y1} x2={cp.x} y2={cp.y}
-                          stroke={company.color} strokeOpacity={0.2} strokeWidth={1}
-                          strokeDasharray="3 3" />
+                          stroke={toColor} strokeOpacity={0.18} strokeWidth={1} strokeDasharray="3 3" />
                         <line x1={x2} y1={y2} x2={cp.x} y2={cp.y}
-                          stroke={company.color} strokeOpacity={0.2} strokeWidth={1}
-                          strokeDasharray="3 3" />
-                        {/* Control point circle */}
-                        <circle
-                          cx={cp.x} cy={cp.y} r={isDraggingThis ? 7 : 5}
-                          fill={company.color} fillOpacity={isDraggingThis ? 0.7 : 0.4}
-                          stroke={company.color} strokeWidth={isDraggingThis ? 2 : 1.5}
-                          strokeOpacity={0.9}
+                          stroke={toColor} strokeOpacity={0.18} strokeWidth={1} strokeDasharray="3 3" />
+                        <circle cx={cp.x} cy={cp.y} r={isDraggingThis ? 7 : 5}
+                          fill={toColor} fillOpacity={isDraggingThis ? 0.7 : 0.35}
+                          stroke={toColor} strokeWidth={1.5} strokeOpacity={0.9}
                           style={{ cursor: 'crosshair' }}
-                          onMouseDown={(e) => {
-                            e.stopPropagation()
-                            setDraggingCtrl(company.id)
-                            setHoveredLine(company.id)
-                          }}
-                        />
-                        {/* Tooltip */}
+                          onMouseDown={(e) => { e.stopPropagation(); setDraggingConnCtrl(conn.id); setHoveredConn(conn.id) }} />
                         {!isDraggingThis && (
-                          <text x={cp.x} y={cp.y - 10}
-                            textAnchor="middle" fontSize={8} fill={company.color}
-                            fillOpacity={0.5} fontFamily="system-ui, sans-serif">
-                            arrastrar
-                          </text>
+                          <text x={cp.x} y={cp.y - 9} textAnchor="middle" fontSize={7}
+                            fill={toColor} fillOpacity={0.45} fontFamily="system-ui">curvar</text>
                         )}
                       </g>
                     )}
 
-                    {/* Label pill at bezier midpoint */}
-                    {label && !isEditing && (
-                      <g
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => !draggingCtrl && setEditingLabel(company.id)}
-                        onMouseEnter={() => !draggingCtrl && setHoveredLine(company.id)}
-                        onMouseLeave={() => !draggingCtrl && setHoveredLine(null)}
-                      >
-                        <rect
-                          x={mid.x - (label.length * 3.6 + 8)}
-                          y={mid.y - 9}
-                          width={label.length * 7.2 + 16}
-                          height={18}
-                          rx={9}
-                          fill={company.color}
-                          fillOpacity={0.15}
-                          stroke={company.color}
-                          strokeOpacity={0.4}
-                          strokeWidth={1}
-                        />
-                        <text x={mid.x} y={mid.y + 4.5}
-                          textAnchor="middle"
-                          fontSize={10}
-                          fontFamily="system-ui, sans-serif"
-                          fontWeight={500}
-                          fill={company.color}
-                          fillOpacity={0.95}
-                        >{label}</text>
+                    {/* Delete × button (on hover, upper-right of midpoint) */}
+                    {isHovered && !isEditing && !connectMode && (
+                      <g style={{ cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); deleteConnection(conn.id) }}>
+                        <circle cx={mid.x + 16} cy={mid.y - 14} r={8}
+                          fill="#dc2626" fillOpacity={0.8} />
+                        <text x={mid.x + 16} y={mid.y - 10} textAnchor="middle"
+                          fontSize={10} fill="white" fontWeight="bold" fontFamily="system-ui">×</text>
                       </g>
                     )}
 
-                    {/* "+ texto" hint when no label and line is hovered */}
-                    {!label && !isEditing && isHovered && !isDraggingThis && (
-                      <g style={{ cursor: 'pointer' }} onClick={() => setEditingLabel(company.id)}>
-                        <rect x={mid.x - 20} y={mid.y - 9} width={40} height={18} rx={9}
-                          fill="#1a1a1a" stroke={company.color} strokeOpacity={0.4} strokeWidth={1} />
+                    {/* Label pill */}
+                    {label && !isEditing && (
+                      <g style={{ cursor: 'pointer' }}
+                        onClick={() => !connectMode && setEditingConn(conn.id)}
+                        onMouseEnter={() => !connectMode && setHoveredConn(conn.id)}
+                        onMouseLeave={() => setHoveredConn(null)}>
+                        <rect x={mid.x - (label.length * 3.6 + 8)} y={mid.y - 9}
+                          width={label.length * 7.2 + 16} height={18} rx={9}
+                          fill={toColor} fillOpacity={0.14}
+                          stroke={toColor} strokeOpacity={0.45} strokeWidth={1} />
                         <text x={mid.x} y={mid.y + 4.5} textAnchor="middle"
-                          fontSize={10} fontFamily="system-ui, sans-serif"
-                          fill={company.color} fillOpacity={0.7}>+ texto</text>
+                          fontSize={10} fontFamily="system-ui, sans-serif" fontWeight={500}
+                          fill={toColor} fillOpacity={0.95}>{label}</text>
+                      </g>
+                    )}
+
+                    {/* "+ etiqueta" hint */}
+                    {!label && !isEditing && isHovered && !connectMode && !isDraggingThis && (
+                      <g style={{ cursor: 'pointer' }} onClick={() => setEditingConn(conn.id)}>
+                        <rect x={mid.x - 24} y={mid.y - 9} width={48} height={18} rx={9}
+                          fill="#1a1a1a" stroke={toColor} strokeOpacity={0.35} strokeWidth={1} />
+                        <text x={mid.x} y={mid.y + 4.5} textAnchor="middle"
+                          fontSize={10} fontFamily="system-ui" fill={toColor} fillOpacity={0.65}>+ etiqueta</text>
                       </g>
                     )}
                   </g>
@@ -473,37 +541,25 @@ export default function EmpresasPage() {
             </svg>
 
             {/* Label editor overlay */}
-            {editingLabel && (() => {
-              const pos = positions[editingLabel]
-              if (!pos) return null
-              const cp = ctrlPoints[editingLabel]
-              const dx = pos.x - centerPos.x; const dy = pos.y - centerPos.y
-              const dist = Math.sqrt(dx * dx + dy * dy) || 1
-              const nx = dx / dist; const ny = dy / dist
-              const x1 = centerPos.x + nx * 58; const y1 = centerPos.y + ny * 58
-              const x2 = pos.x - nx * 48; const y2 = pos.y - ny * 48
-              const cpx = cp?.x ?? (x1 + x2) / 2; const cpy = cp?.y ?? (y1 + y2) / 2
-              const mid = bezierMid(x1, y1, cpx, cpy, x2, y2)
-              const company = companies.find((c) => c.id === editingLabel)
-              return (
-                <div
-                  style={{ position: 'absolute', left: mid.x, top: mid.y, transform: 'translate(-50%, -50%)', zIndex: 30 }}
-                >
-                  <input
-                    autoFocus
-                    defaultValue={lineLabels[editingLabel] || ''}
-                    onBlur={(e) => saveLabel(editingLabel, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveLabel(editingLabel, e.currentTarget.value)
-                      if (e.key === 'Escape') setEditingLabel(null)
-                    }}
-                    className="bg-[#0f0f0f] rounded-full px-3 py-1 text-xs text-white outline-none w-36 text-center placeholder-gray-600"
-                    style={{ border: `1px solid ${company?.color ?? '#2563eb'}60`, boxShadow: `0 0 12px ${company?.color ?? '#2563eb'}30` }}
-                    placeholder="Etiqueta..."
-                  />
-                </div>
-              )
-            })()}
+            {editingConnObj && editingConnMid && (
+              <div style={{ position: 'absolute', left: editingConnMid.x, top: editingConnMid.y, transform: 'translate(-50%,-50%)', zIndex: 30 }}>
+                <input
+                  autoFocus
+                  defaultValue={editingConnObj.label}
+                  onBlur={(e) => saveConnLabel(editingConnObj.id, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveConnLabel(editingConnObj.id, e.currentTarget.value)
+                    if (e.key === 'Escape') setEditingConn(null)
+                  }}
+                  className="bg-[#0f0f0f] rounded-full px-3 py-1 text-xs text-white outline-none w-36 text-center placeholder-gray-600"
+                  style={{
+                    border: `1px solid ${getNodeColor(editingConnObj.to)}60`,
+                    boxShadow: `0 0 12px ${getNodeColor(editingConnObj.to)}30`,
+                  }}
+                  placeholder="Etiqueta de relación..."
+                />
+              </div>
+            )}
 
             {/* Canvas notes */}
             {canvasNotes.map((note) => (
@@ -511,11 +567,18 @@ export default function EmpresasPage() {
             ))}
 
             {/* Center node */}
-            <CenterNode x={centerPos.x} y={centerPos.y} containerRef={containerRef} onDragEnd={handleCenterDragEnd} />
+            <CenterNode
+              x={centerPos.x} y={centerPos.y} containerRef={containerRef}
+              connectMode={connectMode} isConnectFrom={connectFrom === 'center'}
+              onDragEnd={handleCenterDragEnd}
+              onConnectClick={() => handleNodeConnect('center')}
+            />
 
             {/* Hint */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none" style={{ zIndex: 2 }}>
-              Arrastra nodos · Arrastra el punto de la flecha para curvarla · Clic en flecha para añadir texto
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none text-center" style={{ zIndex: 2 }}>
+              {connectMode
+                ? connectFrom ? 'Clic en el nodo destino para conectar · ESC para cancelar' : 'Clic en el nodo de origen para iniciar conexión'
+                : 'Arrastra nodos · Hover en flecha para curvar o eliminar · Clic en flecha para etiquetar'}
             </div>
 
             {/* Company nodes */}
@@ -526,7 +589,9 @@ export default function EmpresasPage() {
               return (
                 <CompanyNode key={company.id} company={company} x={pos.x} y={pos.y} delay={i * 0.1}
                   pending={pending} containerRef={containerRef}
+                  connectMode={connectMode} isConnectFrom={connectFrom === company.id}
                   onClick={() => router.push(`/empresas/${company.id}`)}
+                  onConnectClick={() => handleNodeConnect(company.id)}
                   onDragEnd={handleNodeDragEnd} />
               )
             })}
@@ -635,10 +700,13 @@ export default function EmpresasPage() {
 
 /* ────────────────────── Center Node ────────────────────── */
 
-function CenterNode({ x, y, containerRef, onDragEnd }: {
+function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom, onConnectClick }: {
   x: number; y: number
   containerRef: React.RefObject<HTMLDivElement>
   onDragEnd: (newX: number, newY: number) => void
+  connectMode: boolean
+  isConnectFrom: boolean
+  onConnectClick: () => void
 }) {
   const size = 110
   const motionX = useMotionValue(x - size / 2)
@@ -649,15 +717,22 @@ function CenterNode({ x, y, containerRef, onDragEnd }: {
 
   return (
     <motion.div
-      drag dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
+      drag={!connectMode} dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
       style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size, zIndex: 10 }}
-      className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+      className={connectMode ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab'}
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => { setIsDragging(false); onDragEnd(motionX.get() + size / 2, motionY.get() + size / 2) }}
+      onClick={() => { if (connectMode) onConnectClick() }}
     >
       <motion.div
-        animate={isDragging ? { boxShadow: '0 0 40px #2563eb80' } : { boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }}
-        transition={isDragging ? {} : { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+        animate={
+          isConnectFrom
+            ? { boxShadow: '0 0 0 4px #2563eb, 0 0 32px #2563eb80' }
+            : isDragging
+            ? { boxShadow: '0 0 40px #2563eb80' }
+            : { boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }
+        }
+        transition={isDragging || isConnectFrom ? {} : { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
         className="w-full h-full rounded-full bg-[#0a1628] border-2 border-blue-600 flex flex-col items-center justify-center select-none"
       >
         <span className="text-2xl font-black text-blue-400">M</span>
@@ -670,11 +745,14 @@ function CenterNode({ x, y, containerRef, onDragEnd }: {
 
 /* ────────────────────── Company Node ────────────────────── */
 
-function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onDragEnd }: {
+function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onConnectClick, onDragEnd, connectMode, isConnectFrom }: {
   company: Company; x: number; y: number; delay: number; pending: number
   containerRef: React.RefObject<HTMLDivElement>
   onClick: () => void
+  onConnectClick: () => void
   onDragEnd: (id: string, newX: number, newY: number) => void
+  connectMode: boolean
+  isConnectFrom: boolean
 }) {
   const size = 88
   const motionX = useMotionValue(x - size / 2)
@@ -685,7 +763,7 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
 
   return (
     <motion.div
-      drag dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
+      drag={!connectMode} dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
       style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size, zIndex: 10 }}
       initial={{ opacity: 0, scale: 0.3 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -699,15 +777,36 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
         className="w-full h-full"
       >
         <button
-          onClick={(e) => { if (isDragging) { e.preventDefault(); return }; onClick() }}
-          className={`w-full h-full rounded-full flex flex-col items-center justify-center relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onClick={(e) => {
+            if (isDragging) { e.preventDefault(); return }
+            if (connectMode) { onConnectClick(); return }
+            onClick()
+          }}
+          className={`w-full h-full rounded-full flex flex-col items-center justify-center relative ${
+            connectMode ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
           style={{
-            background: `${company.color}18`, border: `2px solid ${isDragging ? company.color : company.color + '60'}`,
-            boxShadow: isDragging ? `0 0 32px ${company.color}80` : `0 0 16px ${company.color}30`,
+            background: `${company.color}18`,
+            border: `2px solid ${isConnectFrom ? company.color : isDragging ? company.color : company.color + '60'}`,
+            boxShadow: isConnectFrom
+              ? `0 0 0 3px ${company.color}, 0 0 28px ${company.color}80`
+              : isDragging
+              ? `0 0 32px ${company.color}80`
+              : `0 0 16px ${company.color}30`,
             transition: 'box-shadow 0.2s, border-color 0.2s',
           }}
-          onMouseEnter={(e) => { if (!isDragging) { e.currentTarget.style.boxShadow = `0 0 28px ${company.color}70`; e.currentTarget.style.borderColor = company.color } }}
-          onMouseLeave={(e) => { if (!isDragging) { e.currentTarget.style.boxShadow = `0 0 16px ${company.color}30`; e.currentTarget.style.borderColor = `${company.color}60` } }}
+          onMouseEnter={(e) => {
+            if (!isDragging && !connectMode) {
+              e.currentTarget.style.boxShadow = `0 0 28px ${company.color}70`
+              e.currentTarget.style.borderColor = company.color
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isDragging && !isConnectFrom) {
+              e.currentTarget.style.boxShadow = `0 0 16px ${company.color}30`
+              e.currentTarget.style.borderColor = `${company.color}60`
+            }
+          }}
         >
           <span className="text-2xl select-none">{company.emoji}</span>
           <span className="text-[9px] font-semibold mt-0.5 px-1 text-center leading-tight" style={{ color: company.color, maxWidth: 72 }}>
