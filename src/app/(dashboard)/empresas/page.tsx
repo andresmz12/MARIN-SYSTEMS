@@ -11,21 +11,19 @@ interface Company {
   status: string; industry: string | null; description: string | null
   tasks: CompanyTask[]
 }
+interface CanvasNote {
+  id: string; text: string; x: number; y: number; colorIdx: number
+}
 
 type Positions = Record<string, { x: number; y: number }>
 
 const EMOJIS = ['🏢', '📊', '🧾', '🧹', '📦', '🏠', '💼', '🚀', '🌎', '💰', '🛒', '📱', '🎯', '⚡', '🔧']
 const COLORS = [
-  { label: 'Azul', value: '#2563eb' },
-  { label: 'Violeta', value: '#7c3aed' },
-  { label: 'Verde', value: '#16a34a' },
-  { label: 'Naranja', value: '#ea580c' },
-  { label: 'Cyan', value: '#0891b2' },
-  { label: 'Dorado', value: '#ca8a04' },
-  { label: 'Rojo', value: '#dc2626' },
-  { label: 'Rosa', value: '#db2777' },
-  { label: 'Teal', value: '#0d9488' },
-  { label: 'Gris', value: '#6b7280' },
+  { label: 'Azul', value: '#2563eb' }, { label: 'Violeta', value: '#7c3aed' },
+  { label: 'Verde', value: '#16a34a' }, { label: 'Naranja', value: '#ea580c' },
+  { label: 'Cyan', value: '#0891b2' }, { label: 'Dorado', value: '#ca8a04' },
+  { label: 'Rojo', value: '#dc2626' }, { label: 'Rosa', value: '#db2777' },
+  { label: 'Teal', value: '#0d9488' }, { label: 'Gris', value: '#6b7280' },
 ]
 const INDUSTRIES = ['Consultoría', 'SaaS/Tech', 'Limpieza', 'Logística/Envíos', 'Inmobiliaria', 'E-commerce', 'Otro']
 const STATUSES = ['activa', 'pausa', 'idea'] as const
@@ -35,20 +33,28 @@ const STATUS_COLORS: Record<string, string> = {
   pausa: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   idea: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
 }
+const NOTE_COLORS = [
+  { bg: '#1a1500', border: '#ca8a04', text: '#fde68a' },
+  { bg: '#0d1a2e', border: '#3b82f6', text: '#93c5fd' },
+  { bg: '#0a1a0d', border: '#22c55e', text: '#86efac' },
+  { bg: '#1a0a1a', border: '#a855f7', text: '#d8b4fe' },
+  { bg: '#1a0d0a', border: '#f97316', text: '#fed7aa' },
+]
 
-const STORAGE_KEY = 'marin-empresa-positions'
+const POS_KEY = 'marin-empresa-positions'
+const CENTER_KEY = 'marin-center-pos'
+const NOTES_KEY = 'marin-canvas-notes'
 
 function getNodePos(index: number, total: number, cx: number, cy: number, radius: number) {
   const angle = (2 * Math.PI * index) / total - Math.PI / 2
   return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) }
 }
 
-function loadSavedPositions(): Positions {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
-  } catch {
-    return {}
-  }
+function ls<T>(key: string, fallback: T): T {
+  try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch { return fallback }
+}
+function lsSet(key: string, val: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* noop */ }
 }
 
 export default function EmpresasPage() {
@@ -62,41 +68,43 @@ export default function EmpresasPage() {
   const [isMobile, setIsMobile] = useState(false)
   const [dims, setDims] = useState({ w: 800, h: 580 })
   const [positions, setPositions] = useState<Positions>({})
+  const [centerPos, setCenterPos] = useState({ x: 400, y: 290 })
+  const [canvasNotes, setCanvasNotes] = useState<CanvasNote[]>([])
   const [form, setForm] = useState({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
   const [saving, setSaving] = useState(false)
 
   const updateDims = useCallback(() => {
     if (containerRef.current) {
-      setDims({ w: containerRef.current.offsetWidth || 800, h: 580 })
+      const w = containerRef.current.offsetWidth || 800
+      setDims({ w, h: 580 })
     }
   }, [])
 
   useEffect(() => {
     loadCompanies()
-    const onResize = () => {
-      setIsMobile(window.innerWidth < 768)
-      updateDims()
-    }
+    setCanvasNotes(ls<CanvasNote[]>(NOTES_KEY, []))
+    const onResize = () => { setIsMobile(window.innerWidth < 768); updateDims() }
     onResize()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [updateDims])
 
-  useEffect(() => {
-    updateDims()
-  }, [companies, updateDims])
+  useEffect(() => { updateDims() }, [companies, updateDims])
 
-  // Initialize positions when companies or dims change
+  // Init center position
+  useEffect(() => {
+    const saved = ls<{ x: number; y: number } | null>(CENTER_KEY, null)
+    setCenterPos(saved ?? { x: dims.w / 2, y: dims.h / 2 })
+  }, [dims.w, dims.h])
+
+  // Init company positions
   useEffect(() => {
     if (!companies.length) return
-    const cx = dims.w / 2
-    const cy = dims.h / 2
+    const cx = dims.w / 2; const cy = dims.h / 2
     const radius = Math.min(cx - 80, cy - 80, 220)
-    const saved = loadSavedPositions()
+    const saved = ls<Positions>(POS_KEY, {})
     const next: Positions = {}
-    companies.forEach((company, i) => {
-      next[company.id] = saved[company.id] || getNodePos(i, companies.length, cx, cy, radius)
-    })
+    companies.forEach((c, i) => { next[c.id] = saved[c.id] || getNodePos(i, companies.length, cx, cy, radius) })
     setPositions(next)
   }, [companies.length, dims.w, dims.h])
 
@@ -105,9 +113,7 @@ export default function EmpresasPage() {
     try {
       const res = await fetch('/api/companies')
       if (res.ok) setCompanies(await res.json())
-    } catch {
-      showToast('Error al cargar empresas', 'error')
-    }
+    } catch { showToast('Error al cargar empresas', 'error') }
     setLoading(false)
   }
 
@@ -116,46 +122,57 @@ export default function EmpresasPage() {
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      const res = await fetch('/api/companies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
+      const res = await fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       if (!res.ok) throw new Error()
       const company: Company = await res.json()
       setCompanies((prev) => [...prev, company])
       setShowModal(false)
       setForm({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
       showToast('Empresa creada', 'success')
-    } catch {
-      showToast('Error al crear empresa', 'error')
-    }
+    } catch { showToast('Error al crear empresa', 'error') }
     setSaving(false)
   }
 
   function handleNodeDragEnd(id: string, newX: number, newY: number) {
-    setPositions((prev) => {
-      const updated = { ...prev, [id]: { x: newX, y: newY } }
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)) } catch { /* noop */ }
-      return updated
-    })
+    setPositions((prev) => { const u = { ...prev, [id]: { x: newX, y: newY } }; lsSet(POS_KEY, u); return u })
+  }
+
+  function handleCenterDragEnd(newX: number, newY: number) {
+    const pos = { x: newX, y: newY }
+    setCenterPos(pos)
+    lsSet(CENTER_KEY, pos)
+  }
+
+  function addNote() {
+    const note: CanvasNote = {
+      id: Date.now().toString(),
+      text: '',
+      x: centerPos.x - 80,
+      y: centerPos.y - 60,
+      colorIdx: 0,
+    }
+    setCanvasNotes((prev) => { const u = [...prev, note]; lsSet(NOTES_KEY, u); return u })
+  }
+
+  function updateNote(id: string, updates: Partial<CanvasNote>) {
+    setCanvasNotes((prev) => { const u = prev.map((n) => n.id === id ? { ...n, ...updates } : n); lsSet(NOTES_KEY, u); return u })
+  }
+
+  function deleteNote(id: string) {
+    setCanvasNotes((prev) => { const u = prev.filter((n) => n.id !== id); lsSet(NOTES_KEY, u); return u })
   }
 
   function resetPositions() {
-    const cx = dims.w / 2
-    const cy = dims.h / 2
+    const cx = dims.w / 2; const cy = dims.h / 2
     const radius = Math.min(cx - 80, cy - 80, 220)
     const next: Positions = {}
-    companies.forEach((company, i) => {
-      next[company.id] = getNodePos(i, companies.length, cx, cy, radius)
-    })
+    companies.forEach((c, i) => { next[c.id] = getNodePos(i, companies.length, cx, cy, radius) })
     setPositions(next)
-    try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
+    setCenterPos({ x: cx, y: cy })
+    try { localStorage.removeItem(POS_KEY); localStorage.removeItem(CENTER_KEY) } catch { /* noop */ }
   }
 
   const activeCount = companies.filter((c) => c.status === 'activa').length
-  const cx = dims.w / 2
-  const cy = dims.h / 2
 
   if (loading) {
     return (
@@ -171,7 +188,6 @@ export default function EmpresasPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">🗺️ Empresas</h1>
@@ -180,13 +196,21 @@ export default function EmpresasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {companies.length > 0 && (
-            <button onClick={resetPositions} className="btn-secondary text-xs flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Resetear mapa
-            </button>
+          {!isMobile && companies.length > 0 && (
+            <>
+              <button onClick={addNote} className="btn-secondary text-xs flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Nota
+              </button>
+              <button onClick={resetPositions} className="btn-secondary text-xs flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Resetear mapa
+              </button>
+            </>
           )}
           <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,7 +221,6 @@ export default function EmpresasPage() {
         </div>
       </div>
 
-      {/* Canvas */}
       <div
         ref={containerRef}
         className="relative w-full rounded-xl overflow-hidden border border-[#2a2a2a]"
@@ -226,41 +249,48 @@ export default function EmpresasPage() {
           </div>
         ) : (
           <>
-            {/* SVG lines — draw to current saved positions */}
+            {/* SVG lines from center to each company */}
             <svg width={dims.w} height={dims.h} className="absolute inset-0 pointer-events-none">
               <defs>
                 <radialGradient id="cglow" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.2" />
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.15" />
                   <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
                 </radialGradient>
               </defs>
-              <circle cx={cx} cy={cy} r={120} fill="url(#cglow)" />
+              <circle cx={centerPos.x} cy={centerPos.y} r={120} fill="url(#cglow)" />
               {companies.map((company) => {
                 const pos = positions[company.id]
                 if (!pos) return null
                 return (
-                  <line key={company.id} x1={cx} y1={cy} x2={pos.x} y2={pos.y}
+                  <line key={company.id}
+                    x1={centerPos.x} y1={centerPos.y} x2={pos.x} y2={pos.y}
                     stroke={company.color} strokeOpacity={0.3} strokeWidth={1.5} strokeDasharray="6 4" />
                 )
               })}
             </svg>
 
-            {/* Center node */}
-            <div className="absolute flex items-center justify-center" style={{ left: cx - 55, top: cy - 55, width: 110, height: 110 }}>
-              <motion.div
-                animate={{ boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-full h-full rounded-full bg-[#0a1628] border-2 border-blue-600 flex flex-col items-center justify-center"
-              >
-                <span className="text-2xl font-black text-blue-400">M</span>
-                <span className="text-[8px] text-blue-400/60 font-bold tracking-widest">MARIN</span>
-                <span className="text-[7px] text-blue-400/40 tracking-widest">SYSTEMS</span>
-              </motion.div>
-            </div>
+            {/* Canvas notes (behind nodes) */}
+            {canvasNotes.map((note) => (
+              <CanvasNoteEl
+                key={note.id}
+                note={note}
+                containerRef={containerRef}
+                onUpdate={updateNote}
+                onDelete={deleteNote}
+              />
+            ))}
 
-            {/* Drag hint */}
+            {/* Center node — draggable */}
+            <CenterNode
+              x={centerPos.x}
+              y={centerPos.y}
+              containerRef={containerRef}
+              onDragEnd={handleCenterDragEnd}
+            />
+
+            {/* Hint */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none">
-              Arrastra las burbujas para organizarlas
+              Arrastra cualquier elemento para organizarlo
             </div>
 
             {/* Company nodes */}
@@ -385,14 +415,54 @@ export default function EmpresasPage() {
   )
 }
 
+/* ────────────────────── Center Node ────────────────────── */
+
+function CenterNode({ x, y, containerRef, onDragEnd }: {
+  x: number; y: number
+  containerRef: React.RefObject<HTMLDivElement>
+  onDragEnd: (newX: number, newY: number) => void
+}) {
+  const size = 110
+  const motionX = useMotionValue(x - size / 2)
+  const motionY = useMotionValue(y - size / 2)
+  const [isDragging, setIsDragging] = useState(false)
+
+  useEffect(() => {
+    motionX.set(x - size / 2)
+    motionY.set(y - size / 2)
+  }, [x, y])
+
+  return (
+    <motion.div
+      drag
+      dragConstraints={containerRef}
+      dragMomentum={false}
+      dragElastic={0.05}
+      style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size, zIndex: 10 }}
+      className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+      onDragStart={() => setIsDragging(true)}
+      onDragEnd={() => {
+        setIsDragging(false)
+        onDragEnd(motionX.get() + size / 2, motionY.get() + size / 2)
+      }}
+    >
+      <motion.div
+        animate={isDragging ? { boxShadow: '0 0 40px #2563eb80' } : { boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }}
+        transition={isDragging ? {} : { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="w-full h-full rounded-full bg-[#0a1628] border-2 border-blue-600 flex flex-col items-center justify-center select-none"
+      >
+        <span className="text-2xl font-black text-blue-400">M</span>
+        <span className="text-[8px] text-blue-400/60 font-bold tracking-widest">MARIN</span>
+        <span className="text-[7px] text-blue-400/40 tracking-widest">SYSTEMS</span>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 /* ────────────────────── Company Node ────────────────────── */
 
 function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onDragEnd }: {
-  company: Company
-  x: number
-  y: number
-  delay: number
-  pending: number
+  company: Company; x: number; y: number; delay: number; pending: number
   containerRef: React.RefObject<HTMLDivElement>
   onClick: () => void
   onDragEnd: (id: string, newX: number, newY: number) => void
@@ -402,7 +472,6 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
   const motionY = useMotionValue(y - size / 2)
   const [isDragging, setIsDragging] = useState(false)
 
-  // Sync position when parent updates (e.g. reset)
   useEffect(() => {
     motionX.set(x - size / 2)
     motionY.set(y - size / 2)
@@ -421,9 +490,7 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => {
         setIsDragging(false)
-        const newX = motionX.get() + size / 2
-        const newY = motionY.get() + size / 2
-        onDragEnd(company.id, newX, newY)
+        onDragEnd(company.id, motionX.get() + size / 2, motionY.get() + size / 2)
       }}
     >
       <motion.div
@@ -432,32 +499,19 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
         className="w-full h-full"
       >
         <button
-          onClick={(e) => {
-            if (isDragging) { e.preventDefault(); return }
-            onClick()
-          }}
+          onClick={(e) => { if (isDragging) { e.preventDefault(); return }; onClick() }}
           className={`w-full h-full rounded-full flex flex-col items-center justify-center relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
             background: `${company.color}18`,
             border: `2px solid ${isDragging ? company.color : company.color + '60'}`,
             boxShadow: isDragging ? `0 0 32px ${company.color}80` : `0 0 16px ${company.color}30`,
-            transform: isDragging ? 'scale(1.1)' : undefined,
             transition: 'box-shadow 0.2s, border-color 0.2s',
           }}
-          onMouseEnter={(e) => {
-            if (isDragging) return
-            e.currentTarget.style.boxShadow = `0 0 28px ${company.color}70`
-            e.currentTarget.style.borderColor = company.color
-          }}
-          onMouseLeave={(e) => {
-            if (isDragging) return
-            e.currentTarget.style.boxShadow = `0 0 16px ${company.color}30`
-            e.currentTarget.style.borderColor = `${company.color}60`
-          }}
+          onMouseEnter={(e) => { if (!isDragging) { e.currentTarget.style.boxShadow = `0 0 28px ${company.color}70`; e.currentTarget.style.borderColor = company.color } }}
+          onMouseLeave={(e) => { if (!isDragging) { e.currentTarget.style.boxShadow = `0 0 16px ${company.color}30`; e.currentTarget.style.borderColor = `${company.color}60` } }}
         >
           <span className="text-2xl select-none">{company.emoji}</span>
-          <span className="text-[9px] font-semibold mt-0.5 px-1 text-center leading-tight"
-            style={{ color: company.color, maxWidth: 72 }}>
+          <span className="text-[9px] font-semibold mt-0.5 px-1 text-center leading-tight" style={{ color: company.color, maxWidth: 72 }}>
             {company.name.length > 13 ? company.name.slice(0, 11) + '…' : company.name}
           </span>
           <div className="absolute -bottom-1.5 w-3 h-3 rounded-full border-2 border-[#080808]" style={{ backgroundColor: company.color }} />
@@ -474,6 +528,94 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
           </span>
         </div>
       </motion.div>
+    </motion.div>
+  )
+}
+
+/* ────────────────────── Canvas Note ────────────────────── */
+
+function CanvasNoteEl({ note, containerRef, onUpdate, onDelete }: {
+  note: CanvasNote
+  containerRef: React.RefObject<HTMLDivElement>
+  onUpdate: (id: string, updates: Partial<CanvasNote>) => void
+  onDelete: (id: string) => void
+}) {
+  const motionX = useMotionValue(note.x)
+  const motionY = useMotionValue(note.y)
+  const [editing, setEditing] = useState(note.text === '')
+  const [text, setText] = useState(note.text)
+  const [isDragging, setIsDragging] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const color = NOTE_COLORS[note.colorIdx % NOTE_COLORS.length]
+
+  useEffect(() => { motionX.set(note.x); motionY.set(note.y) }, [note.x, note.y])
+
+  function saveText() {
+    setEditing(false)
+    onUpdate(note.id, { text, x: motionX.get(), y: motionY.get() })
+  }
+
+  return (
+    <motion.div
+      drag={!editing}
+      dragConstraints={containerRef}
+      dragMomentum={false}
+      dragElastic={0.05}
+      style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: 168, zIndex: 5 }}
+      className={editing ? 'cursor-text' : isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+      onDragStart={() => setIsDragging(true)}
+      onDragEnd={() => { setIsDragging(false); onUpdate(note.id, { text, x: motionX.get(), y: motionY.get() }) }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+    >
+      <div className="rounded-xl border p-3 relative" style={{ background: color.bg, borderColor: color.border }}>
+        {/* Delete */}
+        <AnimatePresence>
+          {(hovered || editing) && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.7 }}
+              onClick={() => onDelete(note.id)}
+              className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white text-xs z-10 hover:bg-red-500"
+            >×</motion.button>
+          )}
+        </AnimatePresence>
+
+        {/* Text */}
+        {editing ? (
+          <textarea
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={saveText}
+            onKeyDown={(e) => { if (e.key === 'Escape') saveText() }}
+            className="w-full bg-transparent resize-none outline-none text-xs leading-relaxed"
+            style={{ color: color.text, minHeight: 60 }}
+            placeholder="Escribe aquí..."
+          />
+        ) : (
+          <p
+            onDoubleClick={() => setEditing(true)}
+            className="text-xs leading-relaxed whitespace-pre-wrap select-none"
+            style={{ color: color.text, minHeight: 40 }}
+          >
+            {text || <span style={{ opacity: 0.35 }}>Doble clic para editar</span>}
+          </p>
+        )}
+
+        {/* Color picker */}
+        <div className="mt-2 flex gap-1.5 justify-center">
+          {NOTE_COLORS.map((c, i) => (
+            <button
+              key={i}
+              onClick={(e) => { e.stopPropagation(); onUpdate(note.id, { colorIdx: i }) }}
+              className="w-3 h-3 rounded-full border transition-transform hover:scale-125"
+              style={{ background: c.border, borderColor: i === note.colorIdx ? '#fff' : 'transparent', boxShadow: i === note.colorIdx ? `0 0 0 1px ${c.border}` : 'none' }}
+            />
+          ))}
+        </div>
+      </div>
     </motion.div>
   )
 }
