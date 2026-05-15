@@ -44,6 +44,7 @@ const NOTE_COLORS = [
 const POS_KEY = 'marin-empresa-positions'
 const CENTER_KEY = 'marin-center-pos'
 const NOTES_KEY = 'marin-canvas-notes'
+const LABELS_KEY = 'marin-line-labels'
 
 function getNodePos(index: number, total: number, cx: number, cy: number, radius: number) {
   const angle = (2 * Math.PI * index) / total - Math.PI / 2
@@ -70,19 +71,20 @@ export default function EmpresasPage() {
   const [positions, setPositions] = useState<Positions>({})
   const [centerPos, setCenterPos] = useState({ x: 400, y: 290 })
   const [canvasNotes, setCanvasNotes] = useState<CanvasNote[]>([])
+  const [lineLabels, setLineLabels] = useState<Record<string, string>>({})
+  const [editingLabel, setEditingLabel] = useState<string | null>(null)
+  const [hoveredLine, setHoveredLine] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
   const [saving, setSaving] = useState(false)
 
   const updateDims = useCallback(() => {
-    if (containerRef.current) {
-      const w = containerRef.current.offsetWidth || 800
-      setDims({ w, h: 580 })
-    }
+    if (containerRef.current) setDims({ w: containerRef.current.offsetWidth || 800, h: 580 })
   }, [])
 
   useEffect(() => {
     loadCompanies()
     setCanvasNotes(ls<CanvasNote[]>(NOTES_KEY, []))
+    setLineLabels(ls<Record<string, string>>(LABELS_KEY, {}))
     const onResize = () => { setIsMobile(window.innerWidth < 768); updateDims() }
     onResize()
     window.addEventListener('resize', onResize)
@@ -91,13 +93,11 @@ export default function EmpresasPage() {
 
   useEffect(() => { updateDims() }, [companies, updateDims])
 
-  // Init center position
   useEffect(() => {
     const saved = ls<{ x: number; y: number } | null>(CENTER_KEY, null)
     setCenterPos(saved ?? { x: dims.w / 2, y: dims.h / 2 })
   }, [dims.w, dims.h])
 
-  // Init company positions
   useEffect(() => {
     if (!companies.length) return
     const cx = dims.w / 2; const cy = dims.h / 2
@@ -138,19 +138,11 @@ export default function EmpresasPage() {
   }
 
   function handleCenterDragEnd(newX: number, newY: number) {
-    const pos = { x: newX, y: newY }
-    setCenterPos(pos)
-    lsSet(CENTER_KEY, pos)
+    const pos = { x: newX, y: newY }; setCenterPos(pos); lsSet(CENTER_KEY, pos)
   }
 
   function addNote() {
-    const note: CanvasNote = {
-      id: Date.now().toString(),
-      text: '',
-      x: centerPos.x - 80,
-      y: centerPos.y - 60,
-      colorIdx: 0,
-    }
+    const note: CanvasNote = { id: Date.now().toString(), text: '', x: centerPos.x - 80, y: centerPos.y - 60, colorIdx: 0 }
     setCanvasNotes((prev) => { const u = [...prev, note]; lsSet(NOTES_KEY, u); return u })
   }
 
@@ -162,13 +154,17 @@ export default function EmpresasPage() {
     setCanvasNotes((prev) => { const u = prev.filter((n) => n.id !== id); lsSet(NOTES_KEY, u); return u })
   }
 
+  function saveLabel(id: string, text: string) {
+    setLineLabels((prev) => { const u = { ...prev, [id]: text.trim() }; lsSet(LABELS_KEY, u); return u })
+    setEditingLabel(null)
+  }
+
   function resetPositions() {
     const cx = dims.w / 2; const cy = dims.h / 2
     const radius = Math.min(cx - 80, cy - 80, 220)
     const next: Positions = {}
     companies.forEach((c, i) => { next[c.id] = getNodePos(i, companies.length, cx, cy, radius) })
-    setPositions(next)
-    setCenterPos({ x: cx, y: cy })
+    setPositions(next); setCenterPos({ x: cx, y: cy })
     try { localStorage.removeItem(POS_KEY); localStorage.removeItem(CENTER_KEY) } catch { /* noop */ }
   }
 
@@ -249,48 +245,173 @@ export default function EmpresasPage() {
           </div>
         ) : (
           <>
-            {/* SVG lines from center to each company */}
-            <svg width={dims.w} height={dims.h} className="absolute inset-0 pointer-events-none">
+            {/* SVG — arrows + labels */}
+            <svg width={dims.w} height={dims.h} className="absolute inset-0" style={{ zIndex: 1 }}>
               <defs>
                 <radialGradient id="cglow" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.15" />
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.12" />
                   <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
                 </radialGradient>
+                {companies.map((company) => (
+                  <marker key={company.id} id={`arrow-${company.id}`}
+                    markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <path d="M0,0.5 L6,3.5 L0,6.5 Z"
+                      fill={company.color}
+                      fillOpacity={hoveredLine === company.id ? 0.9 : 0.55} />
+                  </marker>
+                ))}
+                {companies.map((company) => {
+                  const pos = positions[company.id]
+                  if (!pos) return null
+                  const dx = pos.x - centerPos.x; const dy = pos.y - centerPos.y
+                  const dist = Math.sqrt(dx * dx + dy * dy) || 1
+                  const x1 = centerPos.x + (dx / dist) * 58
+                  const y1 = centerPos.y + (dy / dist) * 58
+                  const x2 = pos.x - (dx / dist) * 48
+                  const y2 = pos.y - (dy / dist) * 48
+                  return (
+                    <linearGradient key={company.id} id={`grad-${company.id}`}
+                      x1={x1} y1={y1} x2={x2} y2={y2} gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={hoveredLine === company.id ? 0.7 : 0.35} />
+                      <stop offset="100%" stopColor={company.color} stopOpacity={hoveredLine === company.id ? 0.9 : 0.5} />
+                    </linearGradient>
+                  )
+                })}
               </defs>
-              <circle cx={centerPos.x} cy={centerPos.y} r={120} fill="url(#cglow)" />
+
+              <circle cx={centerPos.x} cy={centerPos.y} r={130} fill="url(#cglow)" />
+
               {companies.map((company) => {
                 const pos = positions[company.id]
                 if (!pos) return null
+                const dx = pos.x - centerPos.x; const dy = pos.y - centerPos.y
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1
+                const nx = dx / dist; const ny = dy / dist
+
+                const x1 = centerPos.x + nx * 58
+                const y1 = centerPos.y + ny * 58
+                const x2 = pos.x - nx * 48
+                const y2 = pos.y - ny * 48
+
+                const midX = (x1 + x2) / 2
+                const midY = (y1 + y2) / 2
+
+                const label = lineLabels[company.id] || ''
+                const isHovered = hoveredLine === company.id
+                const isEditing = editingLabel === company.id
+
                 return (
-                  <line key={company.id}
-                    x1={centerPos.x} y1={centerPos.y} x2={pos.x} y2={pos.y}
-                    stroke={company.color} strokeOpacity={0.3} strokeWidth={1.5} strokeDasharray="6 4" />
+                  <g key={company.id}>
+                    {/* Glow on hover */}
+                    {isHovered && (
+                      <line x1={x1} y1={y1} x2={x2} y2={y2}
+                        stroke={company.color} strokeWidth={6} strokeOpacity={0.12}
+                        strokeLinecap="round" />
+                    )}
+
+                    {/* Main arrow line */}
+                    <line
+                      x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke={`url(#grad-${company.id})`}
+                      strokeWidth={isHovered ? 2 : 1.5}
+                      strokeDasharray={isHovered ? 'none' : '7 4'}
+                      strokeLinecap="round"
+                      markerEnd={`url(#arrow-${company.id})`}
+                      style={{ transition: 'stroke-width 0.15s' }}
+                    />
+
+                    {/* Invisible wide hit area */}
+                    <line x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke="transparent" strokeWidth={20}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredLine(company.id)}
+                      onMouseLeave={() => setHoveredLine(null)}
+                      onClick={() => setEditingLabel(company.id)} />
+
+                    {/* Label pill */}
+                    {label && !isEditing && (
+                      <g
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setEditingLabel(company.id)}
+                        onMouseEnter={() => setHoveredLine(company.id)}
+                        onMouseLeave={() => setHoveredLine(null)}
+                      >
+                        <rect
+                          x={midX - (label.length * 3.6 + 8)}
+                          y={midY - 9}
+                          width={label.length * 7.2 + 16}
+                          height={18}
+                          rx={9}
+                          fill={company.color}
+                          fillOpacity={0.15}
+                          stroke={company.color}
+                          strokeOpacity={0.4}
+                          strokeWidth={1}
+                        />
+                        <text x={midX} y={midY + 4.5}
+                          textAnchor="middle"
+                          fontSize={10}
+                          fontFamily="system-ui, sans-serif"
+                          fontWeight={500}
+                          fill={company.color}
+                          fillOpacity={0.95}
+                        >{label}</text>
+                      </g>
+                    )}
+
+                    {/* "+" add label hint (when no label and line is hovered) */}
+                    {!label && !isEditing && isHovered && (
+                      <g style={{ cursor: 'pointer' }} onClick={() => setEditingLabel(company.id)}>
+                        <rect x={midX - 20} y={midY - 9} width={40} height={18} rx={9}
+                          fill="#1a1a1a" stroke={company.color} strokeOpacity={0.4} strokeWidth={1} />
+                        <text x={midX} y={midY + 4.5} textAnchor="middle"
+                          fontSize={10} fontFamily="system-ui, sans-serif"
+                          fill={company.color} fillOpacity={0.7}>+ texto</text>
+                      </g>
+                    )}
+                  </g>
                 )
               })}
             </svg>
 
-            {/* Canvas notes (behind nodes) */}
+            {/* Label editor overlay */}
+            {editingLabel && (() => {
+              const pos = positions[editingLabel]
+              if (!pos) return null
+              const midX = (centerPos.x + pos.x) / 2
+              const midY = (centerPos.y + pos.y) / 2
+              const company = companies.find((c) => c.id === editingLabel)
+              return (
+                <div
+                  style={{ position: 'absolute', left: midX, top: midY, transform: 'translate(-50%, -50%)', zIndex: 30 }}
+                >
+                  <input
+                    autoFocus
+                    defaultValue={lineLabels[editingLabel] || ''}
+                    onBlur={(e) => saveLabel(editingLabel, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveLabel(editingLabel, e.currentTarget.value)
+                      if (e.key === 'Escape') setEditingLabel(null)
+                    }}
+                    className="bg-[#0f0f0f] rounded-full px-3 py-1 text-xs text-white outline-none w-36 text-center placeholder-gray-600"
+                    style={{ border: `1px solid ${company?.color ?? '#2563eb'}60`, boxShadow: `0 0 12px ${company?.color ?? '#2563eb'}30` }}
+                    placeholder="Etiqueta..."
+                  />
+                </div>
+              )
+            })()}
+
+            {/* Canvas notes */}
             {canvasNotes.map((note) => (
-              <CanvasNoteEl
-                key={note.id}
-                note={note}
-                containerRef={containerRef}
-                onUpdate={updateNote}
-                onDelete={deleteNote}
-              />
+              <CanvasNoteEl key={note.id} note={note} containerRef={containerRef} onUpdate={updateNote} onDelete={deleteNote} />
             ))}
 
-            {/* Center node — draggable */}
-            <CenterNode
-              x={centerPos.x}
-              y={centerPos.y}
-              containerRef={containerRef}
-              onDragEnd={handleCenterDragEnd}
-            />
+            {/* Center node */}
+            <CenterNode x={centerPos.x} y={centerPos.y} containerRef={containerRef} onDragEnd={handleCenterDragEnd} />
 
             {/* Hint */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none">
-              Arrastra cualquier elemento para organizarlo
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none" style={{ zIndex: 2 }}>
+              Arrastra elementos · Clic en flecha para añadir texto
             </div>
 
             {/* Company nodes */}
@@ -299,17 +420,10 @@ export default function EmpresasPage() {
               if (!pos) return null
               const pending = company.tasks.filter((t) => t.status !== 'completada').length
               return (
-                <CompanyNode
-                  key={company.id}
-                  company={company}
-                  x={pos.x}
-                  y={pos.y}
-                  delay={i * 0.1}
-                  pending={pending}
-                  containerRef={containerRef}
+                <CompanyNode key={company.id} company={company} x={pos.x} y={pos.y} delay={i * 0.1}
+                  pending={pending} containerRef={containerRef}
                   onClick={() => router.push(`/empresas/${company.id}`)}
-                  onDragEnd={handleNodeDragEnd}
-                />
+                  onDragEnd={handleNodeDragEnd} />
               )
             })}
           </>
@@ -427,24 +541,15 @@ function CenterNode({ x, y, containerRef, onDragEnd }: {
   const motionY = useMotionValue(y - size / 2)
   const [isDragging, setIsDragging] = useState(false)
 
-  useEffect(() => {
-    motionX.set(x - size / 2)
-    motionY.set(y - size / 2)
-  }, [x, y])
+  useEffect(() => { motionX.set(x - size / 2); motionY.set(y - size / 2) }, [x, y])
 
   return (
     <motion.div
-      drag
-      dragConstraints={containerRef}
-      dragMomentum={false}
-      dragElastic={0.05}
+      drag dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
       style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size, zIndex: 10 }}
       className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
       onDragStart={() => setIsDragging(true)}
-      onDragEnd={() => {
-        setIsDragging(false)
-        onDragEnd(motionX.get() + size / 2, motionY.get() + size / 2)
-      }}
+      onDragEnd={() => { setIsDragging(false); onDragEnd(motionX.get() + size / 2, motionY.get() + size / 2) }}
     >
       <motion.div
         animate={isDragging ? { boxShadow: '0 0 40px #2563eb80' } : { boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }}
@@ -472,26 +577,17 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
   const motionY = useMotionValue(y - size / 2)
   const [isDragging, setIsDragging] = useState(false)
 
-  useEffect(() => {
-    motionX.set(x - size / 2)
-    motionY.set(y - size / 2)
-  }, [x, y])
+  useEffect(() => { motionX.set(x - size / 2); motionY.set(y - size / 2) }, [x, y])
 
   return (
     <motion.div
-      drag
-      dragConstraints={containerRef}
-      dragMomentum={false}
-      dragElastic={0.05}
-      style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size }}
+      drag dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
+      style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size, zIndex: 10 }}
       initial={{ opacity: 0, scale: 0.3 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay, type: 'spring', damping: 16, stiffness: 200 }}
       onDragStart={() => setIsDragging(true)}
-      onDragEnd={() => {
-        setIsDragging(false)
-        onDragEnd(company.id, motionX.get() + size / 2, motionY.get() + size / 2)
-      }}
+      onDragEnd={() => { setIsDragging(false); onDragEnd(company.id, motionX.get() + size / 2, motionY.get() + size / 2) }}
     >
       <motion.div
         animate={isDragging ? {} : { y: [0, -5, 0] }}
@@ -502,8 +598,7 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onD
           onClick={(e) => { if (isDragging) { e.preventDefault(); return }; onClick() }}
           className={`w-full h-full rounded-full flex flex-col items-center justify-center relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
-            background: `${company.color}18`,
-            border: `2px solid ${isDragging ? company.color : company.color + '60'}`,
+            background: `${company.color}18`, border: `2px solid ${isDragging ? company.color : company.color + '60'}`,
             boxShadow: isDragging ? `0 0 32px ${company.color}80` : `0 0 16px ${company.color}30`,
             transition: 'box-shadow 0.2s, border-color 0.2s',
           }}
@@ -557,10 +652,7 @@ function CanvasNoteEl({ note, containerRef, onUpdate, onDelete }: {
 
   return (
     <motion.div
-      drag={!editing}
-      dragConstraints={containerRef}
-      dragMomentum={false}
-      dragElastic={0.05}
+      drag={!editing} dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
       style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: 168, zIndex: 5 }}
       className={editing ? 'cursor-text' : isDragging ? 'cursor-grabbing' : 'cursor-grab'}
       onDragStart={() => setIsDragging(true)}
@@ -571,48 +663,32 @@ function CanvasNoteEl({ note, containerRef, onUpdate, onDelete }: {
       animate={{ opacity: 1, scale: 1 }}
     >
       <div className="rounded-xl border p-3 relative" style={{ background: color.bg, borderColor: color.border }}>
-        {/* Delete */}
         <AnimatePresence>
           {(hovered || editing) && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.7 }}
+            <motion.button initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.7 }}
               onClick={() => onDelete(note.id)}
-              className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white text-xs z-10 hover:bg-red-500"
-            >×</motion.button>
+              className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white text-xs z-10 hover:bg-red-500">
+              ×
+            </motion.button>
           )}
         </AnimatePresence>
-
-        {/* Text */}
         {editing ? (
-          <textarea
-            autoFocus
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onBlur={saveText}
-            onKeyDown={(e) => { if (e.key === 'Escape') saveText() }}
+          <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)}
+            onBlur={saveText} onKeyDown={(e) => { if (e.key === 'Escape') saveText() }}
             className="w-full bg-transparent resize-none outline-none text-xs leading-relaxed"
-            style={{ color: color.text, minHeight: 60 }}
-            placeholder="Escribe aquí..."
-          />
+            style={{ color: color.text, minHeight: 60 }} placeholder="Escribe aquí..." />
         ) : (
-          <p
-            onDoubleClick={() => setEditing(true)}
+          <p onDoubleClick={() => setEditing(true)}
             className="text-xs leading-relaxed whitespace-pre-wrap select-none"
-            style={{ color: color.text, minHeight: 40 }}
-          >
+            style={{ color: color.text, minHeight: 40 }}>
             {text || <span style={{ opacity: 0.35 }}>Doble clic para editar</span>}
           </p>
         )}
-
-        {/* Color picker */}
         <div className="mt-2 flex gap-1.5 justify-center">
           {NOTE_COLORS.map((c, i) => (
-            <button
-              key={i}
-              onClick={(e) => { e.stopPropagation(); onUpdate(note.id, { colorIdx: i }) }}
+            <button key={i} onClick={(e) => { e.stopPropagation(); onUpdate(note.id, { colorIdx: i }) }}
               className="w-3 h-3 rounded-full border transition-transform hover:scale-125"
-              style={{ background: c.border, borderColor: i === note.colorIdx ? '#fff' : 'transparent', boxShadow: i === note.colorIdx ? `0 0 0 1px ${c.border}` : 'none' }}
-            />
+              style={{ background: c.border, borderColor: i === note.colorIdx ? '#fff' : 'transparent', boxShadow: i === note.colorIdx ? `0 0 0 1px ${c.border}` : 'none' }} />
           ))}
         </div>
       </div>
