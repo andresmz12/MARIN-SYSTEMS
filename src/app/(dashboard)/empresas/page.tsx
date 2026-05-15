@@ -16,6 +16,7 @@ interface CanvasNote {
 }
 
 type Positions = Record<string, { x: number; y: number }>
+type CtrlPoints = Record<string, { x: number; y: number }>
 
 const EMOJIS = ['🏢', '📊', '🧾', '🧹', '📦', '🏠', '💼', '🚀', '🌎', '💰', '🛒', '📱', '🎯', '⚡', '🔧']
 const COLORS = [
@@ -45,6 +46,7 @@ const POS_KEY = 'marin-empresa-positions'
 const CENTER_KEY = 'marin-center-pos'
 const NOTES_KEY = 'marin-canvas-notes'
 const LABELS_KEY = 'marin-line-labels'
+const CTRL_KEY = 'marin-line-controls'
 
 function getNodePos(index: number, total: number, cx: number, cy: number, radius: number) {
   const angle = (2 * Math.PI * index) / total - Math.PI / 2
@@ -58,10 +60,19 @@ function lsSet(key: string, val: unknown) {
   try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* noop */ }
 }
 
+// Point at t=0.5 on a quadratic bezier
+function bezierMid(x1: number, y1: number, cpx: number, cpy: number, x2: number, y2: number) {
+  return {
+    x: 0.25 * x1 + 0.5 * cpx + 0.25 * x2,
+    y: 0.25 * y1 + 0.5 * cpy + 0.25 * y2,
+  }
+}
+
 export default function EmpresasPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const containerRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,6 +81,8 @@ export default function EmpresasPage() {
   const [dims, setDims] = useState({ w: 800, h: 580 })
   const [positions, setPositions] = useState<Positions>({})
   const [centerPos, setCenterPos] = useState({ x: 400, y: 290 })
+  const [ctrlPoints, setCtrlPoints] = useState<CtrlPoints>({})
+  const [draggingCtrl, setDraggingCtrl] = useState<string | null>(null)
   const [canvasNotes, setCanvasNotes] = useState<CanvasNote[]>([])
   const [lineLabels, setLineLabels] = useState<Record<string, string>>({})
   const [editingLabel, setEditingLabel] = useState<string | null>(null)
@@ -85,6 +98,7 @@ export default function EmpresasPage() {
     loadCompanies()
     setCanvasNotes(ls<CanvasNote[]>(NOTES_KEY, []))
     setLineLabels(ls<Record<string, string>>(LABELS_KEY, {}))
+    setCtrlPoints(ls<CtrlPoints>(CTRL_KEY, {}))
     const onResize = () => { setIsMobile(window.innerWidth < 768); updateDims() }
     onResize()
     window.addEventListener('resize', onResize)
@@ -107,6 +121,22 @@ export default function EmpresasPage() {
     companies.forEach((c, i) => { next[c.id] = saved[c.id] || getNodePos(i, companies.length, cx, cy, radius) })
     setPositions(next)
   }, [companies.length, dims.w, dims.h])
+
+  // Set default ctrl points only for companies that don't have one yet
+  useEffect(() => {
+    if (!companies.length || !Object.keys(positions).length) return
+    setCtrlPoints((prev) => {
+      const next = { ...prev }
+      let changed = false
+      companies.forEach((c) => {
+        const pos = positions[c.id]
+        if (!pos || next[c.id]) return
+        next[c.id] = { x: (centerPos.x + pos.x) / 2, y: (centerPos.y + pos.y) / 2 }
+        changed = true
+      })
+      return changed ? next : prev
+    })
+  }, [companies.length, positions, centerPos])
 
   async function loadCompanies() {
     setLoading(true)
@@ -164,8 +194,31 @@ export default function EmpresasPage() {
     const radius = Math.min(cx - 80, cy - 80, 220)
     const next: Positions = {}
     companies.forEach((c, i) => { next[c.id] = getNodePos(i, companies.length, cx, cy, radius) })
-    setPositions(next); setCenterPos({ x: cx, y: cy })
-    try { localStorage.removeItem(POS_KEY); localStorage.removeItem(CENTER_KEY) } catch { /* noop */ }
+    setPositions(next); setCenterPos({ x: cx, y: cy }); setCtrlPoints({})
+    try {
+      localStorage.removeItem(POS_KEY)
+      localStorage.removeItem(CENTER_KEY)
+      localStorage.removeItem(CTRL_KEY)
+    } catch { /* noop */ }
+  }
+
+  // SVG control-point drag handlers
+  function getSVGPoint(e: React.MouseEvent): { x: number; y: number } {
+    if (!svgRef.current) return { x: 0, y: 0 }
+    const rect = svgRef.current.getBoundingClientRect()
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  function handleSVGMouseMove(e: React.MouseEvent) {
+    if (!draggingCtrl) return
+    const pt = getSVGPoint(e)
+    setCtrlPoints((prev) => ({ ...prev, [draggingCtrl]: pt }))
+  }
+
+  function handleSVGMouseUp() {
+    if (!draggingCtrl) return
+    setCtrlPoints((prev) => { lsSet(CTRL_KEY, prev); return prev })
+    setDraggingCtrl(null)
   }
 
   const activeCount = companies.filter((c) => c.status === 'activa').length
@@ -245,8 +298,16 @@ export default function EmpresasPage() {
           </div>
         ) : (
           <>
-            {/* SVG — arrows + labels */}
-            <svg width={dims.w} height={dims.h} className="absolute inset-0" style={{ zIndex: 1 }}>
+            {/* SVG — curved arrows + control points + labels */}
+            <svg
+              ref={svgRef}
+              width={dims.w} height={dims.h}
+              className="absolute inset-0"
+              style={{ zIndex: 1, cursor: draggingCtrl ? 'crosshair' : 'default' }}
+              onMouseMove={handleSVGMouseMove}
+              onMouseUp={handleSVGMouseUp}
+              onMouseLeave={handleSVGMouseUp}
+            >
               <defs>
                 <radialGradient id="cglow" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="#2563eb" stopOpacity="0.12" />
@@ -293,52 +354,89 @@ export default function EmpresasPage() {
                 const x2 = pos.x - nx * 48
                 const y2 = pos.y - ny * 48
 
-                const midX = (x1 + x2) / 2
-                const midY = (y1 + y2) / 2
+                const cp = ctrlPoints[company.id] || { x: (x1 + x2) / 2, y: (y1 + y2) / 2 }
+                const pathD = `M ${x1} ${y1} Q ${cp.x} ${cp.y} ${x2} ${y2}`
 
+                const mid = bezierMid(x1, y1, cp.x, cp.y, x2, y2)
                 const label = lineLabels[company.id] || ''
                 const isHovered = hoveredLine === company.id
                 const isEditing = editingLabel === company.id
+                const isDraggingThis = draggingCtrl === company.id
 
                 return (
                   <g key={company.id}>
                     {/* Glow on hover */}
                     {isHovered && (
-                      <line x1={x1} y1={y1} x2={x2} y2={y2}
-                        stroke={company.color} strokeWidth={6} strokeOpacity={0.12}
-                        strokeLinecap="round" />
+                      <path d={pathD}
+                        stroke={company.color} strokeWidth={8} strokeOpacity={0.1}
+                        fill="none" strokeLinecap="round" />
                     )}
 
-                    {/* Main arrow line */}
-                    <line
-                      x1={x1} y1={y1} x2={x2} y2={y2}
+                    {/* Main arrow curve */}
+                    <path
+                      d={pathD}
                       stroke={`url(#grad-${company.id})`}
-                      strokeWidth={isHovered ? 2 : 1.5}
-                      strokeDasharray={isHovered ? 'none' : '7 4'}
+                      strokeWidth={isHovered || isDraggingThis ? 2 : 1.5}
+                      strokeDasharray={isHovered || isDraggingThis ? 'none' : '7 4'}
                       strokeLinecap="round"
+                      fill="none"
                       markerEnd={`url(#arrow-${company.id})`}
                       style={{ transition: 'stroke-width 0.15s' }}
                     />
 
                     {/* Invisible wide hit area */}
-                    <line x1={x1} y1={y1} x2={x2} y2={y2}
-                      stroke="transparent" strokeWidth={20}
+                    <path d={pathD}
+                      stroke="transparent" strokeWidth={20} fill="none"
                       style={{ cursor: 'pointer' }}
-                      onMouseEnter={() => setHoveredLine(company.id)}
-                      onMouseLeave={() => setHoveredLine(null)}
-                      onClick={() => setEditingLabel(company.id)} />
+                      onMouseEnter={() => !draggingCtrl && setHoveredLine(company.id)}
+                      onMouseLeave={() => !draggingCtrl && setHoveredLine(null)}
+                      onClick={() => !draggingCtrl && setEditingLabel(company.id)} />
 
-                    {/* Label pill */}
+                    {/* Draggable control point handle (visible when hovered or dragging) */}
+                    {(isHovered || isDraggingThis) && (
+                      <g>
+                        {/* Guide lines to endpoints */}
+                        <line x1={x1} y1={y1} x2={cp.x} y2={cp.y}
+                          stroke={company.color} strokeOpacity={0.2} strokeWidth={1}
+                          strokeDasharray="3 3" />
+                        <line x1={x2} y1={y2} x2={cp.x} y2={cp.y}
+                          stroke={company.color} strokeOpacity={0.2} strokeWidth={1}
+                          strokeDasharray="3 3" />
+                        {/* Control point circle */}
+                        <circle
+                          cx={cp.x} cy={cp.y} r={isDraggingThis ? 7 : 5}
+                          fill={company.color} fillOpacity={isDraggingThis ? 0.7 : 0.4}
+                          stroke={company.color} strokeWidth={isDraggingThis ? 2 : 1.5}
+                          strokeOpacity={0.9}
+                          style={{ cursor: 'crosshair' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation()
+                            setDraggingCtrl(company.id)
+                            setHoveredLine(company.id)
+                          }}
+                        />
+                        {/* Tooltip */}
+                        {!isDraggingThis && (
+                          <text x={cp.x} y={cp.y - 10}
+                            textAnchor="middle" fontSize={8} fill={company.color}
+                            fillOpacity={0.5} fontFamily="system-ui, sans-serif">
+                            arrastrar
+                          </text>
+                        )}
+                      </g>
+                    )}
+
+                    {/* Label pill at bezier midpoint */}
                     {label && !isEditing && (
                       <g
                         style={{ cursor: 'pointer' }}
-                        onClick={() => setEditingLabel(company.id)}
-                        onMouseEnter={() => setHoveredLine(company.id)}
-                        onMouseLeave={() => setHoveredLine(null)}
+                        onClick={() => !draggingCtrl && setEditingLabel(company.id)}
+                        onMouseEnter={() => !draggingCtrl && setHoveredLine(company.id)}
+                        onMouseLeave={() => !draggingCtrl && setHoveredLine(null)}
                       >
                         <rect
-                          x={midX - (label.length * 3.6 + 8)}
-                          y={midY - 9}
+                          x={mid.x - (label.length * 3.6 + 8)}
+                          y={mid.y - 9}
                           width={label.length * 7.2 + 16}
                           height={18}
                           rx={9}
@@ -348,7 +446,7 @@ export default function EmpresasPage() {
                           strokeOpacity={0.4}
                           strokeWidth={1}
                         />
-                        <text x={midX} y={midY + 4.5}
+                        <text x={mid.x} y={mid.y + 4.5}
                           textAnchor="middle"
                           fontSize={10}
                           fontFamily="system-ui, sans-serif"
@@ -359,12 +457,12 @@ export default function EmpresasPage() {
                       </g>
                     )}
 
-                    {/* "+" add label hint (when no label and line is hovered) */}
-                    {!label && !isEditing && isHovered && (
+                    {/* "+ texto" hint when no label and line is hovered */}
+                    {!label && !isEditing && isHovered && !isDraggingThis && (
                       <g style={{ cursor: 'pointer' }} onClick={() => setEditingLabel(company.id)}>
-                        <rect x={midX - 20} y={midY - 9} width={40} height={18} rx={9}
+                        <rect x={mid.x - 20} y={mid.y - 9} width={40} height={18} rx={9}
                           fill="#1a1a1a" stroke={company.color} strokeOpacity={0.4} strokeWidth={1} />
-                        <text x={midX} y={midY + 4.5} textAnchor="middle"
+                        <text x={mid.x} y={mid.y + 4.5} textAnchor="middle"
                           fontSize={10} fontFamily="system-ui, sans-serif"
                           fill={company.color} fillOpacity={0.7}>+ texto</text>
                       </g>
@@ -378,12 +476,18 @@ export default function EmpresasPage() {
             {editingLabel && (() => {
               const pos = positions[editingLabel]
               if (!pos) return null
-              const midX = (centerPos.x + pos.x) / 2
-              const midY = (centerPos.y + pos.y) / 2
+              const cp = ctrlPoints[editingLabel]
+              const dx = pos.x - centerPos.x; const dy = pos.y - centerPos.y
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1
+              const nx = dx / dist; const ny = dy / dist
+              const x1 = centerPos.x + nx * 58; const y1 = centerPos.y + ny * 58
+              const x2 = pos.x - nx * 48; const y2 = pos.y - ny * 48
+              const cpx = cp?.x ?? (x1 + x2) / 2; const cpy = cp?.y ?? (y1 + y2) / 2
+              const mid = bezierMid(x1, y1, cpx, cpy, x2, y2)
               const company = companies.find((c) => c.id === editingLabel)
               return (
                 <div
-                  style={{ position: 'absolute', left: midX, top: midY, transform: 'translate(-50%, -50%)', zIndex: 30 }}
+                  style={{ position: 'absolute', left: mid.x, top: mid.y, transform: 'translate(-50%, -50%)', zIndex: 30 }}
                 >
                   <input
                     autoFocus
@@ -411,7 +515,7 @@ export default function EmpresasPage() {
 
             {/* Hint */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none" style={{ zIndex: 2 }}>
-              Arrastra elementos · Clic en flecha para añadir texto
+              Arrastra nodos · Arrastra el punto de la flecha para curvarla · Clic en flecha para añadir texto
             </div>
 
             {/* Company nodes */}
