@@ -7,35 +7,44 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const habits = await prisma.habit.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  return NextResponse.json(habits)
+  try {
+    const habits = await prisma.habit.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: 'asc' },
+    })
+    return NextResponse.json(habits)
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Error al obtener hábitos' }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
-  const { name, emoji, category, frequency, isPreMarket } = body
+  try {
+    const body = await req.json()
+    const { name, emoji, category, frequency, isPreMarket } = body
 
-  if (!name || !emoji || !category || !frequency) {
-    return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 })
+    if (!name || !emoji || !category || !frequency) {
+      return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 })
+    }
+
+    const habit = await prisma.habit.create({
+      data: {
+        userId: session.user.id,
+        name,
+        emoji,
+        category,
+        frequency,
+        isPreMarket: Boolean(isPreMarket),
+      },
+    })
+
+    return NextResponse.json(habit, { status: 201 })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Error al crear hábito' }, { status: 500 })
   }
-
-  const habit = await prisma.habit.create({
-    data: {
-      userId: session.user.id,
-      name,
-      emoji,
-      category,
-      frequency,
-      isPreMarket: Boolean(isPreMarket),
-    },
-  })
-
-  return NextResponse.json(habit, { status: 201 })
 }

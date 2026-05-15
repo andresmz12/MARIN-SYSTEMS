@@ -21,6 +21,8 @@ model User {
   dailyStates      DailyState[]
   checklists       PreTradeChecklist[]
   companies        Company[]
+  playbookEntries  PlaybookEntry[]
+  quickNote        QuickNote?
 }
 
 model Trade {
@@ -36,6 +38,9 @@ model Trade {
   notes        String?
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, date])
 }
 
 model Habit {
@@ -49,6 +54,8 @@ model Habit {
   createdAt   DateTime          @default(now())
   user        User              @relation(fields: [userId], references: [id])
   completions HabitCompletion[]
+
+  @@index([userId])
 }
 
 model HabitCompletion {
@@ -61,6 +68,8 @@ model HabitCompletion {
   user      User     @relation(fields: [userId], references: [id])
 
   @@unique([habitId, date])
+  @@index([userId])
+  @@index([habitId])
 }
 
 model Event {
@@ -75,6 +84,9 @@ model Event {
   forexPair   String?
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, date])
 }
 
 model JournalEntry {
@@ -181,4 +193,27 @@ model CompanyLink {
   url         String
   type        String  @default("Web")
   description String?
+}
+
+model PlaybookEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  conditions String   @default("")
+  entry      String   @default("")
+  exit       String   @default("")
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model QuickNote {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  content   String   @default("")
+  updatedAt DateTime @updatedAt
 }

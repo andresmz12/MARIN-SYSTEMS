@@ -13,11 +13,19 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = { userId: session.user.id }
 
+  const fromStr = searchParams.get('from')
+  const toStr = searchParams.get('to')
+
   if (date) {
     where.date = {
       gte: new Date(`${date}T00:00:00-05:00`),
       lte: new Date(`${date}T23:59:59-05:00`),
     }
+  } else if (fromStr || toStr) {
+    const dateFilter: Record<string, Date> = {}
+    if (fromStr) dateFilter.gte = new Date(fromStr + 'T00:00:00')
+    if (toStr) dateFilter.lte = new Date(toStr + 'T23:59:59')
+    where.date = dateFilter
   } else if (month) {
     const [year, m] = month.split('-').map(Number)
     where.date = {

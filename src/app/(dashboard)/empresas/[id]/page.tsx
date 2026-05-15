@@ -370,9 +370,12 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-sm font-medium ${TASK_STATUS_COLORS[task.status] ?? 'text-gray-200'}`}>{task.title}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority] ?? ''}`}>{task.priority}</span>
+                  {task.status !== 'completada' && task.dueDate && new Date(task.dueDate) < new Date() && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/20 text-red-400 border-red-500/40 font-semibold">VENCIDA</span>
+                  )}
                 </div>
                 {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
-                {task.dueDate && <p className="text-xs text-gray-600 mt-0.5">📅 {new Date(task.dueDate).toLocaleDateString('es-CO')}</p>}
+                {task.dueDate && <p className={`text-xs mt-0.5 ${task.status !== 'completada' && new Date(task.dueDate) < new Date() ? 'text-red-400' : 'text-gray-600'}`}>📅 {new Date(task.dueDate).toLocaleDateString('es-CO')}</p>}
               </div>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button onClick={() => setEditingTask(task)} className="text-gray-600 hover:text-gray-300 p-1">
