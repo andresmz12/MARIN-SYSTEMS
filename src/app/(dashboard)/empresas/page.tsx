@@ -52,6 +52,7 @@ const POS_KEY = 'marin-empresa-positions'
 const CENTER_KEY = 'marin-center-pos'
 const NOTES_KEY = 'marin-canvas-notes'
 const CONNS_KEY = 'marin-connections'
+const CLABEL_KEY = 'marin-center-label'
 
 function getNodePos(index: number, total: number, cx: number, cy: number, radius: number) {
   const angle = (2 * Math.PI * index) / total - Math.PI / 2
@@ -79,6 +80,7 @@ export default function EmpresasPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [centerLabel, setCenterLabel] = useState('MARIN SYSTEMS')
   const [dims, setDims] = useState({ w: 800, h: 580 })
   const [positions, setPositions] = useState<Positions>({})
   const [centerPos, setCenterPos] = useState({ x: 400, y: 290 })
@@ -104,6 +106,7 @@ export default function EmpresasPage() {
     loadCompanies()
     setCanvasNotes(ls<CanvasNote[]>(NOTES_KEY, []))
     setConnections(ls<Connection[]>(CONNS_KEY, []))
+    setCenterLabel(ls<string>(CLABEL_KEY, 'MARIN SYSTEMS'))
     const onResize = () => { setIsMobile(window.innerWidth < 768); updateDims() }
     onResize()
     window.addEventListener('resize', onResize)
@@ -571,6 +574,8 @@ export default function EmpresasPage() {
             <CenterNode
               x={centerPos.x} y={centerPos.y} containerRef={containerRef}
               connectMode={connectMode} isConnectFrom={connectFrom === 'center'}
+              label={centerLabel}
+              onLabelSave={(val) => { setCenterLabel(val); lsSet(CLABEL_KEY, val) }}
               onDragEnd={handleCenterDragEnd}
               onConnectClick={() => handleNodeConnect('center')}
             />
@@ -701,29 +706,46 @@ export default function EmpresasPage() {
 
 /* ────────────────────── Center Node ────────────────────── */
 
-function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom, onConnectClick }: {
+function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom, onConnectClick, label, onLabelSave }: {
   x: number; y: number
   containerRef: React.RefObject<HTMLDivElement>
   onDragEnd: (newX: number, newY: number) => void
   connectMode: boolean
   isConnectFrom: boolean
   onConnectClick: () => void
+  label: string
+  onLabelSave: (val: string) => void
 }) {
   const size = 110
   const motionX = useMotionValue(x - size / 2)
   const motionY = useMotionValue(y - size / 2)
   const [isDragging, setIsDragging] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { motionX.set(x - size / 2); motionY.set(y - size / 2) }, [x, y])
+  useEffect(() => { if (editing) inputRef.current?.select() }, [editing])
+
+  const parts = label.trim().split(/\s+/)
+  const firstChar = parts[0]?.[0]?.toUpperCase() ?? 'M'
+  const line1 = parts[0]?.toUpperCase() ?? 'MARIN'
+  const line2 = parts.slice(1).join(' ').toUpperCase()
+
+  function handleSave(val: string) {
+    const clean = val.trim() || 'MARIN SYSTEMS'
+    onLabelSave(clean)
+    setEditing(false)
+  }
 
   return (
     <motion.div
-      drag={!connectMode} dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
+      drag={!connectMode && !editing} dragConstraints={containerRef} dragMomentum={false} dragElastic={0.05}
       style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size, zIndex: 10 }}
-      className={connectMode ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+      className={connectMode ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : editing ? 'cursor-text' : 'cursor-grab'}
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => { setIsDragging(false); onDragEnd(motionX.get() + size / 2, motionY.get() + size / 2) }}
       onClick={() => { if (connectMode) onConnectClick() }}
+      onDoubleClick={() => { if (!connectMode) setEditing(true) }}
     >
       <motion.div
         animate={
@@ -734,11 +756,28 @@ function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom,
             : { boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }
         }
         transition={isDragging || isConnectFrom ? {} : { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        className="w-full h-full rounded-full bg-[#0a1628] border-2 border-blue-600 flex flex-col items-center justify-center select-none"
+        className="w-full h-full rounded-full bg-[#0a1628] border-2 border-blue-600 flex flex-col items-center justify-center select-none relative overflow-hidden"
       >
-        <span className="text-2xl font-black text-blue-400">M</span>
-        <span className="text-[8px] text-blue-400/60 font-bold tracking-widest">MARIN</span>
-        <span className="text-[7px] text-blue-400/40 tracking-widest">SYSTEMS</span>
+        {editing ? (
+          <input
+            ref={inputRef}
+            defaultValue={label}
+            onBlur={(e) => handleSave(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSave(e.currentTarget.value)
+              if (e.key === 'Escape') setEditing(false)
+            }}
+            className="w-[88px] text-center bg-transparent border-b border-blue-400/60 text-blue-300 text-[10px] font-bold outline-none tracking-wider px-1"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <>
+            <span className="text-2xl font-black text-blue-400 leading-none">{firstChar}</span>
+            <span className="text-[8px] text-blue-400/60 font-bold tracking-widest">{line1}</span>
+            {line2 && <span className="text-[7px] text-blue-400/40 tracking-widest">{line2}</span>}
+            <span className="absolute bottom-2 text-[7px] text-blue-400/20 tracking-wide">doble clic</span>
+          </>
+        )}
       </motion.div>
     </motion.div>
   )
