@@ -459,7 +459,12 @@ export default function EmpresasPage() {
                 const toColor = getNodeColor(conn.to)
 
                 return (
-                  <g key={conn.id}>
+                  // Outer group handles hover for the entire connection (line + controls + label + delete)
+                  // This prevents onMouseLeave firing when moving between child elements
+                  <g key={conn.id}
+                    onMouseEnter={() => !draggingConnCtrl && !connectMode && setHoveredConn(conn.id)}
+                    onMouseLeave={() => !draggingConnCtrl && setHoveredConn(null)}
+                  >
                     {/* Glow on hover */}
                     {isHovered && (
                       <path d={pathD} stroke={toColor} strokeWidth={8}
@@ -473,11 +478,9 @@ export default function EmpresasPage() {
                       strokeLinecap="round" fill="none"
                       markerEnd={`url(#arr-${conn.id})`}
                       style={{ transition: 'stroke-width 0.15s' }} />
-                    {/* Wide transparent hit area */}
+                    {/* Wide transparent hit area for click */}
                     <path d={pathD} stroke="transparent" strokeWidth={20} fill="none"
                       style={{ cursor: 'pointer' }}
-                      onMouseEnter={() => !draggingConnCtrl && !connectMode && setHoveredConn(conn.id)}
-                      onMouseLeave={() => !draggingConnCtrl && setHoveredConn(null)}
                       onClick={() => { if (!draggingConnCtrl && !connectMode) setEditingConn(conn.id) }} />
 
                     {/* Control point handle (on hover) */}
@@ -503,19 +506,17 @@ export default function EmpresasPage() {
                     {isHovered && !isEditing && !connectMode && (
                       <g style={{ cursor: 'pointer' }}
                         onClick={(e) => { e.stopPropagation(); deleteConnection(conn.id) }}>
-                        <circle cx={mid.x + 16} cy={mid.y - 14} r={8}
-                          fill="#dc2626" fillOpacity={0.8} />
+                        <circle cx={mid.x + 16} cy={mid.y - 14} r={9}
+                          fill="#dc2626" fillOpacity={0.85} />
                         <text x={mid.x + 16} y={mid.y - 10} textAnchor="middle"
-                          fontSize={10} fill="white" fontWeight="bold" fontFamily="system-ui">×</text>
+                          fontSize={11} fill="white" fontWeight="bold" fontFamily="system-ui">×</text>
                       </g>
                     )}
 
                     {/* Label pill */}
                     {label && !isEditing && (
                       <g style={{ cursor: 'pointer' }}
-                        onClick={() => !connectMode && setEditingConn(conn.id)}
-                        onMouseEnter={() => !connectMode && setHoveredConn(conn.id)}
-                        onMouseLeave={() => setHoveredConn(null)}>
+                        onClick={() => !connectMode && setEditingConn(conn.id)}>
                         <rect x={mid.x - (label.length * 3.6 + 8)} y={mid.y - 9}
                           width={label.length * 7.2 + 16} height={18} rx={9}
                           fill={toColor} fillOpacity={0.14}
