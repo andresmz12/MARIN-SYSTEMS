@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 interface Event {
   id: string
@@ -33,7 +35,6 @@ function getWeekDates(): { date: Date; str: string }[] {
   const day = today.getDay()
   const monday = new Date(today)
   monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
-
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -54,11 +55,15 @@ const emptyForm = {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 export default function AgendaPage() {
+  const { showToast } = useToast()
   const [events, setEvents] = useState<Event[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [view, setView] = useState<'semana' | 'lista'>('semana')
 
   const weekDates = getWeekDates()
@@ -69,12 +74,20 @@ export default function AgendaPage() {
   }, [])
 
   async function loadEvents() {
-    const from = weekDates[0].str
-    const future = new Date()
-    future.setDate(future.getDate() + 30)
-    const to = future.toISOString().split('T')[0]
-    const res = await fetch(`/api/events?from=${from}&to=${to}`)
-    if (res.ok) setEvents(await res.json())
+    setPageLoading(true)
+    setLoadError(false)
+    try {
+      const from = weekDates[0].str
+      const future = new Date()
+      future.setDate(future.getDate() + 30)
+      const to = future.toISOString().split('T')[0]
+      const res = await fetch(`/api/events?from=${from}&to=${to}`)
+      if (!res.ok) throw new Error()
+      setEvents(await res.json())
+    } catch {
+      setLoadError(true)
+    }
+    setPageLoading(false)
   }
 
   function openCreate(dateStr?: string) {
@@ -100,31 +113,44 @@ export default function AgendaPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const payload = { ...form, isForexNews: form.isForexNews }
-
-    if (editEvent) {
-      await fetch(`/api/events/${editEvent.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } else {
-      await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+    try {
+      const payload = { ...form }
+      const res = editEvent
+        ? await fetch(`/api/events/${editEvent.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        : await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+      if (!res.ok) throw new Error()
+      showToast(editEvent ? 'Evento actualizado' : 'Evento creado', 'success')
+      setModalOpen(false)
+      loadEvents()
+    } catch {
+      showToast('Error al guardar el evento', 'error')
     }
-
     setLoading(false)
-    setModalOpen(false)
-    loadEvents()
   }
 
-  async function deleteEvent(id: string) {
-    if (!confirm('¿Eliminar este evento?')) return
-    await fetch(`/api/events/${id}`, { method: 'DELETE' })
-    loadEvents()
+  async function confirmDeleteEvent() {
+    if (!confirmDelete) return
+    try {
+      await fetch(`/api/events/${confirmDelete}`, { method: 'DELETE' })
+      showToast('Evento eliminado', 'success')
+      setModalOpen(false)
+      loadEvents()
+    } catch {
+      showToast('Error al eliminar', 'error')
+    }
+    setConfirmDelete(null)
+  }
+
+  function requestDelete(id: string) {
+    setConfirmDelete(id)
   }
 
   const getEventsForDay = (dateStr: string) =>
@@ -133,6 +159,15 @@ export default function AgendaPage() {
   const upcomingEvents = events
     .filter((e) => e.date.split('T')[0] >= today)
     .slice(0, 20)
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <p className="text-gray-500">Error al cargar los eventos</p>
+        <button onClick={loadEvents} className="btn-primary">Reintentar</button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -169,7 +204,9 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      {view === 'semana' ? (
+      {pageLoading ? (
+        <div className="card animate-pulse h-64" />
+      ) : view === 'semana' ? (
         <div className="card p-0 overflow-hidden">
           <div className="grid grid-cols-7 divide-x divide-[#2a2a2a]">
             {weekDates.map(({ date, str }) => {
@@ -177,15 +214,12 @@ export default function AgendaPage() {
               const isToday = str === today
               return (
                 <div key={str} className="min-h-32">
-                  {/* Day header */}
                   <div className={`p-2 border-b border-[#2a2a2a] text-center ${isToday ? 'bg-blue-600/10' : ''}`}>
                     <p className="text-[10px] text-gray-500">{DAYS_ES[date.getDay()]}</p>
                     <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-blue-400' : 'text-gray-300'}`}>
                       {date.getDate()}
                     </p>
                   </div>
-
-                  {/* Events */}
                   <div className="p-1 space-y-1">
                     {dayEvents.map((event) => (
                       <div
@@ -249,7 +283,7 @@ export default function AgendaPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
-                  <button onClick={() => deleteEvent(event.id)} className="text-gray-600 hover:text-red-400 transition-colors">
+                  <button onClick={() => requestDelete(event.id)} className="text-gray-600 hover:text-red-400 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -261,7 +295,6 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editEvent ? 'Editar evento' : 'Nuevo evento'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -275,7 +308,6 @@ export default function AgendaPage() {
               required
             />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
@@ -297,14 +329,12 @@ export default function AgendaPage() {
               />
             </div>
           </div>
-
           <div>
             <label className="label">Tipo</label>
             <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               {EVENT_TYPES.map((t) => <option key={t} value={t} className="capitalize">{t}</option>)}
             </select>
           </div>
-
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -314,7 +344,6 @@ export default function AgendaPage() {
             />
             <span className="text-sm text-gray-300">Noticia Forex de alto impacto</span>
           </label>
-
           {form.isForexNews && (
             <div>
               <label className="label">Par afectado</label>
@@ -327,7 +356,6 @@ export default function AgendaPage() {
               />
             </div>
           )}
-
           <div>
             <label className="label">Notas (opcional)</label>
             <textarea
@@ -337,7 +365,6 @@ export default function AgendaPage() {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
-
           <div className="flex gap-3 pt-1">
             <button type="submit" disabled={loading} className="btn-primary flex-1">
               {loading ? 'Guardando...' : editEvent ? 'Actualizar' : 'Crear evento'}
@@ -345,7 +372,7 @@ export default function AgendaPage() {
             {editEvent && (
               <button
                 type="button"
-                onClick={async () => { await deleteEvent(editEvent.id); setModalOpen(false) }}
+                onClick={() => requestDelete(editEvent.id)}
                 className="btn-danger"
               >
                 Eliminar
@@ -357,6 +384,16 @@ export default function AgendaPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Eliminar evento"
+        message="¿Seguro que quieres eliminar este evento? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={confirmDeleteEvent}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

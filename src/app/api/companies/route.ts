@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { CompanySchema } from '@/lib/schemas'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -28,19 +29,21 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    const { name, description, emoji, color, status, industry } = body
-
-    if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+    const parsed = CompanySchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
+    }
+    const { name, description, emoji, color, status, industry } = parsed.data
 
     const company = await prisma.company.create({
       data: {
         userId: session.user.id,
         name,
-        description: description || null,
-        emoji: emoji || '🏢',
-        color: color || '#2563eb',
-        status: status || 'activa',
-        industry: industry || null,
+        description: description ?? null,
+        emoji: emoji ?? '🏢',
+        color: color ?? '#2563eb',
+        status: status ?? 'activa',
+        industry: industry ?? null,
       },
       include: { tasks: true },
     })

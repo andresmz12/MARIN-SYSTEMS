@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/lib/utils'
+import { PAIRS, SETUPS, EMOTIONS } from '@/lib/constants'
 
 interface Trade {
   id: string
@@ -16,10 +19,6 @@ interface Trade {
   notes: string | null
 }
 
-const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
-const SETUPS = ['London Breakout', 'NY Session Open', 'Estructura H4', 'Rebote soporte/resistencia', 'Fibonacci', 'Price Action', 'Otro']
-const EMOTIONS = ['Tranquilo', 'Ansioso', 'Confiado', 'Dudoso', 'Emocionado', 'Frustrado', 'Neutral']
-
 const emptyForm = {
   pair: 'EUR/USD',
   result: 'win' as string,
@@ -32,11 +31,15 @@ const emptyForm = {
 }
 
 export default function TradingDiarioPage() {
+  const { showToast } = useToast()
   const [trades, setTrades] = useState<Trade[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editTrade, setEditTrade] = useState<Trade | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [filterResult, setFilterResult] = useState('')
   const [filterPair, setFilterPair] = useState('')
   const [filterDate, setFilterDate] = useState('')
@@ -46,12 +49,20 @@ export default function TradingDiarioPage() {
   }, [filterResult, filterPair, filterDate])
 
   async function loadTrades() {
-    const params = new URLSearchParams()
-    if (filterResult) params.set('result', filterResult)
-    if (filterPair) params.set('pair', filterPair)
-    if (filterDate) params.set('date', filterDate)
-    const res = await fetch(`/api/trades?${params}`)
-    if (res.ok) setTrades(await res.json())
+    setPageLoading(true)
+    setLoadError(false)
+    try {
+      const params = new URLSearchParams()
+      if (filterResult) params.set('result', filterResult)
+      if (filterPair) params.set('pair', filterPair)
+      if (filterDate) params.set('date', filterDate)
+      const res = await fetch(`/api/trades?${params}`)
+      if (!res.ok) throw new Error()
+      setTrades(await res.json())
+    } catch {
+      setLoadError(true)
+    }
+    setPageLoading(false)
   }
 
   const last3 = trades.slice(0, 3)
@@ -81,37 +92,54 @@ export default function TradingDiarioPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const payload = { ...form, pips: form.pips ? parseFloat(form.pips) : null }
-
-    if (editTrade) {
-      await fetch(`/api/trades/${editTrade.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } else {
-      await fetch('/api/trades', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+    try {
+      const payload = { ...form, pips: form.pips ? parseFloat(form.pips) : null }
+      const res = editTrade
+        ? await fetch(`/api/trades/${editTrade.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        : await fetch('/api/trades', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+      if (!res.ok) throw new Error()
+      showToast(editTrade ? 'Trade actualizado' : 'Trade registrado', 'success')
+      setModalOpen(false)
+      loadTrades()
+    } catch {
+      showToast('Error al guardar el trade', 'error')
     }
-
     setLoading(false)
-    setModalOpen(false)
-    loadTrades()
   }
 
-  async function deleteTrade(id: string) {
-    if (!confirm('¿Eliminar este trade?')) return
-    await fetch(`/api/trades/${id}`, { method: 'DELETE' })
-    loadTrades()
+  async function confirmDeleteTrade() {
+    if (!confirmDelete) return
+    try {
+      await fetch(`/api/trades/${confirmDelete}`, { method: 'DELETE' })
+      showToast('Trade eliminado', 'success')
+      loadTrades()
+    } catch {
+      showToast('Error al eliminar', 'error')
+    }
+    setConfirmDelete(null)
   }
 
   const wins = trades.filter((t) => t.result === 'win').length
   const losses = trades.filter((t) => t.result === 'loss').length
   const winRate = trades.length > 0 ? Math.round((wins / trades.length) * 100) : 0
   const totalPips = trades.reduce((sum, t) => sum + (t.pips || 0), 0)
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <p className="text-gray-500">Error al cargar los trades</p>
+        <button onClick={loadTrades} className="btn-primary">Reintentar</button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -128,7 +156,6 @@ export default function TradingDiarioPage() {
         </button>
       </div>
 
-      {/* 3 Strikes Alert */}
       {threeStrikes && (
         <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-4 flex items-start gap-3">
           <span className="text-2xl">🛑</span>
@@ -141,7 +168,6 @@ export default function TradingDiarioPage() {
         </div>
       )}
 
-      {/* Quick Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card">
           <p className="text-xs text-gray-500">Total trades</p>
@@ -165,7 +191,6 @@ export default function TradingDiarioPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="card">
         <div className="flex flex-wrap gap-3">
           <div className="flex-1 min-w-32">
@@ -204,9 +229,20 @@ export default function TradingDiarioPage() {
         </div>
       </div>
 
-      {/* Trades Table */}
       <div className="card p-0 overflow-hidden">
-        {trades.length === 0 ? (
+        {pageLoading ? (
+          <div className="divide-y divide-[#1f1f1f]">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="px-4 py-3 flex gap-4 animate-pulse">
+                <div className="h-4 bg-[#2a2a2a] rounded w-20" />
+                <div className="h-4 bg-[#2a2a2a] rounded w-16" />
+                <div className="h-4 bg-[#2a2a2a] rounded w-12" />
+                <div className="h-4 bg-[#2a2a2a] rounded w-8" />
+                <div className="h-4 bg-[#2a2a2a] rounded w-28 ml-auto" />
+              </div>
+            ))}
+          </div>
+        ) : trades.length === 0 ? (
           <div className="p-8 text-center">
             <p className="text-gray-600 text-sm">No hay trades registrados</p>
             <button onClick={openCreate} className="btn-primary mt-3">Registrar primer trade</button>
@@ -248,18 +284,12 @@ export default function TradingDiarioPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(trade)}
-                          className="text-gray-500 hover:text-gray-300 transition-colors"
-                        >
+                        <button onClick={() => openEdit(trade)} className="text-gray-500 hover:text-gray-300 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button
-                          onClick={() => deleteTrade(trade.id)}
-                          className="text-gray-600 hover:text-red-400 transition-colors"
-                        >
+                        <button onClick={() => setConfirmDelete(trade.id)} className="text-gray-600 hover:text-red-400 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
@@ -274,12 +304,7 @@ export default function TradingDiarioPage() {
         )}
       </div>
 
-      {/* Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editTrade ? 'Editar Trade' : 'Registrar Trade'}
-      >
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editTrade ? 'Editar Trade' : 'Registrar Trade'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -294,11 +319,7 @@ export default function TradingDiarioPage() {
             </div>
             <div>
               <label className="label">Par de divisas</label>
-              <select
-                className="input"
-                value={form.pair}
-                onChange={(e) => setForm({ ...form, pair: e.target.value })}
-              >
+              <select className="input" value={form.pair} onChange={(e) => setForm({ ...form, pair: e.target.value })}>
                 {PAIRS.map((p) => <option key={p}>{p}</option>)}
               </select>
             </div>
@@ -389,6 +410,16 @@ export default function TradingDiarioPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Eliminar trade"
+        message="¿Seguro que quieres eliminar este trade? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={confirmDeleteTrade}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

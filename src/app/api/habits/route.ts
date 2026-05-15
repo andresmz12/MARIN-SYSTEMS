@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { HabitSchema } from '@/lib/schemas'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -25,11 +26,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { name, emoji, category, frequency, isPreMarket } = body
-
-    if (!name || !emoji || !category || !frequency) {
-      return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 })
+    const parsed = HabitSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
     }
+    const { name, emoji, category, frequency, isPreMarket } = parsed.data
 
     const habit = await prisma.habit.create({
       data: {
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
         emoji,
         category,
         frequency,
-        isPreMarket: Boolean(isPreMarket),
+        isPreMarket: isPreMarket ?? false,
       },
     })
 

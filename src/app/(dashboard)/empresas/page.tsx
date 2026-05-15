@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion'
+import { useToast } from '@/components/ui/Toast'
 
 interface CompanyTask { id: string; status: string; priority: string }
 interface Company {
@@ -10,6 +11,8 @@ interface Company {
   status: string; industry: string | null; description: string | null
   tasks: CompanyTask[]
 }
+
+type Positions = Record<string, { x: number; y: number }>
 
 const EMOJIS = ['🏢', '📊', '🧾', '🧹', '📦', '🏠', '💼', '🚀', '🌎', '💰', '🛒', '📱', '🎯', '⚡', '🔧']
 const COLORS = [
@@ -33,13 +36,24 @@ const STATUS_COLORS: Record<string, string> = {
   idea: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
 }
 
+const STORAGE_KEY = 'marin-empresa-positions'
+
 function getNodePos(index: number, total: number, cx: number, cy: number, radius: number) {
   const angle = (2 * Math.PI * index) / total - Math.PI / 2
   return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) }
 }
 
+function loadSavedPositions(): Positions {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
 export default function EmpresasPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [companies, setCompanies] = useState<Company[]>([])
@@ -47,6 +61,7 @@ export default function EmpresasPage() {
   const [showModal, setShowModal] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [dims, setDims] = useState({ w: 800, h: 580 })
+  const [positions, setPositions] = useState<Positions>({})
   const [form, setForm] = useState({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
   const [saving, setSaving] = useState(false)
 
@@ -71,12 +86,28 @@ export default function EmpresasPage() {
     updateDims()
   }, [companies, updateDims])
 
+  // Initialize positions when companies or dims change
+  useEffect(() => {
+    if (!companies.length) return
+    const cx = dims.w / 2
+    const cy = dims.h / 2
+    const radius = Math.min(cx - 80, cy - 80, 220)
+    const saved = loadSavedPositions()
+    const next: Positions = {}
+    companies.forEach((company, i) => {
+      next[company.id] = saved[company.id] || getNodePos(i, companies.length, cx, cy, radius)
+    })
+    setPositions(next)
+  }, [companies.length, dims.w, dims.h])
+
   async function loadCompanies() {
     setLoading(true)
     try {
       const res = await fetch('/api/companies')
       if (res.ok) setCompanies(await res.json())
-    } catch (e) { console.error(e) }
+    } catch {
+      showToast('Error al cargar empresas', 'error')
+    }
     setLoading(false)
   }
 
@@ -90,20 +121,41 @@ export default function EmpresasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      if (res.ok) {
-        const company: Company = await res.json()
-        setCompanies((prev) => [...prev, company])
-        setShowModal(false)
-        setForm({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
-      }
-    } catch (e) { console.error(e) }
+      if (!res.ok) throw new Error()
+      const company: Company = await res.json()
+      setCompanies((prev) => [...prev, company])
+      setShowModal(false)
+      setForm({ name: '', description: '', emoji: '🏢', color: '#2563eb', status: 'activa', industry: 'Consultoría' })
+      showToast('Empresa creada', 'success')
+    } catch {
+      showToast('Error al crear empresa', 'error')
+    }
     setSaving(false)
+  }
+
+  function handleNodeDragEnd(id: string, newX: number, newY: number) {
+    setPositions((prev) => {
+      const updated = { ...prev, [id]: { x: newX, y: newY } }
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)) } catch { /* noop */ }
+      return updated
+    })
+  }
+
+  function resetPositions() {
+    const cx = dims.w / 2
+    const cy = dims.h / 2
+    const radius = Math.min(cx - 80, cy - 80, 220)
+    const next: Positions = {}
+    companies.forEach((company, i) => {
+      next[company.id] = getNodePos(i, companies.length, cx, cy, radius)
+    })
+    setPositions(next)
+    try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
   }
 
   const activeCount = companies.filter((c) => c.status === 'activa').length
   const cx = dims.w / 2
   const cy = dims.h / 2
-  const radius = Math.min(cx - 80, cy - 80, 220)
 
   if (loading) {
     return (
@@ -127,12 +179,22 @@ export default function EmpresasPage() {
             {companies.length} empresa{companies.length !== 1 ? 's' : ''} · {activeCount} activa{activeCount !== 1 ? 's' : ''}
           </p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nueva empresa
-        </button>
+        <div className="flex items-center gap-2">
+          {companies.length > 0 && (
+            <button onClick={resetPositions} className="btn-secondary text-xs flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Resetear mapa
+            </button>
+          )}
+          <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nueva empresa
+          </button>
+        </div>
       </div>
 
       {/* Canvas */}
@@ -148,7 +210,6 @@ export default function EmpresasPage() {
             <button onClick={() => setShowModal(true)} className="btn-primary">Crea tu primera empresa</button>
           </div>
         ) : isMobile ? (
-          /* Mobile grid */
           <div className="p-6 grid grid-cols-2 gap-4">
             {companies.map((company) => {
               const pending = company.tasks.filter((t) => t.status !== 'completada').length
@@ -164,9 +225,8 @@ export default function EmpresasPage() {
             })}
           </div>
         ) : (
-          /* Desktop map */
           <>
-            {/* SVG lines */}
+            {/* SVG lines — draw to current saved positions */}
             <svg width={dims.w} height={dims.h} className="absolute inset-0 pointer-events-none">
               <defs>
                 <radialGradient id="cglow" cx="50%" cy="50%" r="50%">
@@ -175,8 +235,9 @@ export default function EmpresasPage() {
                 </radialGradient>
               </defs>
               <circle cx={cx} cy={cy} r={120} fill="url(#cglow)" />
-              {companies.map((company, i) => {
-                const pos = getNodePos(i, companies.length, cx, cy, radius)
+              {companies.map((company) => {
+                const pos = positions[company.id]
+                if (!pos) return null
                 return (
                   <line key={company.id} x1={cx} y1={cy} x2={pos.x} y2={pos.y}
                     stroke={company.color} strokeOpacity={0.3} strokeWidth={1.5} strokeDasharray="6 4" />
@@ -197,13 +258,28 @@ export default function EmpresasPage() {
               </motion.div>
             </div>
 
+            {/* Drag hint */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none">
+              Arrastra las burbujas para organizarlas
+            </div>
+
             {/* Company nodes */}
             {companies.map((company, i) => {
-              const pos = getNodePos(i, companies.length, cx, cy, radius)
+              const pos = positions[company.id]
+              if (!pos) return null
               const pending = company.tasks.filter((t) => t.status !== 'completada').length
               return (
-                <CompanyNode key={company.id} company={company} x={pos.x} y={pos.y}
-                  delay={i * 0.1} pending={pending} onClick={() => router.push(`/empresas/${company.id}`)} />
+                <CompanyNode
+                  key={company.id}
+                  company={company}
+                  x={pos.x}
+                  y={pos.y}
+                  delay={i * 0.1}
+                  pending={pending}
+                  containerRef={containerRef}
+                  onClick={() => router.push(`/empresas/${company.id}`)}
+                  onDragEnd={handleNodeDragEnd}
+                />
               )
             })}
           </>
@@ -284,7 +360,6 @@ export default function EmpresasPage() {
                     {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
                   </select>
                 </div>
-                {/* Preview */}
                 <div className="flex items-center gap-3 p-3 rounded-xl border border-[#2a2a2a] bg-[#0a0a0a]">
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl border-2 flex-shrink-0"
                     style={{ borderColor: form.color, boxShadow: `0 0 12px ${form.color}40` }}>
@@ -312,40 +387,72 @@ export default function EmpresasPage() {
 
 /* ────────────────────── Company Node ────────────────────── */
 
-function CompanyNode({ company, x, y, delay, pending, onClick }: {
-  company: Company; x: number; y: number; delay: number; pending: number; onClick: () => void
+function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onDragEnd }: {
+  company: Company
+  x: number
+  y: number
+  delay: number
+  pending: number
+  containerRef: React.RefObject<HTMLDivElement>
+  onClick: () => void
+  onDragEnd: (id: string, newX: number, newY: number) => void
 }) {
   const size = 88
+  const motionX = useMotionValue(x - size / 2)
+  const motionY = useMotionValue(y - size / 2)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Sync position when parent updates (e.g. reset)
+  useEffect(() => {
+    motionX.set(x - size / 2)
+    motionY.set(y - size / 2)
+  }, [x, y])
+
   return (
     <motion.div
+      drag
+      dragConstraints={containerRef}
+      dragMomentum={false}
+      dragElastic={0.05}
+      style={{ x: motionX, y: motionY, position: 'absolute', left: 0, top: 0, width: size, height: size }}
       initial={{ opacity: 0, scale: 0.3 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay, type: 'spring', damping: 16, stiffness: 200 }}
-      style={{ position: 'absolute', left: x - size / 2, top: y - size / 2, width: size, height: size }}
+      onDragStart={() => setIsDragging(true)}
+      onDragEnd={() => {
+        setIsDragging(false)
+        const newX = motionX.get() + size / 2
+        const newY = motionY.get() + size / 2
+        onDragEnd(company.id, newX, newY)
+      }}
     >
       <motion.div
-        animate={{ y: [0, -5, 0] }}
+        animate={isDragging ? {} : { y: [0, -5, 0] }}
         transition={{ duration: 3.5 + delay, repeat: Infinity, ease: 'easeInOut' }}
         className="w-full h-full"
       >
         <button
-          onClick={onClick}
-          className="w-full h-full rounded-full flex flex-col items-center justify-center relative"
+          onClick={(e) => {
+            if (isDragging) { e.preventDefault(); return }
+            onClick()
+          }}
+          className={`w-full h-full rounded-full flex flex-col items-center justify-center relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
             background: `${company.color}18`,
-            border: `2px solid ${company.color}60`,
-            boxShadow: `0 0 16px ${company.color}30`,
-            transition: 'box-shadow 0.2s, border-color 0.2s, transform 0.2s',
+            border: `2px solid ${isDragging ? company.color : company.color + '60'}`,
+            boxShadow: isDragging ? `0 0 32px ${company.color}80` : `0 0 16px ${company.color}30`,
+            transform: isDragging ? 'scale(1.1)' : undefined,
+            transition: 'box-shadow 0.2s, border-color 0.2s',
           }}
           onMouseEnter={(e) => {
+            if (isDragging) return
             e.currentTarget.style.boxShadow = `0 0 28px ${company.color}70`
             e.currentTarget.style.borderColor = company.color
-            e.currentTarget.style.transform = 'scale(1.08)'
           }}
           onMouseLeave={(e) => {
+            if (isDragging) return
             e.currentTarget.style.boxShadow = `0 0 16px ${company.color}30`
             e.currentTarget.style.borderColor = `${company.color}60`
-            e.currentTarget.style.transform = 'scale(1)'
           }}
         >
           <span className="text-2xl select-none">{company.emoji}</span>
@@ -353,16 +460,13 @@ function CompanyNode({ company, x, y, delay, pending, onClick }: {
             style={{ color: company.color, maxWidth: 72 }}>
             {company.name.length > 13 ? company.name.slice(0, 11) + '…' : company.name}
           </span>
-          {/* Connection dot */}
           <div className="absolute -bottom-1.5 w-3 h-3 rounded-full border-2 border-[#080808]" style={{ backgroundColor: company.color }} />
-          {/* Badge */}
           {pending > 0 && (
             <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center">
               <span className="text-[9px] font-black text-black">{pending > 9 ? '9+' : pending}</span>
             </div>
           )}
         </button>
-        {/* Status label */}
         <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap">
           <span className="text-[9px] px-2 py-0.5 rounded-full border font-medium"
             style={{ color: company.color, borderColor: `${company.color}50`, background: `${company.color}15` }}>

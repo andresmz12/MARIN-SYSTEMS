@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getDayStart, getDayEnd } from '@/lib/utils'
+import { TradeSchema } from '@/lib/schemas'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -52,11 +53,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { pair, result, pips, setup, emotion, followedPlan, notes, date } = body
-
-    if (!pair || !result) {
-      return NextResponse.json({ error: 'Par y resultado son requeridos' }, { status: 400 })
+    const parsed = TradeSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
     }
+    const { pair, result, pips, setup, emotion, followedPlan, notes, date } = parsed.data
 
     const trade = await prisma.trade.create({
       data: {
@@ -64,11 +65,11 @@ export async function POST(req: NextRequest) {
         date: date ? new Date(date) : new Date(),
         pair,
         result,
-        pips: pips ? parseFloat(pips) : null,
-        setup: setup || null,
-        emotion: emotion || null,
-        followedPlan: Boolean(followedPlan),
-        notes: notes || null,
+        pips: pips ?? null,
+        setup: setup ?? null,
+        emotion: emotion ?? null,
+        followedPlan: followedPlan ?? false,
+        notes: notes ?? null,
       },
     })
 
