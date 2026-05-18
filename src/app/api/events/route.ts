@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     orderBy: { date: 'asc' },
   })
 
-  return NextResponse.json(events)
+  return NextResponse.json(events, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {

@@ -74,13 +74,16 @@ export default function AgendaPage() {
   const today = new Date().toISOString().split('T')[0]
 
   const loadEvents = useCallback(async () => {
-    const from = weekDates[0].str
+    // Fetch from 30 days back so past incomplete events are visible
+    const past = new Date()
+    past.setDate(past.getDate() - 30)
+    const from = past.toISOString().split('T')[0]
     const future = new Date()
     future.setDate(future.getDate() + 60)
     const to = future.toISOString().split('T')[0]
     const res = await fetch(`/api/events?from=${from}&to=${to}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
-  }, [weekDates[0].str])
+  }, [weekOffset])
 
   useEffect(() => {
     loadEvents()
@@ -180,9 +183,13 @@ export default function AgendaPage() {
     events.filter((e) => e.date.startsWith(dateStr))
 
   const upcomingEvents = events
-    .filter((e) => e.date.split('T')[0] >= today)
+    .filter((e) => {
+      const dateStr = e.date.split('T')[0]
+      // Show future events + past events that aren't completed yet
+      return dateStr >= today || !e.completed
+    })
     .filter((e) => !hideCompleted || !e.completed)
-    .slice(0, 30)
+    .slice(0, 50)
 
   return (
     <div className="space-y-4 lg:space-y-6">
