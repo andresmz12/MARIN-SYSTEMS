@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getDailyQuote, computeTrafficLight } from '@/lib/utils'
+import { useToast } from '@/components/ui/Toast'
 
 interface DailyState {
   id?: string
@@ -38,10 +39,30 @@ interface Event {
   isForexNews: boolean
 }
 
+interface UrgentTask {
+  id: string
+  title: string
+  priority: string
+  status: string
+  dueDate?: string | null
+  company: {
+    id: string
+    name: string
+    color: string
+    emoji: string
+  }
+}
+
+interface Stats {
+  last10WinRate: number
+  habitStreak: number
+}
+
 const MOOD_LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente']
 const MOOD_COLORS = ['', 'text-red-400', 'text-orange-400', 'text-yellow-400', 'text-green-400', 'text-emerald-400']
 
 export default function DashboardPage() {
+  const { showToast } = useToast()
   const [dailyState, setDailyState] = useState<DailyState>({
     mentalState: 3,
     rutinaCompleted: false,
@@ -51,7 +72,11 @@ export default function DashboardPage() {
   const [habits, setHabits] = useState<Habit[]>([])
   const [completions, setCompletions] = useState<HabitCompletion[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
+  const [urgentTasks, setUrgentTasks] = useState<UrgentTask[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const today = new Date().toISOString().split('T')[0]
   const quote = getDailyQuote()
@@ -62,24 +87,48 @@ export default function DashboardPage() {
   }, [])
 
   async function loadData() {
-    const [stateRes, tradesRes, habitsRes, completionsRes, eventsRes] = await Promise.all([
-      fetch(`/api/daily-state?date=${today}`),
-      fetch(`/api/trades?date=${today}`),
-      fetch('/api/habits'),
-      fetch(`/api/habits/complete?date=${today}`),
-      fetch(`/api/events?from=${today}`),
-    ])
+    setLoadError(false)
+    setLoading(true)
+    try {
+      const [stateRes, tradesRes, habitsRes, completionsRes, eventsRes, companiesRes, statsRes] = await Promise.all([
+        fetch(`/api/daily-state?date=${today}`),
+        fetch(`/api/trades?date=${today}`),
+        fetch('/api/habits'),
+        fetch(`/api/habits/complete?date=${today}`),
+        fetch(`/api/events?from=${today}`),
+        fetch('/api/companies'),
+        fetch('/api/stats'),
+      ])
 
-    if (stateRes.ok) {
-      const state = await stateRes.json()
-      if (state) setDailyState(state)
-    }
-    if (tradesRes.ok) setTodayTrades(await tradesRes.json())
-    if (habitsRes.ok) setHabits(await habitsRes.json())
-    if (completionsRes.ok) setCompletions(await completionsRes.json())
-    if (eventsRes.ok) {
-      const events = await eventsRes.json()
-      setUpcomingEvents(events.slice(0, 5))
+      if (stateRes.ok) {
+        const state = await stateRes.json()
+        if (state) setDailyState(state)
+      }
+      if (tradesRes.ok) setTodayTrades(await tradesRes.json())
+      if (habitsRes.ok) setHabits(await habitsRes.json())
+      if (completionsRes.ok) setCompletions(await completionsRes.json())
+      if (eventsRes.ok) {
+        const events = await eventsRes.json()
+        setUpcomingEvents(events.slice(0, 5))
+      }
+      if (statsRes.ok) setStats(await statsRes.json())
+      if (companiesRes.ok) {
+        const companies: Array<{ id: string; name: string; color: string; emoji: string; tasks: Array<{ id: string; title: string; priority: string; status: string; dueDate?: string | null }> }> = await companiesRes.json()
+        const urgent: UrgentTask[] = []
+        const todayDate = new Date(today)
+        for (const c of companies) {
+          for (const t of c.tasks) {
+            if (t.priority === 'alta' && t.status !== 'completada') {
+              urgent.push({ id: t.id, title: t.title, priority: t.priority, status: t.status, dueDate: t.dueDate, company: { id: c.id, name: c.name, color: c.color, emoji: c.emoji } })
+            }
+          }
+        }
+        setUrgentTasks(urgent.slice(0, 6))
+      }
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -87,12 +136,18 @@ export default function DashboardPage() {
     const newState = { ...dailyState, ...updates }
     setDailyState(newState)
     setSaving(true)
-    await fetch('/api/daily-state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newState, date: today }),
-    })
-    setSaving(false)
+    try {
+      await fetch('/api/daily-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newState, date: today }),
+      })
+      showToast('Estado guardado', 'success')
+    } catch {
+      showToast('Error al guardar', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const wins = todayTrades.filter((t) => t.result === 'win').length
@@ -109,6 +164,30 @@ export default function DashboardPage() {
     amarillo: { label: 'Condición MODERADA', color: 'text-yellow-400', bg: 'bg-yellow-500/20 border-yellow-500/30', dot: 'bg-yellow-400' },
     rojo: { label: 'Condición BAJA — cuidado', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30', dot: 'bg-red-400' },
   }[light]
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 bg-[#1a1a1a] animate-pulse rounded" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card h-24 bg-[#1a1a1a] animate-pulse" />
+          <div className="card h-24 bg-[#1a1a1a] animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="card h-20 bg-[#1a1a1a] animate-pulse" />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-gray-400">No se pudo cargar el dashboard</p>
+        <button onClick={loadData} className="btn-secondary">Reintentar</button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -198,12 +277,14 @@ export default function DashboardPage() {
           <p className={`text-3xl font-bold mt-1 ${winRate >= 60 ? 'text-green-400' : winRate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
             {winRate}%
           </p>
-          <p className="text-xs text-gray-600 mt-1">hoy</p>
+          <p className="text-xs text-gray-600 mt-1">hoy · últ. 10: {stats?.last10WinRate ?? '—'}%</p>
         </div>
         <div className="card">
           <p className="text-xs text-gray-500 uppercase tracking-wider">Hábitos</p>
           <p className="text-3xl font-bold text-white mt-1">{completedCount}/{habits.length}</p>
-          <p className="text-xs text-gray-600 mt-1">completados</p>
+          <p className="text-xs text-gray-600 mt-1">
+            completados{stats && stats.habitStreak > 0 ? ` · 🔥 ${stats.habitStreak}d racha` : ''}
+          </p>
         </div>
         <div className="card">
           <p className="text-xs text-gray-500 uppercase tracking-wider">Pre-mercado</p>
@@ -242,6 +323,48 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Urgent Company Tasks */}
+      {urgentTasks.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse inline-block" />
+              Tareas urgentes de empresas
+            </p>
+            <Link href="/empresas" className="text-xs text-blue-400 hover:text-blue-300">Ver empresas →</Link>
+          </div>
+          <div className="space-y-2">
+            {urgentTasks.map((task) => (
+              <Link
+                key={task.id}
+                href={`/empresas/${task.company.id}`}
+                className="flex items-center gap-3 py-1.5 hover:bg-[#1a1a1a] rounded-lg px-1 transition-colors group"
+              >
+                <div
+                  className="w-1.5 h-8 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: task.company.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-200 truncate">{task.title}</p>
+                  <p className="text-xs text-gray-600">
+                    {task.company.emoji} {task.company.name}
+                  </p>
+                </div>
+                {task.dueDate && new Date(task.dueDate) < new Date(today) ? (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex-shrink-0 font-semibold">
+                    VENCIDA
+                  </span>
+                ) : (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 flex-shrink-0">
+                    {task.status === 'en-progreso' ? 'En progreso' : 'Pendiente'}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">

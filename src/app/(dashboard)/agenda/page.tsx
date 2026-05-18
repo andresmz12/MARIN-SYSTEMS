@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 interface Event {
   id: string
@@ -34,7 +36,6 @@ function getWeekDates(offset = 0): { date: Date; str: string }[] {
   const day = today.getDay()
   const monday = new Date(today)
   monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1) + offset * 7)
-
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -55,6 +56,7 @@ const emptyForm = {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 export default function AgendaPage() {
+  const { showToast } = useToast()
   const [events, setEvents] = useState<Event[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
@@ -63,8 +65,8 @@ export default function AgendaPage() {
   const [view, setView] = useState<'semana' | 'lista'>('lista')
   const [weekOffset, setWeekOffset] = useState(0)
   const [hideCompleted, setHideCompleted] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  // Google Calendar sync state
   const [calendarToken, setCalendarToken] = useState<string | null>(null)
   const [calendarLoading, setCalendarLoading] = useState(false)
   const [calendarCopied, setCalendarCopied] = useState(false)
@@ -74,7 +76,6 @@ export default function AgendaPage() {
   const today = new Date().toISOString().split('T')[0]
 
   const loadEvents = useCallback(async () => {
-    // Fetch from 30 days back so past incomplete events are visible
     const past = new Date()
     past.setDate(past.getDate() - 30)
     const from = past.toISOString().split('T')[0]
@@ -144,30 +145,39 @@ export default function AgendaPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-
-    if (editEvent) {
-      await fetch(`/api/events/${editEvent.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-    } else {
-      await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
+    try {
+      const res = editEvent
+        ? await fetch(`/api/events/${editEvent.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form),
+          })
+        : await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form),
+          })
+      if (!res.ok) throw new Error()
+      showToast(editEvent ? 'Evento actualizado' : 'Evento creado', 'success')
+      setModalOpen(false)
+      loadEvents()
+    } catch {
+      showToast('Error al guardar el evento', 'error')
     }
-
     setLoading(false)
-    setModalOpen(false)
-    loadEvents()
   }
 
-  async function deleteEvent(id: string) {
-    if (!confirm('¿Eliminar este evento?')) return
-    await fetch(`/api/events/${id}`, { method: 'DELETE' })
-    loadEvents()
+  async function confirmDeleteEvent() {
+    if (!confirmDelete) return
+    try {
+      await fetch(`/api/events/${confirmDelete}`, { method: 'DELETE' })
+      showToast('Evento eliminado', 'success')
+      setModalOpen(false)
+      loadEvents()
+    } catch {
+      showToast('Error al eliminar', 'error')
+    }
+    setConfirmDelete(null)
   }
 
   async function toggleComplete(event: Event) {
@@ -185,7 +195,6 @@ export default function AgendaPage() {
   const upcomingEvents = events
     .filter((e) => {
       const dateStr = e.date.split('T')[0]
-      // Show future events + past events that aren't completed yet
       return dateStr >= today || !e.completed
     })
     .filter((e) => !hideCompleted || !e.completed)
@@ -282,8 +291,6 @@ export default function AgendaPage() {
                   Copia esta URL y agrégala a Google Calendar como &quot;Otras agendas → Desde URL&quot;.
                   Tus eventos aparecerán automáticamente con recordatorios 30 min antes.
                 </p>
-
-                {/* URL box */}
                 <div className="flex gap-2">
                   <div className="flex-1 bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[11px] text-gray-400 overflow-hidden">
                     <p className="truncate">{getCalendarUrl(calendarToken)}</p>
@@ -299,31 +306,13 @@ export default function AgendaPage() {
                     {calendarCopied ? '✓ Copiado' : 'Copiar'}
                   </button>
                 </div>
-
-                {/* Steps */}
                 <ol className="space-y-1.5 text-xs text-gray-500">
-                  <li className="flex gap-2">
-                    <span className="text-blue-400 font-bold flex-shrink-0">1.</span>
-                    Abre Google Calendar en tu celular
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-blue-400 font-bold flex-shrink-0">2.</span>
-                    Ve a Ajustes → Agregar calendario → Desde URL
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-blue-400 font-bold flex-shrink-0">3.</span>
-                    Pega la URL copiada y presiona &quot;Agregar calendario&quot;
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-blue-400 font-bold flex-shrink-0">4.</span>
-                    Los eventos con hora incluyen recordatorio automático de 30 min
-                  </li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">1.</span>Abre Google Calendar en tu celular</li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">2.</span>Ve a Ajustes → Agregar calendario → Desde URL</li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">3.</span>Pega la URL copiada y presiona &quot;Agregar calendario&quot;</li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">4.</span>Los eventos con hora incluyen recordatorio automático de 30 min</li>
                 </ol>
-
-                <button
-                  onClick={regenerateToken}
-                  className="text-[11px] text-gray-600 hover:text-red-400 transition-colors"
-                >
+                <button onClick={regenerateToken} className="text-[11px] text-gray-600 hover:text-red-400 transition-colors">
                   Regenerar URL (invalida la anterior)
                 </button>
               </>
@@ -339,7 +328,6 @@ export default function AgendaPage() {
       {/* Week view */}
       {view === 'semana' ? (
         <div className="space-y-3">
-          {/* Week navigation */}
           <div className="flex items-center justify-between">
             <button
               onClick={() => setWeekOffset(w => w - 1)}
@@ -364,7 +352,6 @@ export default function AgendaPage() {
             </button>
           </div>
 
-          {/* Scrollable week grid */}
           <div className="card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <div className="grid grid-cols-7 divide-x divide-[#2a2a2a] min-w-[560px]">
@@ -427,7 +414,6 @@ export default function AgendaPage() {
           ) : (
             upcomingEvents.map((event) => (
               <div key={event.id} className={`card flex items-start gap-3 p-3 lg:p-4 transition-opacity ${event.completed ? 'opacity-60' : ''}`}>
-                {/* Complete toggle */}
                 <button
                   onClick={() => toggleComplete(event)}
                   className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
@@ -476,7 +462,7 @@ export default function AgendaPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
-                  <button onClick={() => deleteEvent(event.id)} className="text-gray-600 hover:text-red-400 transition-colors p-1">
+                  <button onClick={() => setConfirmDelete(event.id)} className="text-gray-600 hover:text-red-400 transition-colors p-1">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -488,7 +474,6 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editEvent ? 'Editar evento' : 'Nuevo evento'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -502,7 +487,6 @@ export default function AgendaPage() {
               required
             />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
@@ -524,14 +508,12 @@ export default function AgendaPage() {
               />
             </div>
           </div>
-
           <div>
             <label className="label">Tipo</label>
             <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -541,7 +523,6 @@ export default function AgendaPage() {
             />
             <span className="text-sm text-gray-300">Noticia Forex de alto impacto</span>
           </label>
-
           {form.isForexNews && (
             <div>
               <label className="label">Par afectado</label>
@@ -554,7 +535,6 @@ export default function AgendaPage() {
               />
             </div>
           )}
-
           <div>
             <label className="label">Notas (opcional)</label>
             <textarea
@@ -564,7 +544,6 @@ export default function AgendaPage() {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
-
           <div className="flex gap-3 pt-1">
             <button type="submit" disabled={loading} className="btn-primary flex-1">
               {loading ? 'Guardando...' : editEvent ? 'Actualizar' : 'Crear evento'}
@@ -572,7 +551,7 @@ export default function AgendaPage() {
             {editEvent && (
               <button
                 type="button"
-                onClick={async () => { await deleteEvent(editEvent.id); setModalOpen(false) }}
+                onClick={() => setConfirmDelete(editEvent.id)}
                 className="btn-danger"
               >
                 Eliminar
@@ -584,6 +563,16 @@ export default function AgendaPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Eliminar evento"
+        message="¿Seguro que quieres eliminar este evento? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={confirmDeleteEvent}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

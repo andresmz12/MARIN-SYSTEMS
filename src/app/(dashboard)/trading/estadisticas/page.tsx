@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  ScatterChart, Scatter, ZAxis,
 } from 'recharts'
 
 interface Stats {
@@ -17,8 +18,22 @@ interface Stats {
   profitFactor: number
   streak: number
   streakType: string
+  last10WinRate: number
   byEmotion: { emotion: string; wins: number; losses: number; total: number; winRate: number }[]
   performance: { month: string; pips: number }[]
+  moodCorrelation: { date: string; mood: number; winRate: number; trades: number }[]
+}
+
+interface Trade {
+  id: string
+  date: string
+  pair: string
+  result: string
+  pips: number | null
+  setup: string | null
+  emotion: string | null
+  followedPlan: boolean
+  notes: string | null
 }
 
 const PIE_COLORS = ['#22c55e', '#ef4444', '#6b7280']
@@ -26,17 +41,65 @@ const PIE_COLORS = ['#22c55e', '#ef4444', '#6b7280']
 export default function EstadisticasPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
-  useEffect(() => {
-    fetch('/api/stats')
-      .then((r) => r.json())
-      .then((data) => { setStats(data); setLoading(false) })
-  }, [])
+  useEffect(() => { loadStats() }, [])
+
+  async function loadStats() {
+    setLoadError(false)
+    setLoading(true)
+    try {
+      const res = await fetch('/api/stats')
+      if (!res.ok) throw new Error()
+      setStats(await res.json())
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function exportCSV() {
+    const res = await fetch('/api/trades')
+    if (!res.ok) return
+    const trades: Trade[] = await res.json()
+    const headers = ['Fecha', 'Par', 'Resultado', 'Pips', 'Setup', 'Emoción', 'Siguió Plan', 'Notas']
+    const rows = trades.map((t) => [
+      t.date?.split('T')[0] ?? '',
+      t.pair,
+      t.result,
+      t.pips ?? '',
+      t.setup ?? '',
+      t.emotion ?? '',
+      t.followedPlan ? 'Sí' : 'No',
+      (t.notes ?? '').replace(/,/g, ';'),
+    ])
+    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `trades-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-48">
-        <div className="text-gray-500 text-sm">Cargando estadísticas...</div>
+      <div className="space-y-6">
+        <div className="h-8 w-48 bg-[#1a1a1a] animate-pulse rounded" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="card h-20 bg-[#1a1a1a] animate-pulse" />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-gray-400">No se pudieron cargar las estadísticas</p>
+        <button onClick={loadStats} className="btn-secondary">Reintentar</button>
       </div>
     )
   }
@@ -73,9 +136,20 @@ export default function EstadisticasPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Estadísticas</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Análisis de tu desempeño como trader</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Estadísticas</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Análisis de tu desempeño como trader</p>
+        </div>
+        <button
+          onClick={exportCSV}
+          className="btn-secondary flex items-center gap-2 text-xs"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Exportar CSV
+        </button>
       </div>
 
       {/* KPI Row */}
@@ -87,10 +161,10 @@ export default function EstadisticasPage() {
           color={stats.winRate >= 55 ? 'green' : stats.winRate >= 40 ? 'yellow' : 'red'}
         />
         <StatCard
-          label="Profit Factor"
-          value={stats.profitFactor.toFixed(2)}
-          sub={`${stats.profitFactor >= 1.5 ? 'Consistente' : 'Mejorar'}`}
-          color={stats.profitFactor >= 1.5 ? 'green' : stats.profitFactor >= 1 ? 'yellow' : 'red'}
+          label="Últ. 10 trades"
+          value={`${stats.last10WinRate}%`}
+          sub="win rate reciente"
+          color={stats.last10WinRate >= 55 ? 'green' : stats.last10WinRate >= 40 ? 'yellow' : 'red'}
         />
         <StatCard
           label="% Siguió el plan"
@@ -108,7 +182,6 @@ export default function EstadisticasPage() {
 
       {/* Streak + Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Streak */}
         <div className="card">
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Racha actual</p>
           <div className="flex items-center gap-4">
@@ -122,7 +195,6 @@ export default function EstadisticasPage() {
           </div>
         </div>
 
-        {/* Pie Chart */}
         <div className="card">
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Distribución de resultados</p>
           <ResponsiveContainer width="100%" height={150}>
@@ -174,6 +246,50 @@ export default function EstadisticasPage() {
                 ))}
               </Bar>
             </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Correlación Mood ↔ Win Rate */}
+      {stats.moodCorrelation.length >= 3 && (
+        <div className="card">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Correlación Journal → Win Rate</p>
+          <p className="text-xs text-gray-600 mb-4">Cada punto = un día de trading. Eje X: mood del journal (1-10). Eje Y: win rate del día.</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <ScatterChart margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+              <XAxis
+                dataKey="mood"
+                type="number"
+                domain={[1, 10]}
+                name="Mood"
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                label={{ value: 'Mood', position: 'insideBottom', offset: -5, fill: '#6b7280', fontSize: 11 }}
+              />
+              <YAxis
+                dataKey="winRate"
+                type="number"
+                domain={[0, 100]}
+                name="Win Rate %"
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                unit="%"
+              />
+              <ZAxis dataKey="trades" range={[30, 120]} name="Trades" />
+              <Tooltip
+                contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }}
+                labelStyle={{ color: '#9ca3af' }}
+                itemStyle={{ color: '#e5e7eb' }}
+                formatter={(value: number, name: string) => [
+                  name === 'Win Rate %' ? `${value}%` : value,
+                  name,
+                ]}
+              />
+              <Scatter
+                data={stats.moodCorrelation}
+                fill="#3b82f6"
+                fillOpacity={0.7}
+              />
+            </ScatterChart>
           </ResponsiveContainer>
         </div>
       )}

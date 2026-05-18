@@ -7,6 +7,7 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  try {
   const trades = await prisma.trade.findMany({
     where: { userId: session.user.id },
     orderBy: { date: 'asc' },
@@ -66,6 +67,74 @@ export async function GET() {
   }
   const performance = Object.entries(byMonth).map(([month, pips]) => ({ month, pips: Math.round(pips * 10) / 10 }))
 
+  // Win rate últimos 10 trades
+  const last10 = trades.slice(-10).filter((t) => t.result !== 'be')
+  const last10Wins = last10.filter((t) => t.result === 'win').length
+  const last10WinRate = last10.length > 0 ? Math.round((last10Wins / last10.length) * 100) : 0
+
+  // Correlación mood (journal) ↔ win rate por día
+  const journalEntries = await prisma.journalEntry.findMany({
+    where: { userId: session.user.id },
+    select: { date: true, mood: true },
+  })
+  const moodByDate: Record<string, number> = {}
+  for (const j of journalEntries) {
+    moodByDate[j.date.toISOString().split('T')[0]] = j.mood
+  }
+  // Agrupar trades por día con su mood
+  const tradesByDate: Record<string, { wins: number; total: number; mood: number }> = {}
+  for (const t of trades) {
+    const dateStr = t.date.toISOString().split('T')[0]
+    if (!tradesByDate[dateStr]) tradesByDate[dateStr] = { wins: 0, total: 0, mood: moodByDate[dateStr] ?? -1 }
+    if (t.result !== 'be') {
+      tradesByDate[dateStr].total++
+      if (t.result === 'win') tradesByDate[dateStr].wins++
+    }
+  }
+  const moodCorrelation = Object.entries(tradesByDate)
+    .filter(([, d]) => d.mood > 0 && d.total > 0)
+    .map(([date, d]) => ({
+      date,
+      mood: d.mood,
+      winRate: Math.round((d.wins / d.total) * 100),
+      trades: d.total,
+    }))
+
+  // Mood chart últimos 7 días
+  const moodChart: { date: string; mood: number | null }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+    moodChart.push({ date: dateStr, mood: moodByDate[dateStr] ?? null })
+  }
+
+  // Racha de hábitos (días consecutivos completando al menos 1 hábito)
+  const habitHistory = await prisma.habitCompletion.findMany({
+    where: { userId: session.user.id },
+    select: { date: true },
+    orderBy: { date: 'desc' },
+  })
+  const habitDateSet = new Set(habitHistory.map((h) => h.date.toISOString().split('T')[0]))
+  const habitDates = Array.from(habitDateSet).sort((a, b) => b.localeCompare(a))
+  let habitStreak = 0
+  if (habitDates.length > 0) {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const startDate = habitDates[0] === todayStr ? todayStr : (() => {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      return yesterday.toISOString().split('T')[0]
+    })()
+    if (habitDates[0] === todayStr || habitDates[0] === startDate) {
+      let current = new Date(habitDates[0])
+      for (const dateStr of habitDates) {
+        const d = new Date(dateStr)
+        const diff = Math.round((current.getTime() - d.getTime()) / 86400000)
+        if (diff <= 1) { habitStreak++; current = d } else break
+      }
+    }
+  }
+
   return NextResponse.json({
     total,
     wins,
@@ -79,5 +148,13 @@ export async function GET() {
     streakType,
     byEmotion,
     performance,
+    last10WinRate,
+    moodCorrelation,
+    moodChart,
+    habitStreak,
   })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Error al obtener estadísticas' }, { status: 500 })
+  }
 }
