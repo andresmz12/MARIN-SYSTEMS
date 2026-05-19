@@ -184,6 +184,25 @@ export default function EmpresasPage() {
     setLoading(false)
   }
 
+  async function deleteCompany(id: string) {
+    try {
+      await fetch(`/api/companies/${id}`, { method: 'DELETE' })
+      setCompanies((prev) => prev.filter((c) => c.id !== id))
+      setConnections((prev) => {
+        const next = prev.filter((c) => c.from !== id && c.to !== id)
+        lsSet(CONNS_KEY, next)
+        return next
+      })
+      setPositions((prev) => {
+        const next = { ...prev }
+        delete next[id]
+        lsSet(POS_KEY, next)
+        return next
+      })
+      showToast('Empresa eliminada', 'success')
+    } catch { showToast('Error al eliminar empresa', 'error') }
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) return
@@ -381,13 +400,22 @@ export default function EmpresasPage() {
             {companies.map((company) => {
               const pending = company.tasks.filter((t) => t.status !== 'completada').length
               return (
-                <button key={company.id} onClick={() => router.push(`/empresas/${company.id}`)}
-                  className="rounded-xl border p-4 text-left transition-all hover:scale-105"
+                <div key={company.id} className="relative group rounded-xl border p-4 text-left transition-all"
                   style={{ borderColor: company.color + '50', background: company.color + '10' }}>
-                  <div className="text-3xl mb-2">{company.emoji}</div>
-                  <p className="text-white text-sm font-semibold leading-tight">{company.name}</p>
-                  {pending > 0 && <span className="mt-2 inline-block text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">{pending} tarea{pending !== 1 ? 's' : ''}</span>}
-                </button>
+                  <button onClick={() => router.push(`/empresas/${company.id}`)} className="w-full text-left">
+                    <div className="text-3xl mb-2">{company.emoji}</div>
+                    <p className="text-white text-sm font-semibold leading-tight">{company.name}</p>
+                    {pending > 0 && <span className="mt-2 inline-block text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">{pending} tarea{pending !== 1 ? 's' : ''}</span>}
+                  </button>
+                  <button
+                    onClick={() => { if (confirm(`¿Eliminar "${company.name}"?`)) deleteCompany(company.id) }}
+                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-600/80 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               )
             })}
           </div>
@@ -598,7 +626,8 @@ export default function EmpresasPage() {
                   connectMode={connectMode} isConnectFrom={connectFrom === company.id}
                   onClick={() => router.push(`/empresas/${company.id}`)}
                   onConnectClick={() => handleNodeConnect(company.id)}
-                  onDragEnd={handleNodeDragEnd} />
+                  onDragEnd={handleNodeDragEnd}
+                  onDelete={() => { if (confirm(`¿Eliminar "${company.name}"?`)) deleteCompany(company.id) }} />
               )
             })}
           </>
@@ -805,12 +834,13 @@ function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom,
 
 /* ────────────────────── Company Node ────────────────────── */
 
-function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onConnectClick, onDragEnd, connectMode, isConnectFrom }: {
+function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onConnectClick, onDragEnd, onDelete, connectMode, isConnectFrom }: {
   company: Company; x: number; y: number; delay: number; pending: number
   containerRef: React.RefObject<HTMLDivElement>
   onClick: () => void
   onConnectClick: () => void
   onDragEnd: (id: string, newX: number, newY: number) => void
+  onDelete: () => void
   connectMode: boolean
   isConnectFrom: boolean
 }) {
@@ -818,6 +848,7 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onC
   const motionX = useMotionValue(x - size / 2)
   const motionY = useMotionValue(y - size / 2)
   const [isDragging, setIsDragging] = useState(false)
+  const [hovered, setHovered] = useState(false)
 
   useEffect(() => { motionX.set(x - size / 2); motionY.set(y - size / 2) }, [x, y])
 
@@ -830,6 +861,8 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onC
       transition={{ delay, type: 'spring', damping: 16, stiffness: 200 }}
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => { setIsDragging(false); onDragEnd(company.id, motionX.get() + size / 2, motionY.get() + size / 2) }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
     >
       <motion.div
         animate={isDragging ? {} : { y: [0, -5, 0] }}
@@ -879,6 +912,23 @@ function CompanyNode({ company, x, y, delay, pending, containerRef, onClick, onC
             </div>
           )}
         </button>
+        <AnimatePresence>
+          {hovered && !connectMode && !isDragging && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.7 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.7 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="absolute -top-1 -left-1 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-lg z-20"
+              title="Eliminar empresa"
+            >
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </motion.button>
+          )}
+        </AnimatePresence>
         <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap">
           <span className="text-[9px] px-2 py-0.5 rounded-full border font-medium"
             style={{ color: company.color, borderColor: `${company.color}50`, background: `${company.color}15` }}>
