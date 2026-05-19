@@ -67,6 +67,50 @@ export async function GET() {
   }
   const performance = Object.entries(byMonth).map(([month, pips]) => ({ month, pips: Math.round(pips * 10) / 10 }))
 
+  // By setup
+  const setupMap: Record<string, { wins: number; losses: number; total: number }> = {}
+  for (const trade of trades) {
+    if (!trade.setup || trade.setup.trim() === '') continue
+    if (!setupMap[trade.setup]) setupMap[trade.setup] = { wins: 0, losses: 0, total: 0 }
+    setupMap[trade.setup].total++
+    if (trade.result === 'win') setupMap[trade.setup].wins++
+    if (trade.result === 'loss') setupMap[trade.setup].losses++
+  }
+  const bySetup = Object.entries(setupMap).map(([setup, data]) => ({
+    setup,
+    ...data,
+    winRate: Math.round((data.wins / data.total) * 100),
+  }))
+
+  // By pair
+  const pairMap: Record<string, { wins: number; losses: number; total: number; totalPips: number }> = {}
+  for (const trade of trades) {
+    if (!trade.pair) continue
+    if (!pairMap[trade.pair]) pairMap[trade.pair] = { wins: 0, losses: 0, total: 0, totalPips: 0 }
+    pairMap[trade.pair].total++
+    pairMap[trade.pair].totalPips += trade.pips || 0
+    if (trade.result === 'win') pairMap[trade.pair].wins++
+    if (trade.result === 'loss') pairMap[trade.pair].losses++
+  }
+  const byPair = Object.entries(pairMap).map(([pair, data]) => ({
+    pair,
+    wins: data.wins,
+    losses: data.losses,
+    total: data.total,
+    winRate: Math.round((data.wins / data.total) * 100),
+    totalPips: Math.round(data.totalPips * 10) / 10,
+  }))
+
+  // Equity curve (cumulative pips per trade, chronological)
+  let cumPips = 0
+  const equityCurve = trades.map((trade) => {
+    cumPips += trade.pips || 0
+    return {
+      date: trade.date.toISOString().split('T')[0],
+      cumPips: Math.round(cumPips * 10) / 10,
+    }
+  })
+
   // Win rate últimos 10 trades
   const last10 = trades.slice(-10).filter((t) => t.result !== 'be')
   const last10Wins = last10.filter((t) => t.result === 'win').length
@@ -152,6 +196,9 @@ export async function GET() {
     moodCorrelation,
     moodChart,
     habitStreak,
+    bySetup,
+    byPair,
+    equityCurve,
   })
   } catch (err) {
     console.error(err)

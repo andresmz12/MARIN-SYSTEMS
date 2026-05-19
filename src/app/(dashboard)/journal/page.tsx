@@ -28,6 +28,7 @@ export default function JournalPage() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -289,10 +290,46 @@ export default function JournalPage() {
       {/* Month history */}
       {monthEntries.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Historial del mes</h2>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Historial del mes</h2>
+          </div>
+
+          {/* Popular tags filter */}
+          {(() => {
+            const allTags = Array.from(
+              new Set(monthEntries.flatMap((e) => e.tags))
+            ).sort()
+            return allTags.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedTag && (
+                  <button
+                    onClick={() => setSelectedTag(null)}
+                    className="text-xs px-3 py-1 rounded-full border border-[#3a3a3a] text-gray-400 hover:text-gray-200 hover:border-[#4a4a4a] transition-colors"
+                  >
+                    Ver todos
+                  </button>
+                )}
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                      selectedTag === tag
+                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/50'
+                        : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300 hover:border-[#3a3a3a]'
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            ) : null
+          })()}
+
           {[...monthEntries]
             .sort((a, b) => b.date.localeCompare(a.date))
             .filter((e) => e.date.split('T')[0] !== today)
+            .filter((e) => selectedTag === null || e.tags.includes(selectedTag))
             .map((entry) => (
               <div key={entry.id} className="card">
                 <div className="flex items-center justify-between mb-2">

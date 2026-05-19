@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 const tradingItems = [
   { label: 'Diario', href: '/trading/diario' },
@@ -251,6 +252,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             </svg>
             {!collapsed && <span>Colapsar</span>}
           </button>
+
+          <ThemeToggle />
 
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}

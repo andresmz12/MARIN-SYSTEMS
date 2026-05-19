@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
-  ScatterChart, Scatter, ZAxis,
+  ScatterChart, Scatter, ZAxis, LineChart, Line,
 } from 'recharts'
 
 interface Stats {
@@ -22,6 +22,9 @@ interface Stats {
   byEmotion: { emotion: string; wins: number; losses: number; total: number; winRate: number }[]
   performance: { month: string; pips: number }[]
   moodCorrelation: { date: string; mood: number; winRate: number; trades: number }[]
+  bySetup: { setup: string; wins: number; losses: number; total: number; winRate: number }[]
+  byPair: { pair: string; wins: number; losses: number; total: number; winRate: number; totalPips: number }[]
+  equityCurve: { date: string; cumPips: number }[]
 }
 
 interface Trade {
@@ -326,6 +329,100 @@ export default function EstadisticasPage() {
                 <p className="text-gray-500 mt-0.5">{e.total} trades · {e.winRate}% win</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Equity curve */}
+      {stats.equityCurve.length > 1 && (
+        <div className="card">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-4">Curva de equity (pips acumulados)</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={stats.equityCurve} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+              <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }}
+                labelStyle={{ color: '#9ca3af' }}
+                itemStyle={{ color: '#e5e7eb' }}
+                formatter={(value: number) => [`${value} pips`, 'Pips acumulados']}
+              />
+              <Line
+                type="monotone"
+                dataKey="cumPips"
+                name="Pips acumulados"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: '#3b82f6' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* By setup */}
+      {stats.bySetup.length > 0 && (
+        <div className="card">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-4">Win rate por setup</p>
+          <ResponsiveContainer width="100%" height={Math.max(180, stats.bySetup.length * 40)}>
+            <BarChart
+              data={[...stats.bySetup].sort((a, b) => b.winRate - a.winRate)}
+              layout="vertical"
+              margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" horizontal={false} />
+              <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} unit="%" />
+              <YAxis type="category" dataKey="setup" tick={{ fill: '#9ca3af', fontSize: 11 }} width={90} />
+              <Tooltip
+                contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }}
+                labelStyle={{ color: '#9ca3af' }}
+                itemStyle={{ color: '#e5e7eb' }}
+                formatter={(value: number) => [`${value}%`, 'Win Rate']}
+              />
+              <Bar dataKey="winRate" name="Win Rate %" radius={[0, 4, 4, 0]}>
+                {[...stats.bySetup].sort((a, b) => b.winRate - a.winRate).map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.winRate >= 60 ? '#22c55e' : entry.winRate >= 40 ? '#eab308' : '#ef4444'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* By pair */}
+      {stats.byPair.length > 0 && (
+        <div className="card">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-4">Rendimiento por par</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-500 uppercase tracking-wider border-b border-[#2a2a2a]">
+                  <th className="text-left pb-2 pr-4">Par</th>
+                  <th className="text-right pb-2 pr-4">Trades</th>
+                  <th className="text-right pb-2 pr-4">Win Rate</th>
+                  <th className="text-right pb-2">Pips totales</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...stats.byPair].sort((a, b) => b.total - a.total).map((row) => (
+                  <tr key={row.pair} className="border-b border-[#1a1a1a] hover:bg-[#1a1a1a] transition-colors">
+                    <td className="py-2 pr-4 text-white font-medium">{row.pair}</td>
+                    <td className="py-2 pr-4 text-right text-gray-400">{row.total}</td>
+                    <td className={`py-2 pr-4 text-right font-semibold ${row.winRate > 50 ? 'text-green-400' : 'text-red-400'}`}>
+                      {row.winRate}%
+                    </td>
+                    <td className={`py-2 text-right font-medium ${row.totalPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {row.totalPips > 0 ? '+' : ''}{row.totalPips}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
