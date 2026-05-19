@@ -45,7 +45,7 @@ export default function ChecklistPage() {
   }, [])
 
   async function loadChecklist() {
-    const res = await fetch(`/api/checklist?date=${today}`)
+    const res = await fetch(`/api/checklist?date=${today}`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
       if (data.items) setItems(data.items as ChecklistItems)

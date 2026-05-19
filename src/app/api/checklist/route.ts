@@ -27,10 +27,10 @@ export async function GET(req: NextRequest) {
   })
 
   if (!checklist) {
-    return NextResponse.json({ items: DEFAULT_ITEMS })
+    return NextResponse.json({ items: DEFAULT_ITEMS }, { headers: { 'Cache-Control': 'no-store' } })
   }
 
-  return NextResponse.json(checklist)
+  return NextResponse.json(checklist, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
