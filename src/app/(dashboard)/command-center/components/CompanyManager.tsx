@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany } from '../types'
 import { CEO_COLORS, flag } from '../utils'
+import { BrandProfileModal } from './BrandProfileModal'
 
 interface Props {
   companies: CEOCompany[]
@@ -17,6 +18,7 @@ export function CompanyManager({ companies, onChanged }: Props) {
   const { showToast } = useToast()
   const [list, setList] = useState<CEOCompany[]>(companies)
   const [showModal, setShowModal] = useState(false)
+  const [brandCompany, setBrandCompany] = useState<CEOCompany | null>(null)
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => { setList(companies) }, [companies])
@@ -78,6 +80,16 @@ export function CompanyManager({ companies, onChanged }: Props) {
             />
             <span className="text-sm font-bold text-white w-4 text-center">{c.strategicWeight}</span>
           </div>
+
+          {/* Brand profile button */}
+          <div className="mt-3 pt-3 border-t border-zinc-800">
+            <button
+              onClick={() => setBrandCompany(c)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 hover:border-zinc-600 transition-colors"
+            >
+              🎯 Configurar marca
+            </button>
+          </div>
         </div>
       ))}
 
@@ -94,6 +106,9 @@ export function CompanyManager({ companies, onChanged }: Props) {
             onClose={() => setShowModal(false)}
             onCreated={() => { setShowModal(false); onChanged?.() }}
           />
+        )}
+        {brandCompany && (
+          <BrandProfileModal company={brandCompany} onClose={() => setBrandCompany(null)} />
         )}
       </AnimatePresence>
     </div>

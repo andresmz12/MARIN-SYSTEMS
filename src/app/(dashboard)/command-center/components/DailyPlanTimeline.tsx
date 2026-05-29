@@ -7,6 +7,7 @@ import {
   BLOCK_TYPE_CONFIG, BLOCK_STATUS_CONFIG, parseBlockDetails, timeToMinutes,
   formatLong, todayKey,
 } from '../utils'
+import { ContentGeneratorSheet } from './ContentGeneratorSheet'
 
 /** Pixels per minute (1h = 80px). */
 const PX_PER_MIN = 80 / 60
@@ -161,17 +162,20 @@ function FixedBlock({ block }: { block: WorkBlock }) {
 
 /** Dynamic company work block — full card with steps + actions. */
 function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpdate: (id: string, status: string) => void }) {
+  const [showContentGen, setShowContentGen] = useState(false)
   const typeCfg = BLOCK_TYPE_CONFIG[block.blockType] ?? BLOCK_TYPE_CONFIG.work
   const statusCfg = BLOCK_STATUS_CONFIG[block.status] ?? BLOCK_STATUS_CONFIG.pending
   const color = block.company?.color ?? '#6366f1'
   const done = block.status === 'done'
   const { description, steps } = parseBlockDetails(block.description)
+  const isMarketing = ['marketing', 'deepwork'].includes(block.blockType)
 
   // Visual-only step checkboxes (do not persist).
   const [checked, setChecked] = useState<boolean[]>(() => steps.map(() => false))
   const toggle = (i: number) => setChecked((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
 
   return (
+    <>
     <motion.div
       layout
       initial={{ opacity: 0, y: 6 }}
@@ -227,6 +231,16 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
         </ul>
       )}
 
+      {/* Content generator button for marketing blocks */}
+      {isMarketing && !done && (
+        <button
+          onClick={() => setShowContentGen(true)}
+          className="mt-2 text-xs px-2 py-1 rounded-md bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors"
+        >
+          ✨ Generar contenido
+        </button>
+      )}
+
       {/* Footer actions */}
       <div className="mt-2.5 flex items-center gap-1.5">
         <AnimatePresence mode="wait">
@@ -265,5 +279,16 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
         </AnimatePresence>
       </div>
     </motion.div>
+
+    {showContentGen && block.company && (
+      <ContentGeneratorSheet
+        companyId={block.companyId}
+        companyName={`${block.company.emoji ?? ''} ${block.company.name}`}
+        workBlockId={block.id}
+        linkedTopic={block.title}
+        onClose={() => setShowContentGen(false)}
+      />
+    )}
+  </>
   )
 }

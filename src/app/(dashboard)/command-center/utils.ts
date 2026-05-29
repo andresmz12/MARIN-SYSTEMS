@@ -159,6 +159,43 @@ export const CEO_COLORS = [
   '#ec4899', '#f97316', '#ef4444', '#14b8a6',
 ]
 
+/** ISO week number (1-53) for a given date key. */
+export function isoWeekNumber(key: string): number {
+  const d = fromKey(key)
+  const jan4 = new Date(d.getFullYear(), 0, 4)
+  const startOfWeek1 = new Date(jan4)
+  startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7))
+  const diff = d.getTime() - startOfWeek1.getTime()
+  return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1
+}
+
+/** Short label for a day of week index (1=Mon…5=Fri). */
+export const DOW_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie']
+
+/** Platform display config. */
+export const PLATFORM_CONFIG: Record<string, { label: string; emoji: string; cls: string }> = {
+  instagram: { label: 'Instagram', emoji: '📸', cls: 'bg-pink-500/20 text-pink-400 border-pink-500/40' },
+  tiktok: { label: 'TikTok', emoji: '🎵', cls: 'bg-zinc-600/30 text-zinc-300 border-zinc-600' },
+  email: { label: 'Email', emoji: '📧', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
+  whatsapp: { label: 'WhatsApp', emoji: '💬', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
+}
+
+/** Content-type display config. */
+export const CONTENT_TYPE_CONFIG: Record<string, { label: string; cls: string }> = {
+  reel: { label: 'Reel', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
+  post: { label: 'Post', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
+  story: { label: 'Story', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/40' },
+  caption: { label: 'Caption', cls: 'bg-teal-500/20 text-teal-400 border-teal-500/40' },
+  email: { label: 'Email', cls: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40' },
+}
+
+/** Post status config. */
+export const POST_STATUS_CONFIG: Record<string, { label: string; dot: string }> = {
+  draft: { label: 'Borrador', dot: 'bg-zinc-500' },
+  ready: { label: 'Listo', dot: 'bg-green-400' },
+  published: { label: 'Publicado', dot: 'bg-emerald-400' },
+}
+
 export function flag(country: string): string {
   const map: Record<string, string> = { US: '🇺🇸', CO: '🇨🇴', MX: '🇲🇽', ES: '🇪🇸' }
   return map[country] ?? country

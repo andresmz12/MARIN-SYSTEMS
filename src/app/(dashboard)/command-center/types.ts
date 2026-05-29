@@ -87,3 +87,47 @@ export interface RolloverResult {
   rolledBlocks: number
   nextWorkDay: string | null
 }
+
+export interface BrandProfile {
+  id: string
+  userId: string
+  companyId: string
+  tone: string
+  targetAudience: string
+  contentPillars: string[]
+  competitors: string[] | null
+  bestDays: string[] | null
+  bestHours: Record<string, string> | null
+  createdAt: string
+  updatedAt: string
+  // Extra fields returned by the API after AI analysis
+  competitorInsights?: string
+  recommendedFrequency?: Record<string, number>
+}
+
+export type PostPlatform = 'instagram' | 'tiktok' | 'email' | 'whatsapp'
+export type PostContentType = 'reel' | 'post' | 'story' | 'caption' | 'email'
+export type PostStatus = 'draft' | 'ready' | 'published'
+
+export interface GeneratedPost {
+  id: string
+  userId: string
+  companyId: string
+  brandProfileId: string
+  workBlockId: string | null
+  platform: string
+  contentType: string
+  topic: string
+  copy: string
+  hashtags: string[]
+  cta: string
+  contentNotes: string | null
+  status: string
+  scheduledDate: string | null
+  publishedAt: string | null
+  weekNumber: number
+  dayOfWeek: number
+  createdAt: string
+  updatedAt: string
+  company?: CEOCompany
+}

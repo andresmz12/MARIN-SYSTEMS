@@ -9,13 +9,15 @@ import { WeekOverview } from './components/WeekOverview'
 import { DailyPlanTimeline } from './components/DailyPlanTimeline'
 import { MarketingIdeasBank } from './components/MarketingIdeasBank'
 import { CompanyManager } from './components/CompanyManager'
+import { ContentGrid } from './components/ContentGrid'
 
-type View = 'plan' | 'ideas' | 'companies'
+type View = 'plan' | 'ideas' | 'companies' | 'grid'
 
 const VIEWS: { key: View; label: string }[] = [
   { key: 'plan', label: '📅 Plan del día' },
   { key: 'ideas', label: '💡 Banco de ideas' },
   { key: 'companies', label: '🏢 Empresas' },
+  { key: 'grid', label: '📅 Parrilla' },
 ]
 
 export default function CommandCenterPage() {
@@ -293,6 +295,10 @@ export default function CommandCenterPage() {
 
       {view === 'companies' && (
         <CompanyManager companies={companies} onChanged={loadCompanies} />
+      )}
+
+      {view === 'grid' && (
+        <ContentGrid companies={companies.filter((c) => c.isActive)} />
       )}
     </div>
   )

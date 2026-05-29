@@ -30,6 +30,8 @@ model User {
   dayStatuses      DayStatus[]
   dailyPlans       DailyPlan[]
   workBlocks       WorkBlock[]
+  brandProfiles    BrandProfile[]
+  generatedPosts   GeneratedPost[]
 }
 
 model Trade {
@@ -271,6 +273,8 @@ model CEOCompany {
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   marketingIdeas  MarketingIdea[]
   workBlocks      WorkBlock[]
+  brandProfile    BrandProfile?
+  generatedPosts  GeneratedPost[]
 
   @@index([userId])
 }
@@ -352,4 +356,52 @@ model WorkBlock {
   @@index([userId])
   @@index([dailyPlanId])
   @@index([companyId])
+}
+
+model BrandProfile {
+  id             String          @id @default(cuid())
+  userId         String
+  companyId      String          @unique
+  tone           String
+  targetAudience String
+  contentPillars Json
+  competitors    Json?
+  bestDays       Json?
+  bestHours      Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        CEOCompany      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contentPosts   GeneratedPost[]
+
+  @@index([userId])
+}
+
+model GeneratedPost {
+  id             String       @id @default(cuid())
+  userId         String
+  companyId      String
+  brandProfileId String
+  workBlockId    String?
+  platform       String
+  contentType    String
+  topic          String
+  copy           String
+  hashtags       String[]
+  cta            String
+  contentNotes   String?
+  status         String       @default("draft")
+  scheduledDate  DateTime?
+  publishedAt    DateTime?
+  weekNumber     Int
+  dayOfWeek      Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        CEOCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([companyId, weekNumber])
 }
