@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { DailyPlan, WorkBlock } from '../types'
 import {
@@ -8,6 +8,7 @@ import {
   formatLong, todayKey,
 } from '../utils'
 import { ContentGeneratorSheet } from './ContentGeneratorSheet'
+import { FocusMode } from './FocusMode'
 
 /** Pixels per minute (1h = 80px). */
 const PX_PER_MIN = 80 / 60
@@ -160,15 +161,40 @@ function FixedBlock({ block }: { block: WorkBlock }) {
   )
 }
 
-/** Dynamic company work block — full card with steps + actions. */
+function fmtTimer(s: number): string {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+/** Dynamic company work block — full card with steps, inline timer, + focus mode. */
 function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpdate: (id: string, status: string) => void }) {
   const [showContentGen, setShowContentGen] = useState(false)
+  const [showFocus, setShowFocus] = useState(false)
+  const [timerSec, setTimerSec] = useState(0)
+  const [timerRunning, setTimerRunning] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const typeCfg = BLOCK_TYPE_CONFIG[block.blockType] ?? BLOCK_TYPE_CONFIG.work
   const statusCfg = BLOCK_STATUS_CONFIG[block.status] ?? BLOCK_STATUS_CONFIG.pending
   const color = block.company?.color ?? '#6366f1'
   const done = block.status === 'done'
   const { description, steps } = parseBlockDetails(block.description)
   const isMarketing = ['marketing', 'deepwork'].includes(block.blockType)
+
+  const targetSec = Math.round(block.durationHours * 3600)
+  const timerOvertime = timerSec > targetSec
+
+  useEffect(() => {
+    if (timerRunning) {
+      intervalRef.current = setInterval(() => setTimerSec((s) => s + 1), 1000)
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [timerRunning])
 
   // Visual-only step checkboxes (do not persist).
   const [checked, setChecked] = useState<boolean[]>(() => steps.map(() => false))
@@ -231,18 +257,55 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
         </ul>
       )}
 
-      {/* Content generator button for marketing blocks */}
-      {isMarketing && !done && (
-        <button
-          onClick={() => setShowContentGen(true)}
-          className="mt-2 text-xs px-2 py-1 rounded-md bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors"
-        >
-          ✨ Generar contenido
-        </button>
+      {/* Inline timer */}
+      {!done && (
+        <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+          <span className={`font-mono text-sm font-bold ${timerOvertime ? 'text-red-400' : timerSec > 0 ? 'text-white' : 'text-zinc-600'}`}>
+            ⏱ {fmtTimer(timerSec)}
+          </span>
+          <button
+            onClick={() => setTimerRunning((r) => !r)}
+            className="text-[11px] px-2 py-0.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300 transition-colors"
+          >
+            {timerRunning ? '⏸' : '▶'}
+          </button>
+          {timerSec > 0 && (
+            <button
+              onClick={() => { setTimerSec(0); setTimerRunning(false) }}
+              className="text-[11px] px-2 py-0.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 transition-colors"
+            >
+              🔄
+            </button>
+          )}
+          {timerOvertime && <span className="text-[10px] text-red-400 font-medium">+{fmtTimer(timerSec - targetSec)}</span>}
+        </div>
       )}
 
+      {/* Action buttons row */}
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+        {/* Content generator for marketing blocks */}
+        {isMarketing && !done && (
+          <button
+            onClick={() => setShowContentGen(true)}
+            className="text-xs px-2 py-1 rounded-md bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors"
+          >
+            ✨ Generar contenido
+          </button>
+        )}
+
+        {/* Focus mode */}
+        {!done && (
+          <button
+            onClick={() => setShowFocus(true)}
+            className="text-xs px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 transition-colors"
+          >
+            🎯 Modo foco
+          </button>
+        )}
+      </div>
+
       {/* Footer actions */}
-      <div className="mt-2.5 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
         <AnimatePresence mode="wait">
           {done ? (
             <motion.button
@@ -255,7 +318,7 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
               ↩️ Reabrir
             </motion.button>
           ) : (
-            <motion.div key="actions" className="flex items-center gap-1.5">
+            <motion.div key="actions" className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => onBlockUpdate(block.id, 'done')}
                 className="text-xs px-2 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
@@ -287,6 +350,14 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
         workBlockId={block.id}
         linkedTopic={block.title}
         onClose={() => setShowContentGen(false)}
+      />
+    )}
+
+    {showFocus && (
+      <FocusMode
+        block={block}
+        onClose={() => setShowFocus(false)}
+        onBlockUpdate={onBlockUpdate}
       />
     )}
   </>

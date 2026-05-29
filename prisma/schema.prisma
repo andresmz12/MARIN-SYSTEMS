@@ -32,6 +32,7 @@ model User {
   workBlocks       WorkBlock[]
   brandProfiles    BrandProfile[]
   generatedPosts   GeneratedPost[]
+  companyRevenues  CompanyRevenue[]
 }
 
 model Trade {
@@ -275,6 +276,7 @@ model CEOCompany {
   workBlocks      WorkBlock[]
   brandProfile    BrandProfile?
   generatedPosts  GeneratedPost[]
+  revenues        CompanyRevenue[]
 
   @@index([userId])
 }
@@ -404,4 +406,23 @@ model GeneratedPost {
   @@index([userId])
   @@index([companyId])
   @@index([companyId, weekNumber])
+}
+
+model CompanyRevenue {
+  id        String     @id @default(cuid())
+  userId    String
+  companyId String
+  month     String
+  target    Float      @default(0)
+  actual    Float      @default(0)
+  currency  String     @default("USD")
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, month])
+  @@index([userId])
+  @@index([companyId])
 }
