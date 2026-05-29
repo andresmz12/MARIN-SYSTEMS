@@ -100,8 +100,9 @@ export function DailyPlanTimeline({ plan, dateKey, loading, generating, onGenera
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="relative" style={{ height: totalPx }}>
+      {/* Timeline — horizontally scrollable on very small screens */}
+      <div className="overflow-x-auto -mx-2 px-2">
+      <div className="relative min-w-[340px]" style={{ height: totalPx }}>
         {/* Vertical line */}
         <div className="absolute top-0 bottom-0 left-[50px] w-px bg-zinc-800" />
 
@@ -135,6 +136,7 @@ export function DailyPlanTimeline({ plan, dateKey, loading, generating, onGenera
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )

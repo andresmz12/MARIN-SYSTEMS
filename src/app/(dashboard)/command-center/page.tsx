@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany, DayStatus, WeekDay, RolloverResult } from './types'
-import { todayKey, weekStartKey, formatLong } from './utils'
+import { todayKey, weekStartKey, addDaysKey, formatLong } from './utils'
 import { DayStatusBar } from './components/DayStatusBar'
 import { WeekOverview } from './components/WeekOverview'
 import { DailyPlanTimeline } from './components/DailyPlanTimeline'
@@ -22,6 +22,7 @@ export default function CommandCenterPage() {
   const { showToast } = useToast()
   const [companies, setCompanies] = useState<CEOCompany[]>([])
   const [selectedDate, setSelectedDate] = useState(todayKey())
+  const [weekStart, setWeekStart] = useState(() => weekStartKey(todayKey()))
   const [dayStatus, setDayStatus] = useState<DayStatus | null>(null)
   const [week, setWeek] = useState<WeekDay[]>([])
   const [availableHours, setAvailableHours] = useState(8)
@@ -56,10 +57,10 @@ export default function CommandCenterPage() {
     setDayLoading(false)
   }, [showToast])
 
-  const loadWeek = useCallback(async (date: string) => {
+  const loadWeek = useCallback(async (start: string) => {
     setWeekLoading(true)
     try {
-      const res = await fetch(`/api/ceo/week-overview?startDate=${weekStartKey(date)}`)
+      const res = await fetch(`/api/ceo/week-overview?startDate=${start}`)
       if (res.ok) setWeek(await res.json())
     } catch {
       showToast('Error al cargar la semana', 'error')
@@ -67,20 +68,33 @@ export default function CommandCenterPage() {
     setWeekLoading(false)
   }, [showToast])
 
+  function handleWeekNav(dir: -1 | 1) {
+    const next = addDaysKey(weekStart, dir * 7)
+    setWeekStart(next)
+    loadWeek(next)
+  }
+
   // Initial load
   useEffect(() => {
     (async () => {
-      await Promise.all([loadCompanies(), loadDay(selectedDate), loadWeek(selectedDate)])
+      await Promise.all([loadCompanies(), loadDay(selectedDate), loadWeek(weekStart)])
       setInitialLoading(false)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reload day when date changes (after initial)
+  // When user clicks a day, load that day's data and sync week if needed.
   useEffect(() => {
     if (initialLoading) return
     loadDay(selectedDate)
-    loadWeek(selectedDate)
+    // If the selected day is outside the current weekStart window, jump to its week.
+    const dayWeekStart = weekStartKey(selectedDate)
+    if (dayWeekStart !== weekStart) {
+      setWeekStart(dayWeekStart)
+      loadWeek(dayWeekStart)
+    } else {
+      loadWeek(weekStart)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate])
 
@@ -102,7 +116,7 @@ export default function CommandCenterPage() {
       } else {
         showToast('Estado del día actualizado', 'success')
       }
-      loadWeek(selectedDate)
+      loadWeek(weekStart)
     } catch {
       showToast('Error al cambiar el estado', 'error')
     }
@@ -124,7 +138,7 @@ export default function CommandCenterPage() {
       } else {
         showToast('Plan generado ⚡', 'success')
         await loadDay(selectedDate)
-        loadWeek(selectedDate)
+        loadWeek(weekStart)
       }
     } catch {
       showToast('Error al generar el plan', 'error')
@@ -146,7 +160,9 @@ export default function CommandCenterPage() {
       } else {
         showToast('Plan generado ⚡', 'success')
         setSelectedDate(date)
-        loadWeek(date)
+        const newWeekStart = weekStartKey(date)
+        setWeekStart(newWeekStart)
+        loadWeek(newWeekStart)
       }
     } catch {
       showToast('Error al generar el plan', 'error')
@@ -170,7 +186,7 @@ export default function CommandCenterPage() {
       } else {
         showToast('Plan regenerado ⚡', 'success')
         await loadDay(selectedDate)
-        loadWeek(selectedDate)
+        loadWeek(weekStart)
       }
     } catch {
       showToast('Error al regenerar el plan', 'error')
@@ -236,10 +252,12 @@ export default function CommandCenterPage() {
 
       <WeekOverview
         days={week}
+        weekStart={weekStart}
         selectedDate={selectedDate}
         loading={weekLoading}
         onSelectDay={setSelectedDate}
         onGenerateDay={handleGenerateForDate}
+        onWeekNav={handleWeekNav}
       />
 
       {/* View tabs */}

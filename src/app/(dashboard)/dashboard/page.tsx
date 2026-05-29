@@ -53,9 +53,18 @@ interface UrgentTask {
   }
 }
 
+interface CeoStats {
+  totalBlocks: number
+  doneBlocks: number
+  skippedBlocks: number
+  workedHours: number
+  pct: number
+}
+
 interface Stats {
   last10WinRate: number
   habitStreak: number
+  ceo: CeoStats | null
 }
 
 const MOOD_LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente']
@@ -362,6 +371,44 @@ export default function DashboardPage() {
                 )}
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* CEO Command Center summary */}
+      {stats?.ceo && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium flex items-center gap-1.5">
+              🎯 Plan del día — Command Center
+            </p>
+            <Link href="/command-center" className="text-xs text-blue-400 hover:text-blue-300">
+              Ver plan →
+            </Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all"
+                  style={{ width: `${stats.ceo.pct}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-gray-500">
+                {stats.ceo.doneBlocks} de {stats.ceo.totalBlocks} bloques ·{' '}
+                {stats.ceo.workedHours}h trabajadas
+                {stats.ceo.skippedBlocks > 0 && (
+                  <span className="text-zinc-600"> · {stats.ceo.skippedBlocks} saltados</span>
+                )}
+              </p>
+            </div>
+            <span
+              className={`text-2xl font-bold flex-shrink-0 ${
+                stats.ceo.pct >= 75 ? 'text-emerald-400' : stats.ceo.pct >= 40 ? 'text-yellow-400' : 'text-zinc-400'
+              }`}
+            >
+              {stats.ceo.pct}%
+            </span>
           </div>
         </div>
       )}

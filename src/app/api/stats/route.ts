@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { parseDateOnly } from '@/lib/ceo'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -179,6 +180,18 @@ export async function GET() {
     }
   }
 
+  // CEO Command Center: today's plan progress (non-fixed blocks only)
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayDate = parseDateOnly(todayStr)
+  const todayPlan = await prisma.dailyPlan.findUnique({
+    where: { userId_date: { userId: session.user.id, date: todayDate } },
+    include: { workBlocks: { where: { isFixed: false } } },
+  })
+  const ceoBlocks = todayPlan?.workBlocks ?? []
+  const ceoDoneBlocks = ceoBlocks.filter((b) => b.status === 'done')
+  const ceoSkippedBlocks = ceoBlocks.filter((b) => b.status === 'skipped')
+  const ceoWorkedHours = ceoDoneBlocks.reduce((s, b) => s + b.durationHours, 0)
+
   return NextResponse.json({
     total,
     wins,
@@ -199,6 +212,15 @@ export async function GET() {
     bySetup,
     byPair,
     equityCurve,
+    ceo: todayPlan
+      ? {
+          totalBlocks: ceoBlocks.length,
+          doneBlocks: ceoDoneBlocks.length,
+          skippedBlocks: ceoSkippedBlocks.length,
+          workedHours: Math.round(ceoWorkedHours * 10) / 10,
+          pct: ceoBlocks.length > 0 ? Math.round((ceoDoneBlocks.length / ceoBlocks.length) * 100) : 0,
+        }
+      : null,
   })
   } catch (err) {
     console.error(err)
