@@ -25,6 +25,11 @@ model User {
   companies        Company[]
   playbookEntries  PlaybookEntry[]
   quickNote        QuickNote?
+  ceoCompanies     CEOCompany[]
+  marketingIdeas   MarketingIdea[]
+  dayStatuses      DayStatus[]
+  dailyPlans       DailyPlan[]
+  workBlocks       WorkBlock[]
 }
 
 model Trade {
@@ -248,4 +253,102 @@ model QuickNote {
   user      User     @relation(fields: [userId], references: [id])
   content   String   @default("")
   updatedAt DateTime @updatedAt
+}
+
+// ──────────────────────── CEO Command Center ────────────────────────
+
+model CEOCompany {
+  id              String          @id @default(cuid())
+  userId          String
+  name            String
+  color           String          @default("#6366f1")
+  emoji           String          @default("🏢")
+  country         String[]
+  strategicWeight Int             @default(3)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketingIdeas  MarketingIdea[]
+  workBlocks      WorkBlock[]
+
+  @@index([userId])
+}
+
+model MarketingIdea {
+  id              String     @id @default(cuid())
+  userId          String
+  companyId       String
+  title           String
+  description     String?
+  type            String
+  status          String     @default("idea")
+  priority        Int        @default(3)
+  convertedToTask Boolean    @default(false)
+  scheduledDate   DateTime?
+  doneAt          DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company         CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+model DayStatus {
+  id             String     @id @default(cuid())
+  userId         String
+  date           DateTime   @db.Date
+  status         String     @default("normal")
+  availableHours Float      @default(8)
+  note           String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPlan      DailyPlan?
+
+  @@unique([userId, date])
+}
+
+model DailyPlan {
+  id          String      @id @default(cuid())
+  userId      String
+  date        DateTime    @db.Date
+  dayStatusId String      @unique
+  status      String      @default("pending")
+  completedAt DateTime?
+  generatedAt DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayStatus   DayStatus   @relation(fields: [dayStatusId], references: [id], onDelete: Cascade)
+  workBlocks  WorkBlock[]
+
+  @@unique([userId, date])
+}
+
+model WorkBlock {
+  id             String     @id @default(cuid())
+  userId         String
+  dailyPlanId    String
+  companyId      String
+  title          String
+  description    String?
+  startTime      String
+  endTime        String
+  durationHours  Float
+  blockType      String     @default("work")
+  status         String     @default("pending")
+  rolledFromDate DateTime?
+  rolledToDate   DateTime?
+  linkedIdeaId   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPlan      DailyPlan  @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  company        CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([dailyPlanId])
+  @@index([companyId])
 }

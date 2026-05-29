@@ -1,0 +1,88 @@
+// Shared client-side types for the CEO Command Center (JSON shapes from the API).
+
+export interface CEOCompany {
+  id: string
+  userId: string
+  name: string
+  color: string
+  emoji: string
+  country: string[]
+  strategicWeight: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  pendingIdeas?: number
+  pendingBlocks?: number
+}
+
+export interface MarketingIdea {
+  id: string
+  userId: string
+  companyId: string
+  title: string
+  description: string | null
+  type: string
+  status: string
+  priority: number
+  convertedToTask: boolean
+  scheduledDate: string | null
+  doneAt: string | null
+  createdAt: string
+  updatedAt: string
+  company?: CEOCompany
+}
+
+export interface WorkBlock {
+  id: string
+  userId: string
+  dailyPlanId: string
+  companyId: string
+  title: string
+  description: string | null
+  startTime: string
+  endTime: string
+  durationHours: number
+  blockType: string
+  status: string
+  rolledFromDate: string | null
+  rolledToDate: string | null
+  linkedIdeaId: string | null
+  company?: CEOCompany
+}
+
+export interface DailyPlan {
+  id: string
+  userId: string
+  date: string
+  dayStatusId: string
+  status: string
+  completedAt: string | null
+  workBlocks: WorkBlock[]
+}
+
+export interface DayStatus {
+  id: string
+  userId: string
+  date: string
+  status: string
+  availableHours: number
+  note: string | null
+  dailyPlan: DailyPlan | null
+}
+
+export interface WeekDay {
+  date: string
+  dayStatus: DayStatus | null
+  plan: DailyPlan | null
+  totalHours: number
+  completedHours: number
+  pendingBlocks: number
+  totalBlocks: number
+  completedBlocks: number
+}
+
+export interface RolloverResult {
+  dayStatus: DayStatus | null
+  rolledBlocks: number
+  nextWorkDay: string | null
+}

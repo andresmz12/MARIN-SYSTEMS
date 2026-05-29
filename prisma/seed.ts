@@ -57,9 +57,40 @@ async function main() {
   }
 
   console.log('✅ Empresas iniciales creadas')
+
+  await seedCEOCompanies()
+
   console.log('\n🚀 Seed completado!')
   console.log('   Email: admin@marinsystems.com')
   console.log('   Password: trading2025')
+}
+
+async function seedCEOCompanies() {
+  const firstUser = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } })
+  if (!firstUser) {
+    console.log('⚠️  No hay usuarios — se omite seed de CEO Command Center')
+    return
+  }
+
+  const companies = [
+    { name: 'ISM Consulting Services', color: '#6366f1', emoji: '📊', country: ['US'], strategicWeight: 5 },
+    { name: 'Report System', color: '#10b981', emoji: '🧾', country: ['US'], strategicWeight: 5 },
+    { name: 'ZyraVoice', color: '#f59e0b', emoji: '🎙️', country: ['US'], strategicWeight: 4 },
+    { name: 'ABC Midwest Cleaning', color: '#3b82f6', emoji: '🧹', country: ['US', 'CO'], strategicWeight: 3 },
+    { name: 'Meraki Real Estate', color: '#ec4899', emoji: '🏠', country: ['CO'], strategicWeight: 3 },
+    { name: 'AM18K', color: '#f97316', emoji: '💎', country: ['CO'], strategicWeight: 3 },
+  ]
+
+  for (const company of companies) {
+    const existing = await prisma.cEOCompany.findFirst({
+      where: { userId: firstUser.id, name: company.name },
+    })
+    if (!existing) {
+      await prisma.cEOCompany.create({ data: { userId: firstUser.id, ...company } })
+    }
+  }
+
+  console.log('✅ Empresas CEO Command Center creadas')
 }
 
 main()
