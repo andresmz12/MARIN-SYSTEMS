@@ -22,6 +22,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     if (!existing) return NextResponse.json({ error: 'Bloque no encontrado' }, { status: 404 })
 
+    // Fixed routine blocks are immutable — they cannot be done / skipped / rolled over.
+    if (existing.isFixed) {
+      return NextResponse.json({ error: 'Los bloques de la rutina fija no se pueden modificar' }, { status: 400 })
+    }
+
     const { status, description, startTime, endTime } = parsed.data
     const data: Prisma.WorkBlockUpdateInput = {}
 

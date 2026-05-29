@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
       const key = dateKey(d)
       const dayStatus = byDate.get(key) ?? null
       const plan = dayStatus?.dailyPlan ?? null
-      const blocks = plan?.workBlocks ?? []
+      // Progress reflects only dynamic company work — fixed routine blocks don't count.
+      const blocks = (plan?.workBlocks ?? []).filter((b) => !b.isFixed)
 
       const totalHours = blocks.reduce((s, b) => s + b.durationHours, 0)
       const completedHours = blocks

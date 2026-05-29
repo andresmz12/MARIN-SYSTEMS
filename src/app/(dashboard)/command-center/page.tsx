@@ -132,6 +132,52 @@ export default function CommandCenterPage() {
     setGenerating(false)
   }
 
+  async function handleGenerateForDate(date: string) {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/ceo/generate-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, availableHours }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        showToast(err.error ?? 'Error al generar el plan', 'error')
+      } else {
+        showToast('Plan generado ⚡', 'success')
+        setSelectedDate(date)
+        loadWeek(date)
+      }
+    } catch {
+      showToast('Error al generar el plan', 'error')
+    }
+    setGenerating(false)
+  }
+
+  async function handleRegenerate() {
+    if (!window.confirm('¿Regenerar el plan de este día? Se perderá el progreso actual.')) return
+    setGenerating(true)
+    try {
+      await fetch(`/api/ceo/generate-plan?date=${selectedDate}`, { method: 'DELETE' })
+      const res = await fetch('/api/ceo/generate-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, availableHours }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        showToast(err.error ?? 'Error al regenerar el plan', 'error')
+      } else {
+        showToast('Plan regenerado ⚡', 'success')
+        await loadDay(selectedDate)
+        loadWeek(selectedDate)
+      }
+    } catch {
+      showToast('Error al regenerar el plan', 'error')
+    }
+    setGenerating(false)
+  }
+
   async function handleBlockUpdate(id: string, status: string) {
     // Optimistic update
     setDayStatus((prev) => {
@@ -193,6 +239,7 @@ export default function CommandCenterPage() {
         selectedDate={selectedDate}
         loading={weekLoading}
         onSelectDay={setSelectedDate}
+        onGenerateDay={handleGenerateForDate}
       />
 
       {/* View tabs */}
@@ -213,9 +260,11 @@ export default function CommandCenterPage() {
       {view === 'plan' && (
         <DailyPlanTimeline
           plan={plan}
+          dateKey={selectedDate}
           loading={dayLoading}
           generating={generating}
           onGenerate={handleGenerate}
+          onRegenerate={handleRegenerate}
           onBlockUpdate={handleBlockUpdate}
         />
       )}

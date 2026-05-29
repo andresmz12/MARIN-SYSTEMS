@@ -3,15 +3,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
-  GeneratePlanSchema, FOREX_COMPANY_NAME, parseDateOnly, addMinutes,
-  type BlockType,
+  GeneratePlanSchema, FOREX_COMPANY_NAME, PERSONAL_COMPANY_NAME,
+  FIXED_BLOCKS, WORK_SLOTS, parseDateOnly, isWeekend, hoursBetween, splitSlot,
+  encodeBlockDetails,
 } from '@/lib/ceo'
+import { generateBlockContent } from '@/lib/ai'
 import type { CEOCompany, MarketingIdea, WorkBlock, Prisma } from '@prisma/client'
-
-const DAY_START = '06:00'
-const MIN_HOURS = 0.5
-const MAX_HOURS = 3
-const FOREX_MIN_AVAILABLE = 4
 
 interface ScoredCompany {
   company: CEOCompany
@@ -21,46 +18,27 @@ interface ScoredCompany {
   carryover: WorkBlock[]
 }
 
-function blockTypeForIdea(type: string): BlockType {
-  if (['reel', 'post', 'video', 'story', 'campaign', 'email'].includes(type)) return 'marketing'
-  return 'admin'
+/** A company-block placement to be filled with AI content. */
+interface PlannedSlot {
+  start: string
+  end: string
+  durationHours: number
+  target: ScoredCompany
+  linkedIdeaId: string | null
 }
 
-/** Distributes `pool` hours across items (ordered by priority) honouring min/max + redistribution. */
-function allocateHours(items: { id: string; score: number }[], pool: number): Map<string, number> {
-  const result = new Map<string, number>()
-  if (items.length === 0 || pool <= 0) return result
-
-  const useEqual = items.every((i) => i.score <= 0)
-  const totalScore = items.reduce((s, i) => s + i.score, 0)
-
-  let remaining = pool
-  for (const i of items) {
-    const share = useEqual ? pool / items.length : pool * (i.score / totalScore)
-    let h = Math.min(MAX_HOURS, Math.max(MIN_HOURS, share))
-    h = Math.round(h * 2) / 2
-    result.set(i.id, h)
-    remaining -= h
-  }
-
-  remaining = Math.round(remaining * 2) / 2
-  let guard = 0
-  while (Math.abs(remaining) >= 0.5 && guard < 200) {
-    guard++
-    if (remaining > 0) {
-      const target = items.find((i) => (result.get(i.id) ?? 0) < MAX_HOURS)
-      if (!target) break
-      result.set(target.id, (result.get(target.id) ?? 0) + 0.5)
-      remaining -= 0.5
-    } else {
-      const target = [...items].reverse().find((i) => (result.get(i.id) ?? 0) > MIN_HOURS)
-      if (!target) break
-      result.set(target.id, (result.get(target.id) ?? 0) - 0.5)
-      remaining += 0.5
-    }
-  }
-
-  return result
+/** Find or create a hidden system pseudo-company (used for fixed routine blocks). */
+async function ensureSystemCompany(
+  userId: string,
+  name: string,
+  emoji: string,
+  color: string,
+): Promise<CEOCompany> {
+  const existing = await prisma.cEOCompany.findFirst({ where: { userId, name } })
+  if (existing) return existing
+  return prisma.cEOCompany.create({
+    data: { userId, name, emoji, color, isActive: false, strategicWeight: 1, country: [] },
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -77,7 +55,12 @@ export async function POST(req: NextRequest) {
     const { date: dateStr, availableHours } = parsed.data
     const date = parseDateOnly(dateStr)
 
-    // 1. Block if a plan already exists for this date.
+    // 1. Weekends are for resting.
+    if (isWeekend(date)) {
+      return NextResponse.json({ error: 'Los fines de semana son para descansar 🏖️' }, { status: 400 })
+    }
+
+    // 2. Block if a plan already exists for this date.
     const existingPlan = await prisma.dailyPlan.findUnique({
       where: { userId_date: { userId, date } },
     })
@@ -85,20 +68,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Ya existe un plan para este día', canRegenerate: true }, { status: 409 })
     }
 
-    // 2. Active companies (system Forex excluded).
+    // 3. Active companies (system pseudo-companies excluded).
     const companies = await prisma.cEOCompany.findMany({
-      where: { userId, isActive: true, name: { not: FOREX_COMPANY_NAME } },
+      where: {
+        userId,
+        isActive: true,
+        name: { notIn: [FOREX_COMPANY_NAME, PERSONAL_COMPANY_NAME] },
+      },
     })
-
     if (companies.length === 0) {
       return NextResponse.json({ error: 'No hay empresas activas para planificar' }, { status: 400 })
     }
-
     const companyIds = companies.map((c) => c.id)
 
-    // 3. Ideas + carryover blocks for scoring.
+    // 4. Ideas + carryover blocks for scoring (algorithm unchanged).
     const ideas = await prisma.marketingIdea.findMany({
       where: { userId, companyId: { in: companyIds }, status: { in: ['idea', 'in_progress'] } },
+      orderBy: { priority: 'desc' },
     })
     const carryoverBlocks = await prisma.workBlock.findMany({
       where: { userId, status: 'rolled_over', rolledToDate: date, companyId: { in: companyIds } },
@@ -109,101 +95,113 @@ export async function POST(req: NextRequest) {
       const ideasInProgress = ideas.filter((i) => i.companyId === company.id && i.status === 'in_progress')
       const carryover = carryoverBlocks.filter((b) => b.companyId === company.id)
       const raw = ideasNew.length * 2 + ideasInProgress.length * 3 + carryover.length * 4
-      return {
-        company,
-        score: raw * company.strategicWeight,
-        ideasNew,
-        ideasInProgress,
-        carryover,
-      }
+      return { company, score: raw * company.strategicWeight, ideasNew, ideasInProgress, carryover }
     })
 
-    // Companies with score drive the distribution; if none, fall back to equal weighting.
     const positive = scored.filter((s) => s.score > 0)
     const targets = (positive.length > 0 ? positive : scored)
       .slice()
       .sort((a, b) => b.score - a.score || b.company.strategicWeight - a.company.strategicWeight)
 
-    // 4. Distribute hours (reserve 1h for the fixed Forex block when applicable).
-    const includeForex = availableHours >= FOREX_MIN_AVAILABLE
-    const pool = availableHours - (includeForex ? 1 : 0)
-    const allocation = allocateHours(
-      targets.map((t) => ({ id: t.company.id, score: t.score })),
-      pool,
-    )
-
-    // 5. Build work blocks starting at 06:00, ordered by score desc.
-    const blockData: Prisma.WorkBlockCreateManyDailyPlanInput[] = []
-    let cursor = DAY_START
-
-    for (const t of targets) {
-      const hours = allocation.get(t.company.id) ?? 0
-      if (hours <= 0) continue
-
-      let title: string
-      let blockType: BlockType
-      let linkedIdeaId: string | null = null
-
-      if (t.ideasInProgress.length > 0) {
-        const idea = t.ideasInProgress[0]
-        title = idea.title
-        blockType = blockTypeForIdea(idea.type)
-        linkedIdeaId = idea.id
-      } else if (t.ideasNew.length > 0) {
-        const idea = t.ideasNew[0]
-        title = `Desarrollar: ${idea.title}`
-        blockType = blockTypeForIdea(idea.type)
-        linkedIdeaId = idea.id
-      } else {
-        title = `${t.company.name}: Operaciones y seguimiento`
-        blockType = 'admin'
-      }
-
-      const end = addMinutes(cursor, hours * 60)
-      const hasCarryover = t.carryover.length > 0
-
-      blockData.push({
-        userId,
-        companyId: t.company.id,
-        title,
-        description: hasCarryover ? `Incluye ${t.carryover.length} bloque(s) acumulado(s) de días previos` : null,
-        startTime: cursor,
-        endTime: end,
-        durationHours: hours,
-        blockType,
-        status: 'pending',
-        rolledFromDate: hasCarryover ? t.carryover[0].rolledFromDate ?? date : null,
-        linkedIdeaId,
-      })
-      cursor = end
+    // 5. Pick the work slots that cover the requested hours (in order), then split each
+    //    slot into one or two company block-slots depending on its length.
+    const selectedSlots: { start: string; end: string }[] = []
+    let covered = 0
+    for (const slot of WORK_SLOTS) {
+      if (covered >= availableHours) break
+      selectedSlots.push(slot)
+      covered += hoursBetween(slot.start, slot.end)
     }
 
-    // 6 (Forex). Ensure the system Forex company exists and append a fixed 1h block.
-    if (includeForex) {
-      let forex = await prisma.cEOCompany.findFirst({ where: { userId, name: FOREX_COMPANY_NAME } })
-      if (!forex) {
-        forex = await prisma.cEOCompany.create({
-          data: { userId, name: FOREX_COMPANY_NAME, emoji: '📈', color: '#14b8a6', isActive: false, strategicWeight: 1, country: [] },
-        })
+    const blockSlots: { start: string; end: string }[] = []
+    for (const slot of selectedSlots) {
+      const parts = hoursBetween(slot.start, slot.end) >= 2 ? 2 : 1
+      blockSlots.push(...splitSlot(slot.start, slot.end, parts))
+    }
+
+    // 6. Assign companies (by score) to block-slots, rotating through ideas per company.
+    const ideaCursor = new Map<string, number>()
+    const planned: PlannedSlot[] = blockSlots.map((bs, i) => {
+      const target = targets[i % targets.length]
+      const queue = [...target.ideasInProgress, ...target.ideasNew]
+      const idx = ideaCursor.get(target.company.id) ?? 0
+      const idea = queue[idx] ?? queue[0] ?? null
+      ideaCursor.set(target.company.id, idx + 1)
+      return {
+        start: bs.start,
+        end: bs.end,
+        durationHours: Math.round(hoursBetween(bs.start, bs.end) * 100) / 100,
+        target,
+        linkedIdeaId: idea?.id ?? null,
       }
-      const end = addMinutes(cursor, 60)
+    })
+
+    // 7. AI-generate content for each company block-slot in parallel (graceful fallback inside).
+    const contents = await Promise.all(
+      planned.map((p) =>
+        generateBlockContent({
+          companyName: p.target.company.name,
+          durationHours: p.durationHours,
+          startTime: p.start,
+          endTime: p.end,
+          ideasInProgress: p.target.ideasInProgress.map((i) => i.title),
+          ideasPending: p.target.ideasNew.map((i) => i.title),
+          defaultBlockType: p.target.ideasInProgress.length > 0 || p.target.ideasNew.length > 0 ? 'marketing' : 'admin',
+        }),
+      ),
+    )
+
+    // 8. Build the fixed routine blocks (always present, immutable).
+    const forexCo = await ensureSystemCompany(userId, FOREX_COMPANY_NAME, '📈', '#14b8a6')
+    const personalCo = await ensureSystemCompany(userId, PERSONAL_COMPANY_NAME, '🌿', '#71717a')
+
+    const blockData: Prisma.WorkBlockCreateManyDailyPlanInput[] = []
+
+    for (const fb of FIXED_BLOCKS) {
+      const co = fb.type === 'forex' ? forexCo : personalCo
       blockData.push({
         userId,
-        companyId: forex.id,
-        title: 'Sesión de Forex',
-        description: 'Bloque fijo diario de trading',
-        startTime: cursor,
-        endTime: end,
-        durationHours: 1,
-        blockType: 'forex',
+        companyId: co.id,
+        title: fb.title,
+        description: null,
+        startTime: fb.start,
+        endTime: fb.end,
+        durationHours: Math.round(hoursBetween(fb.start, fb.end) * 100) / 100,
+        blockType: fb.type,
         status: 'pending',
+        isFixed: true,
         rolledFromDate: null,
         linkedIdeaId: null,
       })
-      cursor = end
     }
 
-    // 7. Ensure DayStatus exists, then create the DailyPlan + blocks in a transaction.
+    // 9. Company work blocks.
+    planned.forEach((p, i) => {
+      const c = contents[i]
+      const hasCarryover = p.target.carryover.length > 0
+      const description = encodeBlockDetails({
+        description: hasCarryover
+          ? `${c.description} (incluye ${p.target.carryover.length} bloque(s) acumulado(s))`
+          : c.description,
+        steps: c.steps,
+      })
+      blockData.push({
+        userId,
+        companyId: p.target.company.id,
+        title: c.title,
+        description,
+        startTime: p.start,
+        endTime: p.end,
+        durationHours: p.durationHours,
+        blockType: c.blockType,
+        status: 'pending',
+        isFixed: false,
+        rolledFromDate: hasCarryover ? p.target.carryover[0].rolledFromDate ?? date : null,
+        linkedIdeaId: p.linkedIdeaId,
+      })
+    })
+
+    // 10. Persist DayStatus + DailyPlan + blocks.
     const dayStatus = await prisma.dayStatus.upsert({
       where: { userId_date: { userId, date } },
       update: { availableHours },
@@ -228,5 +226,26 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Error al generar el plan' }, { status: 500 })
+  }
+}
+
+/** Delete the plan for a given date so it can be regenerated. Keeps the DayStatus. */
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = session.user.id
+
+  try {
+    const { searchParams } = new URL(req.url)
+    const dateStr = searchParams.get('date')
+    if (!dateStr) return NextResponse.json({ error: 'Parámetro date requerido' }, { status: 400 })
+
+    const date = parseDateOnly(dateStr)
+    await prisma.dailyPlan.deleteMany({ where: { userId, date } })
+
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Error al eliminar el plan' }, { status: 500 })
   }
 }

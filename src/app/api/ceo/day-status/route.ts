@@ -68,11 +68,12 @@ export async function POST(req: NextRequest) {
       const plan = dayStatus.dailyPlan
       if (plan) {
         const next = nextWorkDay(date)
-        const pendingBlocks = plan.workBlocks.filter((b) => b.status === 'pending')
+        // Fixed routine blocks never roll over.
+        const pendingBlocks = plan.workBlocks.filter((b) => b.status === 'pending' && !b.isFixed)
 
         if (pendingBlocks.length > 0) {
           await prisma.workBlock.updateMany({
-            where: { dailyPlanId: plan.id, status: 'pending' },
+            where: { dailyPlanId: plan.id, status: 'pending', isFixed: false },
             data: { status: 'rolled_over', rolledToDate: next },
           })
           await prisma.dailyPlan.update({

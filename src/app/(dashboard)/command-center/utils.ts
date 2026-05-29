@@ -112,6 +112,39 @@ export const BLOCK_TYPE_CONFIG: Record<string, { label: string; cls: string }> =
   admin: { label: 'Admin', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
   sales: { label: 'Ventas', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
   forex: { label: 'Forex', cls: 'bg-teal-500/20 text-teal-400 border-teal-500/40' },
+  deepwork: { label: 'Deep work', cls: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40' },
+  personal: { label: 'Personal', cls: 'bg-zinc-700/40 text-zinc-300 border-zinc-600' },
+}
+
+// ──────────────────────── Block details (description + steps) ────────────────────────
+
+export interface BlockDetails {
+  description: string
+  steps: string[]
+}
+
+/** Decode the work-block `description` column (JSON `{description,steps}` or legacy plain text). */
+export function parseBlockDetails(raw: string | null | undefined): BlockDetails {
+  if (!raw) return { description: '', steps: [] }
+  try {
+    const p: unknown = JSON.parse(raw)
+    if (p && typeof p === 'object' && ('description' in p || 'steps' in p)) {
+      const obj = p as Record<string, unknown>
+      return {
+        description: typeof obj.description === 'string' ? obj.description : '',
+        steps: Array.isArray(obj.steps) ? obj.steps.filter((s): s is string => typeof s === 'string') : [],
+      }
+    }
+  } catch {
+    // legacy plain-text description
+  }
+  return { description: raw, steps: [] }
+}
+
+/** Minutes-since-midnight for a `HH:MM` string. */
+export function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
 }
 
 export const BLOCK_STATUS_CONFIG: Record<string, { label: string; cls: string }> = {

@@ -339,6 +339,7 @@ model WorkBlock {
   durationHours  Float
   blockType      String     @default("work")
   status         String     @default("pending")
+  isFixed        Boolean    @default(false)
   rolledFromDate DateTime?
   rolledToDate   DateTime?
   linkedIdeaId   String?

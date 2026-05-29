@@ -44,6 +44,7 @@ export interface WorkBlock {
   durationHours: number
   blockType: string
   status: string
+  isFixed: boolean
   rolledFromDate: string | null
   rolledToDate: string | null
   linkedIdeaId: string | null
