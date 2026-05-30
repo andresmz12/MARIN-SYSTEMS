@@ -288,6 +288,7 @@ export default function CommandCenterPage() {
           onGenerate={handleGenerate}
           onRegenerate={handleRegenerate}
           onBlockUpdate={handleBlockUpdate}
+          onReloadDay={() => loadDay(selectedDate)}
         />
       )}
 
