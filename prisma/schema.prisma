@@ -115,3 +115,13 @@ model PreTradeChecklist {
 
   @@unique([userId, date])
 }
+
+model IrsNews {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  url         String   @unique
+  publishedAt DateTime
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

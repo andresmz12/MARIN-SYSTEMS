@@ -5,6 +5,15 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { useState } from 'react'
 
+const IRS_ICON = (
+  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+      d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+      d="M13 4v6h6M9 12h6M9 16h6" />
+  </svg>
+)
+
 const navItems = [
   {
     label: 'Dashboard',
@@ -157,6 +166,19 @@ export function Sidebar() {
               d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
           </svg>
           Journal
+        </Link>
+
+        {/* IRS News */}
+        <Link
+          href="/irs-news"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+            pathname.startsWith('/irs-news')
+              ? 'bg-amber-600/20 text-amber-400 border border-amber-600/30'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
+          }`}
+        >
+          {IRS_ICON}
+          IRS News
         </Link>
       </nav>
 
