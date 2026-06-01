@@ -111,7 +111,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
       active
         ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
-        : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
+        : 'hover:bg-[var(--bg-hover)]'
     }`
 
   const navLink = (href: string, label: string, icon: React.ReactNode) => (
@@ -124,7 +124,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   return (
     <>
       {/* Mobile top bar */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-[#111] border-b border-[#2a2a2a] flex items-center px-4 gap-3">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-[var(--bg-sidebar)] border-b border-[var(--bg-border)] flex items-center px-4 gap-3">
         <button
           onClick={() => setMobileOpen(true)}
           className="text-gray-400 hover:text-white p-1"
@@ -153,14 +153,14 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
       {/* Sidebar panel */}
       <aside
-        className={`fixed left-0 top-0 h-full bg-[#111] border-r border-[#2a2a2a] flex flex-col z-50
+        className={`fixed left-0 top-0 h-full bg-[var(--bg-sidebar)] border-r border-[var(--bg-border)] flex flex-col z-50
           transition-all duration-300
           ${mobileOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full'}
           ${collapsed ? 'lg:w-16 lg:translate-x-0' : 'lg:w-60 lg:translate-x-0'}
         `}
       >
         {/* Brand */}
-        <div className="p-4 border-b border-[#2a2a2a] flex items-center justify-between min-h-[60px]">
+        <div className="p-4 border-b border-[var(--bg-border)] flex items-center justify-between min-h-[60px]">
           {(!collapsed) && (
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 bg-blue-600/20 border border-blue-600/40 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -188,7 +188,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {/* Mobile close */}
           <button
             onClick={() => setMobileOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#1a1a1a] transition-colors flex-shrink-0"
+            className="lg:hidden p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[var(--bg-hover)] transition-colors flex-shrink-0"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -233,7 +233,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             </button>
 
             {tradingOpen && !collapsed && (
-              <div className="ml-4 mt-0.5 space-y-0.5 border-l border-[#2a2a2a] pl-3">
+              <div className="ml-4 mt-0.5 space-y-0.5 border-l border-[var(--bg-border)] pl-3">
                 {tradingItems.map((item) => (
                   <Link
                     key={item.href}
@@ -241,7 +241,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                     className={`block px-2 py-2 rounded-lg text-xs transition-colors ${
                       pathname === item.href
                         ? 'text-blue-400 bg-blue-600/10'
-                        : 'text-gray-500 hover:text-gray-300 hover:bg-[#1a1a1a]'
+                        : 'text-gray-500 hover:text-gray-300 hover:bg-[var(--bg-hover)]'
                     }`}
                   >
                     {item.label}
@@ -259,11 +259,11 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         </nav>
 
         {/* Bottom */}
-        <div className="p-3 border-t border-[#2a2a2a] space-y-0.5">
+        <div className="p-3 border-t border-[var(--bg-border)] space-y-0.5">
           {/* Desktop collapse toggle */}
           <button
             onClick={onToggleCollapse}
-            className="hidden lg:flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-[#1a1a1a] transition-colors"
+            className="hidden lg:flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-[var(--bg-hover)] transition-colors"
           >
             <svg
               className={`w-4 h-4 flex-shrink-0 transition-transform ${collapsed ? 'rotate-180' : ''}`}
@@ -290,7 +290,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#111] border-t border-[#2a2a2a] flex">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--bg-sidebar)] border-t border-[var(--bg-border)] flex">
         {mainNavItems.map(({ href, label, icon }) => (
           <Link
             key={href}

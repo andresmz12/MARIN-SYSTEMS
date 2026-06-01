@@ -4,35 +4,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables ── */
 :root {
-  --bg: #0f0f0f;
-  --card: #1a1a1a;
-  --card-hover: #222222;
-  --border: #2a2a2a;
-  --accent: #2563eb;
-
-  --bg-base: #0f0f0f;
-  --bg-card: #111111;
-  --bg-elevated: #1a1a1a;
-  --bg-border: #2a2a2a;
-  --text-primary: #ffffff;
-  --text-secondary: #9ca3af;
-  --text-muted: #4b5563;
+  --bg-base:       #0f0f0f;
+  --bg-sidebar:    #111111;
+  --bg-card:       #111111;
+  --bg-elevated:   #1a1a1a;
+  --bg-hover:      #222222;
+  --bg-border:     #2a2a2a;
+  --text-primary:  #e5e7eb;
+  --text-secondary:#9ca3af;
+  --text-muted:    #4b5563;
+  --scrollbar-thumb: #3a3a3a;
+  --scrollbar-thumb-hover: #4a4a4a;
 }
 
 .light {
-  --bg-base: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-elevated: #f1f5f9;
-  --bg-border: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --bg-base:       #f1f5f9;
+  --bg-sidebar:    #ffffff;
+  --bg-card:       #ffffff;
+  --bg-elevated:   #ffffff;
+  --bg-hover:      #f1f5f9;
+  --bg-border:     #e2e8f0;
+  --text-primary:  #0f172a;
+  --text-secondary:#475569;
+  --text-muted:    #94a3b8;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* ── Base ── */
+* { box-sizing: border-box; }
 
 body {
   background-color: var(--bg-base);
@@ -41,47 +43,51 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg);
-}
-::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
+/* ── Component classes ── */
 @layer components {
   .card {
-    @apply bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4;
+    @apply rounded-xl p-4;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--bg-border);
   }
+
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm;
   }
+
   .btn-secondary {
-    @apply bg-[#2a2a2a] hover:bg-[#333] text-gray-200 font-medium px-4 py-2 rounded-lg transition-colors text-sm;
+    @apply font-medium px-4 py-2 rounded-lg transition-colors text-sm;
+    background-color: var(--bg-border);
+    color: var(--text-primary);
   }
+  .btn-secondary:hover {
+    background-color: var(--bg-hover);
+  }
+
   .btn-danger {
     @apply bg-red-600/20 hover:bg-red-600/30 text-red-400 font-medium px-4 py-2 rounded-lg transition-colors text-sm border border-red-600/30;
   }
+
   .input {
-    @apply bg-[#111] border border-[#2a2a2a] text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full placeholder-gray-600;
+    @apply rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full;
+    background-color: var(--bg-card);
+    border: 1px solid var(--bg-border);
+    color: var(--text-primary);
   }
+  .input:focus { border-color: #3b82f6; }
+  .input::placeholder { color: var(--text-muted); }
+
   .label {
-    @apply text-xs font-medium text-gray-400 block mb-1;
+    @apply text-xs font-medium block mb-1;
+    color: var(--text-secondary);
   }
-  .badge-win {
-    @apply bg-green-500/20 text-green-400 border border-green-500/30 text-xs font-bold px-2 py-0.5 rounded;
-  }
-  .badge-loss {
-    @apply bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold px-2 py-0.5 rounded;
-  }
-  .badge-be {
-    @apply bg-gray-500/20 text-gray-400 border border-gray-500/30 text-xs font-bold px-2 py-0.5 rounded;
-  }
+
+  .badge-win  { @apply bg-green-500/20 text-green-400 border border-green-500/30 text-xs font-bold px-2 py-0.5 rounded; }
+  .badge-loss { @apply bg-red-500/20   text-red-400   border border-red-500/30   text-xs font-bold px-2 py-0.5 rounded; }
+  .badge-be   { @apply bg-gray-500/20  text-gray-400  border border-gray-500/30  text-xs font-bold px-2 py-0.5 rounded; }
 }
