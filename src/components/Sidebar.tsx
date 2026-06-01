@@ -76,6 +76,18 @@ const mainNavItems = [
       </svg>
     ),
   },
+  {
+    href: '/irs-news',
+    label: 'IRS News',
+    icon: (
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M13 4v6h6M9 12h6M9 16h6" />
+      </svg>
+    ),
+  },
 ]
 
 interface SidebarProps {
@@ -243,6 +255,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {navLink('/agenda', 'Agenda', mainNavItems[3].icon)}
           {navLink('/journal', 'Journal', mainNavItems[4].icon)}
           {navLink('/metas', 'Metas', mainNavItems[5].icon)}
+          {navLink('/irs-news', 'IRS News', mainNavItems[6].icon)}
         </nav>
 
         {/* Bottom */}
