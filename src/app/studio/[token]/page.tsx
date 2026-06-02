@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
 const StudioMap = dynamic(() => import('@/components/studio/StudioMap'), { ssr: false })
@@ -24,8 +23,8 @@ interface SessionData {
 
 type State = 'loading' | 'ready' | 'error'
 
-export default function StudioPage() {
-  const { token } = useParams<{ token: string }>()
+export default function StudioPage({ params }: { params: { token: string } }) {
+  const { token } = params
   const [state, setState] = useState<State>('loading')
   const [data, setData] = useState<SessionData | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
