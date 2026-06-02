@@ -141,7 +141,21 @@ NOTICIA:
 Título: ${title}
 ${context ? `Contexto: ${context}` : ''}
 
-También genera un guion narrado de 60-75 segundos que recorra los 5 temas del mapa, en español latino conversacional, con gancho al inicio y llamada a la acción al final.
+También genera un guion narrado de 60-75 segundos en español latino conversacional. El guion DEBE tener estos marcadores exactos al inicio de cada sección (los usamos para sincronizar el mapa):
+
+[INTRO] gancho impactante (1-2 oraciones)
+[R1] sección sobre qué es / a quién aplica
+[R2] sección sobre cómo funciona
+[R3] sección sobre qué debe hacer el contribuyente
+[R4] sección sobre fechas y montos
+[R5] sección sobre errores que evitar
+[CTA] llamada a la acción final
+
+Reglas del guion:
+- Cada sección [R1]-[R5]: 2-3 oraciones con datos concretos
+- Tono: amigable, como hablarle a un amigo, no como un anuncio
+- Sin muletillas, sin "básicamente", sin "en resumen"
+- Total: 60-75 segundos cuando se lee en voz alta
 
 Responde SOLO con JSON válido (sin markdown):
 { "mapaJson": {...}, "guionCompleto": "..." }`
