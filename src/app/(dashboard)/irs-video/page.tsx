@@ -167,28 +167,43 @@ function MindMap({
   }, [])
 
   function exportPng() {
-    const svg = svgRef.current; const el = containerRef.current; if (!svg || !el) return
-    const { width, height } = el.getBoundingClientRect()
+    const svg = svgRef.current; if (!svg) return
+
+    // Always export at 4K so the PNG is never pixelated
+    const OUT_W = 3840; const OUT_H = 2160
+    const PAD = 160
+
     const clone = svg.cloneNode(true) as SVGSVGElement
-    clone.setAttribute('width', String(width)); clone.setAttribute('height', String(height))
+    clone.setAttribute('width', String(OUT_W))
+    clone.setAttribute('height', String(OUT_H))
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-    const scale = Math.min(width / (CX * 2 + 400), height / (CY * 2 + 300)) * 0.82
+
+    // Fit the full map (all branches + children) with padding
+    const MAP_SPAN_X = (CX + BRANCH_R + CHILD_R + 220) * 2
+    const MAP_SPAN_Y = (CY + BRANCH_R + CHILD_R + 160) * 2
+    const fitScale = Math.min((OUT_W - PAD * 2) / MAP_SPAN_X, (OUT_H - PAD * 2) / MAP_SPAN_Y)
+    const tx = OUT_W / 2 - CX * fitScale
+    const ty = OUT_H / 2 - CY * fitScale
+
     const g = clone.querySelector('g')
-    if (g) g.setAttribute('transform', `translate(${(width / 2 - CX * scale).toFixed(1)},${(height / 2 - CY * scale).toFixed(1)}) scale(${scale.toFixed(4)})`)
+    if (g) g.setAttribute('transform', `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${fitScale.toFixed(5)})`)
+
     const svgStr = new XMLSerializer().serializeToString(clone)
     const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const img = new Image()
     img.onload = () => {
-      const dpr = Math.max(window.devicePixelRatio, 2)
       const canvas = document.createElement('canvas')
-      canvas.width = width * dpr; canvas.height = height * dpr
+      canvas.width = OUT_W; canvas.height = OUT_H
       const ctx = canvas.getContext('2d')!
-      ctx.scale(dpr, dpr)
       ctx.fillStyle = presentationMode ? '#0f172a' : '#f9fafb'
-      ctx.fillRect(0, 0, width, height)
-      ctx.drawImage(img, 0, 0, width, height); URL.revokeObjectURL(url)
-      canvas.toBlob(pb => { if (!pb) return; const a = document.createElement('a'); a.href = URL.createObjectURL(pb); a.download = 'mapa-irs.png'; a.click() }, 'image/png')
+      ctx.fillRect(0, 0, OUT_W, OUT_H)
+      ctx.drawImage(img, 0, 0, OUT_W, OUT_H)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(pb => {
+        if (!pb) return
+        const a = document.createElement('a'); a.href = URL.createObjectURL(pb); a.download = 'mapa-irs.png'; a.click()
+      }, 'image/png')
     }
     img.onerror = () => { const a = document.createElement('a'); a.href = url; a.download = 'mapa-irs.svg'; a.click() }
     img.src = url
