@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = [
+  "npx prisma generate",
+  "npx next build"
+]
+
+[start]
+cmd = "npx prisma db push --accept-data-loss && npx next start -p $PORT"
