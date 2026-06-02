@@ -11,264 +11,338 @@ interface MapaJson {
   ramas: MapaRama[]
 }
 interface ElevenVoice { voice_id: string; name: string }
+interface DrawPath { d: string; color: string; size: number }
 
-/* ── Layout constants ── */
-const W = 1400
-const H = 860
-const CX = W / 2
-const CY = H / 2
-const BRANCH_R = 290
-const CHILD_R = 175
-const BRANCH_ANGLES = [-115, -40, 40, 115]
+/* ── Map layout (large coordinate space — no clipping) ── */
+const CX = 1100
+const CY = 700
+const BRANCH_R = 340
+const CHILD_R = 210
+const BRANCH_ANGLES = [-125, -45, 45, 125]
 const RAD = (d: number) => (d * Math.PI) / 180
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
 
-function branchPos(angle: number) {
+function bp(angle: number) {
   return { x: CX + BRANCH_R * Math.cos(RAD(angle)), y: CY + BRANCH_R * Math.sin(RAD(angle)) }
 }
-function childPos(angle: number, idx: number) {
-  const { x: bx, y: by } = branchPos(angle)
-  const a = angle + ([-30, 30][idx] ?? 0)
+function cp(angle: number, idx: number) {
+  const { x: bx, y: by } = bp(angle)
+  const a = angle + ([-35, 35][idx] ?? 0)
   return { x: bx + CHILD_R * Math.cos(RAD(a)), y: by + CHILD_R * Math.sin(RAD(a)) }
 }
-function curve(x1: number, y1: number, x2: number, y2: number) {
+function qcurve(x1: number, y1: number, x2: number, y2: number) {
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
   const dx = x2 - x1, dy = y2 - y1
-  return `M ${x1} ${y1} Q ${mx - dy * 0.15} ${my + dx * 0.15} ${x2} ${y2}`
+  return `M ${x1} ${y1} Q ${mx - dy * 0.18} ${my + dx * 0.18} ${x2} ${y2}`
 }
-function wrapText(text: string, maxChars: number): string[] {
+function wrap(text: string, max: number): string[] {
   const words = text.split(' ')
   const lines: string[] = []
   let cur = ''
   for (const w of words) {
     const next = cur ? `${cur} ${w}` : w
-    if (next.length <= maxChars) cur = next
+    if (next.length <= max) cur = next
     else { if (cur) lines.push(cur); cur = w }
   }
   if (cur) lines.push(cur)
-  return lines.length ? lines : [text.slice(0, maxChars)]
+  return lines.length ? lines : [text.slice(0, max)]
 }
 
-/* ── Interactive Mind Map ── */
+const PEN_COLORS = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#000000','#ffffff']
+
+/* ════════════════════════════════════
+   Interactive Mind Map with drawing
+════════════════════════════════════ */
 function MindMap({ mapa }: { mapa: MapaJson }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
+
+  // Pan/zoom
   const [tf, setTf] = useState({ x: 0, y: 0, scale: 1 })
-  const drag = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null)
+  const tfRef = useRef({ x: 0, y: 0, scale: 1 })
+  const dragState = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
 
-  function onMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    drag.current = { startX: e.clientX, startY: e.clientY, ox: tf.x, oy: tf.y }
-  }
-  function onMouseMove(e: React.MouseEvent) {
-    if (!drag.current) return
-    setTf(t => ({ ...t, x: drag.current!.ox + e.clientX - drag.current!.startX, y: drag.current!.oy + e.clientY - drag.current!.startY }))
-  }
-  function onMouseUp() { drag.current = null }
+  // Drawing
+  const [mode, setMode] = useState<'pan' | 'draw'>('pan')
+  const [penColor, setPenColor] = useState('#dc2626')
+  const [penSize, setPenSize] = useState(4)
+  const [drawings, setDrawings] = useState<DrawPath[]>([])
+  const [liveD, setLiveD] = useState<string | null>(null)
+  const isDrawing = useRef(false)
+  const livePts = useRef('')
 
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault()
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const mx = e.clientX - rect.left
-    const my = e.clientY - rect.top
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    setTf(t => {
-      const ns = Math.min(4, Math.max(0.25, t.scale * delta))
-      return {
-        scale: ns,
-        x: mx - (mx - t.x) * (ns / t.scale),
-        y: my - (my - t.y) * (ns / t.scale),
-      }
-    })
-  }
+  // keep tfRef in sync so pointer handlers can read latest without stale closure
+  useEffect(() => { tfRef.current = tf }, [tf])
 
-  function resetView() { setTf({ x: 0, y: 0, scale: 1 }) }
+  // Auto-center on mount
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const scale = Math.min(width / (CX * 2 + 300), height / (CY * 2 + 200)) * 0.88
+    const x = width / 2 - CX * scale
+    const y = height / 2 - CY * scale
+    setTf({ x, y, scale })
+  }, [])
 
-  // Touch support
-  const lastTouchDist = useRef<number | null>(null)
-  const lastTouchMid = useRef<{ x: number; y: number } | null>(null)
+  // Non-passive wheel listener so preventDefault works for zoom
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const mx = e.clientX - rect.left
+      const my = e.clientY - rect.top
+      const factor = e.deltaY > 0 ? 0.9 : 1.1
+      setTf(t => {
+        const ns = Math.min(5, Math.max(0.15, t.scale * factor))
+        return { scale: ns, x: mx - (mx - t.x) * (ns / t.scale), y: my - (my - t.y) * (ns / t.scale) }
+      })
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
 
-  function onTouchStart(e: React.TouchEvent) {
-    if (e.touches.length === 1) {
-      drag.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, ox: tf.x, oy: tf.y }
-    } else if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      lastTouchDist.current = Math.hypot(dx, dy)
-      lastTouchMid.current = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }
+  function toMap(clientX: number, clientY: number) {
+    const rect = svgRef.current!.getBoundingClientRect()
+    const t = tfRef.current
+    return {
+      x: (clientX - rect.left - t.x) / t.scale,
+      y: (clientY - rect.top - t.y) / t.scale,
     }
   }
-  function onTouchMove(e: React.TouchEvent) {
-    e.preventDefault()
-    if (e.touches.length === 1 && drag.current) {
-      setTf(t => ({ ...t, x: drag.current!.ox + e.touches[0].clientX - drag.current!.startX, y: drag.current!.oy + e.touches[0].clientY - drag.current!.startY }))
-    } else if (e.touches.length === 2 && lastTouchDist.current && lastTouchMid.current) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      const dist = Math.hypot(dx, dy)
-      const mid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }
-      const delta = dist / lastTouchDist.current
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (rect) {
-        const mx = mid.x - rect.left, my = mid.y - rect.top
-        setTf(t => {
-          const ns = Math.min(4, Math.max(0.25, t.scale * delta))
-          return { scale: ns, x: mx - (mx - t.x) * (ns / t.scale), y: my - (my - t.y) * (ns / t.scale) }
-        })
-      }
-      lastTouchDist.current = dist
-      lastTouchMid.current = mid
+
+  function onPointerDown(e: React.PointerEvent) {
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    if (mode === 'pan') {
+      dragState.current = { sx: e.clientX, sy: e.clientY, ox: tfRef.current.x, oy: tfRef.current.y }
+    } else {
+      isDrawing.current = true
+      const { x, y } = toMap(e.clientX, e.clientY)
+      livePts.current = `M ${x.toFixed(1)} ${y.toFixed(1)}`
+      setLiveD(livePts.current)
     }
   }
-  function onTouchEnd() { drag.current = null; lastTouchDist.current = null }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (mode === 'pan' && dragState.current) {
+      const nx = dragState.current.ox + e.clientX - dragState.current.sx
+      const ny = dragState.current.oy + e.clientY - dragState.current.sy
+      setTf(t => ({ ...t, x: nx, y: ny }))
+    } else if (mode === 'draw' && isDrawing.current) {
+      const { x, y } = toMap(e.clientX, e.clientY)
+      livePts.current += ` L ${x.toFixed(1)} ${y.toFixed(1)}`
+      setLiveD(livePts.current)
+    }
+  }
+
+  function onPointerUp() {
+    dragState.current = null
+    if (mode === 'draw' && isDrawing.current && livePts.current) {
+      setDrawings(prev => [...prev, { d: livePts.current, color: penColor, size: penSize }])
+      livePts.current = ''
+      setLiveD(null)
+    }
+    isDrawing.current = false
+  }
+
+  const gTransform = `translate(${tf.x.toFixed(1)}, ${tf.y.toFixed(1)}) scale(${tf.scale.toFixed(4)})`
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-full relative select-none overflow-hidden bg-white"
-      style={{ cursor: drag.current ? 'grabbing' : 'grab', touchAction: 'none' }}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-      onWheel={onWheel}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
-      {/* Reset button */}
-      <button
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={resetView}
-        className="absolute top-3 right-3 z-10 bg-white/90 border border-gray-200 rounded-lg px-2.5 py-1 text-xs text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors shadow-sm"
-      >
-        ⊙ Restablecer
-      </button>
+    <div className="w-full h-full flex flex-col">
+      {/* ── Drawing toolbar ── */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200 flex-wrap">
+        {/* Mode toggle */}
+        <div className="flex rounded-lg overflow-hidden border border-gray-200">
+          <button
+            onClick={() => setMode('pan')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${mode === 'pan' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+          >🖐 Mover</button>
+          <button
+            onClick={() => setMode('draw')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${mode === 'draw' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+          >✏️ Rayar</button>
+        </div>
 
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        style={{ display: 'block', width: '100%', height: '100%', transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.scale})`, transformOrigin: '0 0', willChange: 'transform' }}
-      >
-        <defs>
-          <pattern id="dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1.3" fill="#e5e7eb" />
-          </pattern>
-          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.12" />
-          </filter>
-        </defs>
-
-        {/* Background */}
-        <rect width={W} height={H} fill="#fafafa" />
-        <rect width={W} height={H} fill="url(#dots)" />
-
-        {/* Lines center → branches */}
-        {mapa.ramas.map((rama, i) => {
-          const bp = branchPos(BRANCH_ANGLES[i] ?? 0)
-          return <path key={`lc${i}`} d={curve(CX, CY, bp.x, bp.y)} stroke={rama.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeOpacity="0.5" />
-        })}
-
-        {/* Lines branches → children */}
-        {mapa.ramas.map((rama, i) =>
-          rama.hijos.map((hijo, j) => {
-            const bp = branchPos(BRANCH_ANGLES[i] ?? 0)
-            const cp = childPos(BRANCH_ANGLES[i] ?? 0, j)
-            return <path key={`lr${i}h${j}`} d={curve(bp.x, bp.y, cp.x, cp.y)} stroke={hijo.color} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeOpacity="0.5" strokeDasharray="6 3" />
-          })
+        {/* Pen colors */}
+        {mode === 'draw' && (
+          <>
+            <div className="flex gap-1 items-center">
+              {PEN_COLORS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setPenColor(c)}
+                  style={{ background: c, border: penColor === c ? '3px solid #1d4ed8' : '2px solid #d1d5db' }}
+                  className="w-6 h-6 rounded-full transition-all"
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500">Grosor</span>
+              {[2, 4, 7, 12].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setPenSize(s)}
+                  className={`flex items-center justify-center rounded ${penSize === s ? 'bg-blue-100' : 'hover:bg-gray-100'} w-7 h-7`}
+                >
+                  <div style={{ width: s * 2, height: s * 2, background: penColor, borderRadius: '50%' }} />
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setDrawings([])}
+              className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-2 py-1 transition-colors"
+            >🗑 Borrar todo</button>
+          </>
         )}
 
-        {/* ── Center node ── */}
-        {(() => {
-          const lines = wrapText(mapa.centro.texto, 12)
-          const totalH = 28 + lines.length * 22
-          const ry = Math.max(58, totalH / 2 + 14)
-          return (
-            <g filter="url(#shadow)">
-              <ellipse cx={CX} cy={CY} rx={115} ry={ry} fill={mapa.centro.color} />
-              {/* emoji */}
-              <text x={CX} y={CY - ry + 32} textAnchor="middle" fontSize="24" fontFamily={FONT}>{mapa.centro.emoji}</text>
-              {/* text lines */}
-              {lines.map((line, li) => (
-                <text key={li}
-                  x={CX}
-                  y={CY - ry + 32 + 28 + li * 22}
-                  textAnchor="middle"
-                  fontFamily={FONT}
-                  fontSize="17"
-                  fontWeight="700"
-                  fill="white"
-                  letterSpacing="0.3"
-                >{line}</text>
-              ))}
-            </g>
-          )
-        })()}
+        <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => {
+              const el = containerRef.current
+              if (!el) return
+              const { width, height } = el.getBoundingClientRect()
+              const scale = Math.min(width / (CX * 2 + 300), height / (CY * 2 + 200)) * 0.88
+              setTf({ x: width / 2 - CX * scale, y: height / 2 - CY * scale, scale })
+            }}
+            className="text-xs text-gray-500 border border-gray-200 rounded px-2.5 py-1 hover:bg-gray-50 transition-colors"
+          >⊙ Centrar</button>
+        </div>
+      </div>
 
-        {/* ── Branch nodes ── */}
-        {mapa.ramas.map((rama, i) => {
-          const bp = branchPos(BRANCH_ANGLES[i] ?? 0)
-          const lines = wrapText(rama.texto, 12)
-          const totalH = 26 + lines.length * 20
-          const ry = Math.max(50, totalH / 2 + 12)
-          return (
-            <g key={`rama${i}`} filter="url(#shadow)">
-              <ellipse cx={bp.x} cy={bp.y} rx={100} ry={ry} fill="white" stroke={rama.color} strokeWidth="3" />
-              {/* colored top band */}
-              <ellipse cx={bp.x} cy={bp.y - ry + 16} rx={100} ry={16} fill={rama.color} opacity="0.15" />
-              {/* emoji */}
-              <text x={bp.x} y={bp.y - ry + 22} textAnchor="middle" fontSize="20" fontFamily={FONT}>{rama.emoji}</text>
-              {/* text */}
-              {lines.map((line, li) => (
-                <text key={li}
-                  x={bp.x}
-                  y={bp.y - ry + 22 + 26 + li * 20}
-                  textAnchor="middle"
-                  fontFamily={FONT}
-                  fontSize="14"
-                  fontWeight="700"
-                  fill={rama.color}
-                  letterSpacing="0.2"
-                >{line}</text>
-              ))}
-            </g>
-          )
-        })}
+      {/* ── Map canvas ── */}
+      <div
+        ref={containerRef}
+        className="flex-1 relative overflow-hidden"
+        style={{ background: '#fafafa', cursor: mode === 'draw' ? 'crosshair' : 'grab', touchAction: 'none', userSelect: 'none' }}
+      >
+        <svg
+          ref={svgRef}
+          width="100%"
+          height="100%"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+          style={{ display: 'block' }}
+        >
+          <defs>
+            <pattern id="grid" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
+              <circle cx="1.5" cy="1.5" r="1.2" fill="#e5e7eb" />
+            </pattern>
+            <filter id="sh">
+              <feDropShadow dx="0" dy="3" stdDeviation="5" floodOpacity="0.10" />
+            </filter>
+          </defs>
 
-        {/* ── Child nodes ── */}
-        {mapa.ramas.map((rama, i) =>
-          rama.hijos.map((hijo, j) => {
-            const cp = childPos(BRANCH_ANGLES[i] ?? 0, j)
-            const lines = wrapText(hijo.texto, 16)
-            const rw = 148
-            const rh = 16 + lines.length * 19 + 10
-            return (
-              <g key={`h${i}${j}`} filter="url(#shadow)">
-                <rect x={cp.x - rw / 2} y={cp.y - rh / 2} width={rw} height={rh} rx="10" fill="white" stroke={hijo.color} strokeWidth="2.5" />
-                {/* left color bar */}
-                <rect x={cp.x - rw / 2} y={cp.y - rh / 2} width={5} height={rh} rx="10" fill={hijo.color} opacity="0.8" />
-                {lines.map((line, li) => (
-                  <text key={li}
-                    x={cp.x + 3}
-                    y={cp.y + (li - (lines.length - 1) / 2) * 19 + 6}
-                    textAnchor="middle"
-                    fontFamily={FONT}
-                    fontSize="13"
-                    fontWeight="600"
-                    fill="#1f2937"
-                  >{line}</text>
-                ))}
-              </g>
-            )
-          })
-        )}
-      </svg>
+          {/* Static dotted background */}
+          <rect width="100%" height="100%" fill="#fafafa" />
+          <rect width="100%" height="100%" fill="url(#grid)" />
+
+          {/* ── Transformed content ── */}
+          <g transform={gTransform}>
+
+            {/* ── Lines center → branches ── */}
+            {mapa.ramas.map((rama, i) => {
+              const b = bp(BRANCH_ANGLES[i] ?? 0)
+              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth="5" fill="none" strokeLinecap="round" strokeOpacity="0.45" />
+            })}
+
+            {/* ── Lines branches → children ── */}
+            {mapa.ramas.map((rama, i) =>
+              rama.hijos.map((hijo, j) => {
+                const b = bp(BRANCH_ANGLES[i] ?? 0)
+                const c = cp(BRANCH_ANGLES[i] ?? 0, j)
+                return <path key={`lch${i}${j}`} d={qcurve(b.x, b.y, c.x, c.y)} stroke={hijo.color} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeOpacity="0.4" strokeDasharray="7 4" />
+              })
+            )}
+
+            {/* ── Center node ── */}
+            {(() => {
+              const lines = wrap(mapa.centro.texto, 11)
+              const ry = Math.max(62, lines.length * 22 + 40)
+              return (
+                <g filter="url(#sh)">
+                  <ellipse cx={CX} cy={CY} rx={120} ry={ry} fill={mapa.centro.color} />
+                  <text x={CX} y={CY - ry + 30} textAnchor="middle" fontSize="26" fontFamily={FONT}>
+                    {mapa.centro.emoji}
+                  </text>
+                  {lines.map((line, li) => (
+                    <text key={li} x={CX} y={CY - ry + 62 + li * 22}
+                      textAnchor="middle" fontFamily={FONT} fontSize="17" fontWeight="800" fill="white" letterSpacing="0.3">
+                      {line}
+                    </text>
+                  ))}
+                </g>
+              )
+            })()}
+
+            {/* ── Branch nodes ── */}
+            {mapa.ramas.map((rama, i) => {
+              const b = bp(BRANCH_ANGLES[i] ?? 0)
+              const lines = wrap(rama.texto, 11)
+              const ry = Math.max(54, lines.length * 20 + 38)
+              return (
+                <g key={`b${i}`} filter="url(#sh)">
+                  <ellipse cx={b.x} cy={b.y} rx={108} ry={ry} fill="white" stroke={rama.color} strokeWidth="3.5" />
+                  <text x={b.x} y={b.y - ry + 26} textAnchor="middle" fontSize="22" fontFamily={FONT}>{rama.emoji}</text>
+                  {lines.map((line, li) => (
+                    <text key={li} x={b.x} y={b.y - ry + 52 + li * 20}
+                      textAnchor="middle" fontFamily={FONT} fontSize="15" fontWeight="700" fill={rama.color}>
+                      {line}
+                    </text>
+                  ))}
+                </g>
+              )
+            })}
+
+            {/* ── Child nodes ── */}
+            {mapa.ramas.map((rama, i) =>
+              rama.hijos.map((hijo, j) => {
+                const c = cp(BRANCH_ANGLES[i] ?? 0, j)
+                const lines = wrap(hijo.texto, 15)
+                const rw = 155
+                const rh = lines.length * 20 + 20
+                return (
+                  <g key={`ch${i}${j}`} filter="url(#sh)">
+                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={rw} height={rh} rx="12" fill="white" stroke={hijo.color} strokeWidth="2.5" />
+                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={6} height={rh} rx="12" fill={hijo.color} />
+                    {lines.map((line, li) => (
+                      <text key={li} x={c.x + 3} y={c.y + (li - (lines.length - 1) / 2) * 20 + 5}
+                        textAnchor="middle" fontFamily={FONT} fontSize="13" fontWeight="600" fill="#111827">
+                        {line}
+                      </text>
+                    ))}
+                  </g>
+                )
+              })
+            )}
+
+            {/* ── User drawings (inside g so they move with map) ── */}
+            {drawings.map((dr, i) => (
+              <path key={i} d={dr.d} stroke={dr.color} strokeWidth={dr.size} fill="none"
+                strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+            ))}
+            {liveD && (
+              <path d={liveD} stroke={penColor} strokeWidth={penSize} fill="none"
+                strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+            )}
+          </g>
+        </svg>
+
+        {/* Hint */}
+        <div className="absolute bottom-3 left-3 text-xs text-gray-400 pointer-events-none">
+          {mode === 'pan' ? 'Arrastra para mover · Scroll para zoom' : 'Dibuja sobre el mapa'}
+        </div>
+      </div>
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════
+/* ════════════════════════════════════
    Main Page
-════════════════════════════════════════════════════ */
+════════════════════════════════════ */
 export default function IrsVideoPage() {
   const [noticias, setNoticias] = useState<NewsItem[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
@@ -295,7 +369,6 @@ export default function IrsVideoPage() {
   async function loadNoticias() {
     setLoadingNews(true)
     setMapa(null); setGuion(''); setAudioUrl(null); setAudioReady(false)
-    // Use the same saved IRS news as the IRS News page
     const res = await fetch('/api/irs-news')
     if (res.ok) {
       const data: NewsItem[] = await res.json()
@@ -346,17 +419,10 @@ export default function IrsVideoPage() {
       body: JSON.stringify({ text: guion, voiceId, apiKey: elevenKey }),
     })
     if (res.ok) {
-      const blob = await res.blob()
-      setAudioUrl(URL.createObjectURL(blob))
+      setAudioUrl(URL.createObjectURL(await res.blob()))
       setAudioReady(true)
     }
     setGeneratingAudio(false)
-  }
-
-  function downloadAudio() {
-    if (!audioUrl) return
-    const a = document.createElement('a')
-    a.href = audioUrl; a.download = 'guion-irs.mp3'; a.click()
   }
 
   const selected = noticias[selectedIdx]
@@ -364,103 +430,97 @@ export default function IrsVideoPage() {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)', minHeight: 600 }}>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap py-3 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)]">
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)]">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-lg">🎬</span>
           <h1 className="text-base font-bold text-[var(--text-primary)] truncate">IRS Video Creator</h1>
         </div>
 
-        {noticias.length > 0 && (
+        {noticias.length > 0 ? (
           <select value={selectedIdx} onChange={(e) => setSelectedIdx(Number(e.target.value))} className="input max-w-xs text-xs">
             {noticias.map((n, i) => (
-              <option key={n.id} value={i}>{n.title.slice(0, 60)}{n.title.length > 60 ? '…' : ''}</option>
+              <option key={n.id} value={i}>{n.title.slice(0, 65)}{n.title.length > 65 ? '…' : ''}</option>
             ))}
           </select>
+        ) : (
+          <p className="text-xs text-gray-500">Ve a IRS News y actualiza las noticias primero</p>
         )}
 
         <button onClick={loadNoticias} disabled={loadingNews} className="btn-secondary text-xs flex items-center gap-1.5">
-          {loadingNews
-            ? <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-            : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-          }
+          {loadingNews ? <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg> : '↺'}
           Cargar noticias
         </button>
 
         <button onClick={generateContent} disabled={!selected || generating} className="btn-primary text-xs flex items-center gap-1.5">
-          {generating
-            ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando mapa…</>
-            : <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Generar mapa</>
-          }
+          {generating ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : '⚡ Generar mapa'}
         </button>
       </div>
 
-      {/* Map area */}
-      <div className="flex-1 min-h-0 bg-white relative">
+      {/* ── Map area ── */}
+      <div className="flex-1 min-h-0 relative">
         {!mapa && !generating && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-400">
-            <svg className="w-16 h-16 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-            <p className="text-sm font-medium">Carga noticias y haz clic en <strong>Generar mapa</strong></p>
-            <p className="text-xs text-gray-400">Arrastra para mover · Scroll para zoom · Pellizca en iPad</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400 bg-gray-50">
+            <svg className="w-14 h-14 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+            <p className="text-sm font-medium">Selecciona una noticia y haz clic en <strong>⚡ Generar mapa</strong></p>
+            <p className="text-xs">Luego podrás mover, hacer zoom y rayar sobre el mapa</p>
           </div>
         )}
         {generating && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-50">
             <svg className="w-10 h-10 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-            <p className="text-sm font-medium text-gray-500">Generando mapa conceptual con IA…</p>
+            <p className="text-sm text-gray-500 font-medium">Generando mapa conceptual con IA…</p>
           </div>
         )}
         {mapa && <MindMap mapa={mapa} />}
       </div>
 
-      {/* Audio panel */}
+      {/* ── Audio panel ── */}
       <div className="border-t border-[var(--bg-border)] bg-[var(--bg-sidebar)]">
         <button onClick={() => setPanelOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-[var(--bg-hover)] transition-colors">
           <div className="flex items-center gap-2">
-            <span className="text-sm">🎧</span>
+            <span>🎧</span>
             <span className="text-sm font-semibold text-[var(--text-primary)]">Panel de audio</span>
-            {audioReady && <span className="text-xs font-medium text-green-500">✅ Audio listo — pon el audio en tus AirPods y graba el mapa</span>}
+            {audioReady && <span className="text-xs text-green-500 font-medium">✅ Audio listo</span>}
           </div>
-          <svg className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${panelOpen ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <svg className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${panelOpen ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
         </button>
 
         {panelOpen && (
-          <div className="px-4 pb-4 space-y-3">
+          <div className="px-4 pb-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <p className="label">Guion ({guion ? `${guion.split(' ').length} palabras` : 'no generado'})</p>
-                <textarea readOnly value={guion} placeholder="El guion aparecerá aquí después de generar el mapa…" className="input resize-none text-xs leading-relaxed" rows={4} />
+                <textarea readOnly value={guion} placeholder="El guion aparecerá aquí…" className="input resize-none text-xs leading-relaxed" rows={4} />
               </div>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <p className="label">API Key de ElevenLabs</p>
-                    <input type="password" value={elevenKey} onChange={(e) => setElevenKey(e.target.value)} placeholder="sk-..." className="input text-xs" />
+                    <input type="password" value={elevenKey} onChange={e => setElevenKey(e.target.value)} placeholder="sk-..." className="input text-xs" />
                   </div>
                   <div className="pt-5">
                     <button onClick={loadVoices} disabled={!elevenKey || loadingVoices} className="btn-secondary text-xs whitespace-nowrap">
-                      {loadingVoices ? '…' : 'Cargar mis voces'}
+                      {loadingVoices ? '…' : 'Cargar voces'}
                     </button>
                   </div>
                 </div>
                 {voices.length > 0 && (
                   <div>
                     <p className="label">Voz</p>
-                    <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)} className="input text-xs">
-                      {voices.map((v) => <option key={v.voice_id} value={v.voice_id}>{v.name}</option>)}
+                    <select value={voiceId} onChange={e => setVoiceId(e.target.value)} className="input text-xs">
+                      {voices.map(v => <option key={v.voice_id} value={v.voice_id}>{v.name}</option>)}
                     </select>
                   </div>
                 )}
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <button onClick={generateAudio} disabled={!guion || !voiceId || !elevenKey || generatingAudio} className="btn-primary text-xs flex items-center gap-1.5">
-                    {generatingAudio ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando audio…</> : '🎙 Generar Audio'}
+                    {generatingAudio ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : '🎙 Generar Audio'}
                   </button>
                   {audioUrl && (
                     <>
                       <button onClick={() => audioRef.current?.paused ? audioRef.current.play() : audioRef.current?.pause()} className="btn-secondary text-xs">▶ Reproducir</button>
-                      <button onClick={downloadAudio} className="btn-secondary text-xs">⬇ Descargar MP3</button>
+                      <button onClick={() => { const a = document.createElement('a'); a.href = audioUrl!; a.download = 'guion-irs.mp3'; a.click() }} className="btn-secondary text-xs">⬇ MP3</button>
                     </>
                   )}
                 </div>
