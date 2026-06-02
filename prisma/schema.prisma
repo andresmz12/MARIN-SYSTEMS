@@ -436,3 +436,13 @@ model IrsNews {
   used        Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
+
+model IrsVideoContent {
+  id            String   @id @default(cuid())
+  titulo        String
+  guionCompleto String
+  mapaJson      Json
+  audioUrl      String?
+  publishedAt   DateTime
+  createdAt     DateTime @default(now())
+}
