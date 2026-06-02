@@ -6,45 +6,32 @@ import { prisma } from '@/lib/prisma'
 export const maxDuration = 60
 
 const VOICE_ID = '9AHim1BsYT5o3WGDtPE0'
+const WPM = 130 // average Spanish speech rate
 
-function parseDurationSecs(dur: string): number {
-  const m = dur.match(/(\d+)/)
-  return m ? parseInt(m[1]) : 60
+function wc(text: string): number {
+  return text ? text.trim().split(/\s+/).filter(Boolean).length : 0
 }
 
-function generateTimestamps(
-  mapaJson: { centro: { id: string }; ramas: Array<{ id: string; hijos: Array<{ id: string }> }> },
-  duracion: string,
-) {
-  const total   = parseDurationSecs(duracion)
-  const { centro, ramas } = mapaJson as any
-  const centerSecs = Math.max(4, total * 0.07)
-  const remaining  = total - centerSecs
-
-  // weight: branch=1, child=0.7
-  const totalWeight = ramas.reduce(
-    (s: number, r: any) => s + 1 + (r.hijos?.length ?? 0) * 0.7, 0,
-  )
-  const sps = remaining / Math.max(totalWeight, 1)
-
+function generateTimestamps(mapaJson: any) {
   const result: Array<{ nodoId: string; inicio: number; fin: number }> = []
   let t = 0
 
-  result.push({ nodoId: centro.id, inicio: 0, fin: Math.round(centerSecs * 10) / 10 })
-  t = centerSecs
+  function addNode(id: string, guion: string) {
+    const secs = (wc(guion) / WPM) * 60
+    const start = Math.round(t * 10) / 10
+    const end   = Math.round((t + secs) * 10) / 10
+    result.push({ nodoId: id, inicio: start, fin: end })
+    t += secs
+  }
 
-  for (const rama of ramas) {
-    const rs = sps
-    result.push({ nodoId: rama.id, inicio: Math.round(t * 10) / 10, fin: Math.round((t + rs) * 10) / 10 })
-    t += rs
-    for (const hijo of (rama.hijos ?? [])) {
-      const hs = sps * 0.7
-      result.push({ nodoId: hijo.id, inicio: Math.round(t * 10) / 10, fin: Math.round((t + hs) * 10) / 10 })
-      t += hs
+  const { centro, ramas } = mapaJson
+  addNode(centro.id, centro.guion ?? '')
+  for (const rama of ramas ?? []) {
+    addNode(rama.id, rama.guion ?? '')
+    for (const hijo of rama.hijos ?? []) {
+      addNode(hijo.id, hijo.guion ?? '')
     }
   }
-  // Clamp last entry to total duration
-  if (result.length) result[result.length - 1].fin = total
   return result
 }
 
@@ -66,8 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'mapaJson, guion y tema son requeridos' }, { status: 400 })
   }
 
-  // Strip section markers before sending to ElevenLabs
-  const cleanGuion = guion.replace(/\[(INTRO|R[1-9]|CTA)\]\s*/g, '').trim()
+  const cleanGuion = guion.trim()
 
   let audioData: string
   try {
@@ -91,7 +77,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const timestamps = generateTimestamps(mapaJson as any, duracion ?? '60s')
+  const timestamps = generateTimestamps(mapaJson as any)
 
   const studioSession = await prisma.studioSession.create({
     data: {

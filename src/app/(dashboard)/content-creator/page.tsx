@@ -123,12 +123,11 @@ export default function ContentCreatorPage() {
     if (!guion) return
     setGeneratingAudio(true)
     if (audioSrc) { URL.revokeObjectURL(audioSrc); setAudioSrc(null) }
-    const cleanGuion = guion.replace(/\[(INTRO|R[1-4]|CTA)\]\s*/g, '')
     try {
       const res = await fetch('/api/irs-video/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanGuion }),
+        body: JSON.stringify({ text: guion }),
       })
       if (res.ok) {
         const blob = await res.blob()
