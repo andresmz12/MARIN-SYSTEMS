@@ -14,19 +14,6 @@ const IRS_ICON = (
   </svg>
 )
 
-const navItems = [
-  {
-    label: 'Dashboard',
-    href: '/dashboard',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-  },
-]
-
 const tradingItems = [
   { label: 'Diario', href: '/trading/diario' },
   { label: 'Checklist', href: '/trading/checklist' },
@@ -40,6 +27,13 @@ export function Sidebar() {
   const [tradingOpen, setTradingOpen] = useState(pathname.startsWith('/trading'))
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+
+  const linkCls = (active: boolean) =>
+    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+      active
+        ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
+        : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
+    }`
 
   return (
     <aside className="fixed left-0 top-0 h-full w-60 bg-[#111] border-r border-[#2a2a2a] flex flex-col z-30">
@@ -61,14 +55,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {/* Dashboard */}
-        <Link
-          href="/dashboard"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-            pathname === '/dashboard'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
-          }`}
-        >
+        <Link href="/dashboard" className={linkCls(pathname === '/dashboard')}>
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -121,14 +108,7 @@ export function Sidebar() {
         </div>
 
         {/* Hábitos */}
-        <Link
-          href="/habitos"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-            pathname.startsWith('/habitos')
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
-          }`}
-        >
+        <Link href="/habitos" className={linkCls(isActive('/habitos'))}>
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -137,14 +117,7 @@ export function Sidebar() {
         </Link>
 
         {/* Agenda */}
-        <Link
-          href="/agenda"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-            pathname.startsWith('/agenda')
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
-          }`}
-        >
+        <Link href="/agenda" className={linkCls(isActive('/agenda'))}>
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -153,14 +126,7 @@ export function Sidebar() {
         </Link>
 
         {/* Journal */}
-        <Link
-          href="/journal"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-            pathname.startsWith('/journal')
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
-          }`}
-        >
+        <Link href="/journal" className={linkCls(isActive('/journal'))}>
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -172,13 +138,45 @@ export function Sidebar() {
         <Link
           href="/irs-news"
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-            pathname.startsWith('/irs-news')
+            isActive('/irs-news')
               ? 'bg-amber-600/20 text-amber-400 border border-amber-600/30'
               : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
           }`}
         >
           {IRS_ICON}
           IRS News
+        </Link>
+
+        {/* IRS Video */}
+        <Link
+          href="/irs-video"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+            isActive('/irs-video')
+              ? 'bg-purple-600/20 text-purple-400 border border-purple-600/30'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
+          }`}
+        >
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+          </svg>
+          IRS Video
+        </Link>
+
+        {/* Content Creator */}
+        <Link
+          href="/content-creator"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+            isActive('/content-creator')
+              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-600/30'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]'
+          }`}
+        >
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Content Creator
         </Link>
       </nav>
 
