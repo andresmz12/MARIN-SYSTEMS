@@ -84,19 +84,19 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   }
 
   return (
-    <div style={{ width: '100dvw', height: '100dvh', background: '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         padding: '12px 20px',
-        background: 'linear-gradient(to bottom, rgba(26,26,46,0.95), transparent)',
+        background: 'linear-gradient(to bottom, rgba(250,250,248,0.97), transparent)',
         zIndex: 10, display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <span style={{ fontSize: 20, fontFamily: "'Caveat', cursive", color: 'white', fontWeight: 700 }}>
+        <span style={{ fontSize: 20, fontFamily: "'Caveat', cursive", color: '#1a1a2e', fontWeight: 700 }}>
           {data!.tema}
         </span>
         <span style={{
           fontSize: 11, padding: '2px 8px', borderRadius: 99,
-          background: 'rgba(99,102,241,0.3)', color: '#a5b4fc',
+          background: 'rgba(99,102,241,0.12)', color: '#4338ca',
           fontFamily: 'system-ui', letterSpacing: 0.5,
         }}>
           {data!.redSocial} · {data!.duracion}
@@ -126,8 +126,8 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         style={{
           position: 'absolute', bottom: 32, right: 104,
           width: 64, height: 64, borderRadius: '50%',
-          background: showGuion ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.1)',
-          border: '1px solid rgba(255,255,255,0.2)',
+          background: showGuion ? 'rgba(99,102,241,0.18)' : 'rgba(0,0,0,0.06)',
+          border: '1px solid rgba(99,102,241,0.25)',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
@@ -142,12 +142,13 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         <div style={{
           position: 'absolute', bottom: 112, left: 16, right: 16,
           maxHeight: '40dvh', overflowY: 'auto',
-          background: 'rgba(15,15,35,0.95)',
-          border: '1px solid rgba(99,102,241,0.3)',
+          background: 'rgba(250,250,248,0.97)',
+          border: '1px solid rgba(99,102,241,0.2)',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
           borderRadius: 16, padding: '20px 24px', zIndex: 20,
         }}>
           <p style={{
-            color: 'rgba(255,255,255,0.9)',
+            color: 'rgba(20,20,35,0.88)',
             fontFamily: "'Caveat', cursive",
             fontSize: 18, lineHeight: 1.7,
             margin: 0, whiteSpace: 'pre-wrap',

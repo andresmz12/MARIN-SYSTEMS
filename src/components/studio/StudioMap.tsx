@@ -168,7 +168,7 @@ export default function StudioMap({ mapaJson }: Props) {
   const startAngle = -Math.PI / 2
   const minDim = Math.min(size.w, size.h)
   const BRANCH_DIST = minDim * 0.27
-  const CHILD_DIST = minDim * 0.46
+  const CHILD_DIST = minDim * 0.52
   const CENTER_R = minDim * 0.088
   const BRANCH_R = minDim * 0.063
   const CHILD_W = 168
@@ -191,14 +191,14 @@ export default function StudioMap({ mapaJson }: Props) {
       >
         <defs>
           <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-            <circle cx="1" cy="1" r="1" fill="rgba(255,255,255,0.06)" />
+            <circle cx="12" cy="12" r="1" fill="#ccc" />
           </pattern>
           <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="3" stdDeviation="6" floodColor="rgba(0,0,0,0.65)" />
+            <feDropShadow dx="0" dy="2" stdDeviation="5" floodColor="rgba(0,0,0,0.18)" />
           </filter>
         </defs>
-        <rect width={size.w} height={size.h} fill="#1a1a2e" />
-        <rect width={size.w} height={size.h} fill="url(#dots)" />
+        <rect width={size.w} height={size.h} fill="#fafaf8" />
+        <rect width={size.w} height={size.h} fill="url(#dots)" opacity={0.3} />
 
         <g transform={tfm}>
 
@@ -211,7 +211,7 @@ export default function StudioMap({ mapaJson }: Props) {
                 <line x1={0} y1={0} x2={bp.x} y2={bp.y}
                   stroke={branch.color} strokeWidth={2.5} strokeOpacity={0.45} strokeDasharray="7 4" />
                 {(branch.hijos ?? []).map((child, j) => {
-                  const sp = branchCount <= 4 ? 0.38 : 0.30
+                  const sp = branchCount <= 4 ? 0.52 : 0.42
                   const ca = angle + (j - (branch.hijos.length - 1) / 2) * sp
                   const cp = polarToXY(ca, CHILD_DIST)
                   return (
@@ -237,14 +237,14 @@ export default function StudioMap({ mapaJson }: Props) {
                 <g key={`child-${branch.id}-${j}`}>
                   <rect x={cp.x - CHILD_W / 2} y={cp.y - rh / 2}
                     width={CHILD_W} height={rh} rx={rh / 2}
-                    fill={branch.color} fillOpacity={0.2}
-                    stroke={branch.color} strokeWidth={1.5} strokeOpacity={0.6} />
+                    fill={branch.color} fillOpacity={0.15}
+                    stroke={branch.color} strokeWidth={1.5} strokeOpacity={0.55} />
                   {lines.map((line, li) => (
                     <text key={li}
                       x={cp.x}
                       y={cp.y - ((lines.length - 1) * LINE_H) / 2 + li * LINE_H}
                       textAnchor="middle" dominantBaseline="central"
-                      fill="rgba(255,255,255,0.9)" fontSize={13}
+                      fill="rgba(30,30,40,0.9)" fontSize={13}
                       fontFamily={FONT}>
                       {line}
                     </text>
@@ -273,7 +273,7 @@ export default function StudioMap({ mapaJson }: Props) {
                     x={bp.x}
                     y={bp.y + (labelLines.length > 1 ? 8 : 14) + li * 15 - ((labelLines.length - 1) * 7)}
                     textAnchor="middle" dominantBaseline="central"
-                    fill="white" fontSize={BRANCH_R * 0.265}
+                    fill="rgba(255,255,255,0.95)" fontSize={BRANCH_R * 0.265}
                     fontFamily={FONT} fontWeight="700">
                     {line}
                   </text>
@@ -294,7 +294,7 @@ export default function StudioMap({ mapaJson }: Props) {
               x={0}
               y={CENTER_R * 0.22 + li * CENTER_R * 0.33 - ((arr.length - 1) * CENTER_R * 0.165)}
               textAnchor="middle" dominantBaseline="central"
-              fill="white" fontSize={CENTER_R * 0.255}
+              fill="rgba(255,255,255,0.95)" fontSize={CENTER_R * 0.255}
               fontFamily={FONT} fontWeight="700">
               {line}
             </text>
@@ -321,17 +321,17 @@ export default function StudioMap({ mapaJson }: Props) {
         {/* Draw/Move toggle */}
         <button onClick={() => setDrawMode((d) => !d)}
           title={drawMode ? 'Modo mover' : 'Modo dibujar'}
-          style={fabStyle(drawMode ? '#f59e0b' : 'rgba(255,255,255,0.1)', drawMode ? '#fbbf24' : 'rgba(255,255,255,0.2)')}>
+          style={fabStyle(drawMode ? '#f59e0b' : 'rgba(0,0,0,0.07)', drawMode ? '#fbbf24' : 'rgba(0,0,0,0.15)')}>
           {drawMode ? '✏️' : '✋'}
         </button>
 
         {!drawMode && (
           <>
             <button onClick={() => setZoom((z) => Math.min(4, z + 0.2))} title="Acercar" style={fabStyle()}>
-              <span style={{ color: 'white', fontSize: 22, fontWeight: 700, lineHeight: 1 }}>+</span>
+              <span style={{ color: '#1a1a2e', fontSize: 22, fontWeight: 700, lineHeight: 1 }}>+</span>
             </button>
             <button onClick={() => setZoom((z) => Math.max(0.2, z - 0.2))} title="Alejar" style={fabStyle()}>
-              <span style={{ color: 'white', fontSize: 26, fontWeight: 700, lineHeight: 1 }}>−</span>
+              <span style={{ color: '#1a1a2e', fontSize: 26, fontWeight: 700, lineHeight: 1 }}>−</span>
             </button>
             <button onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1) }} title="Centrar" style={fabStyle()}>
               <span style={{ fontSize: 18 }}>⊙</span>
@@ -349,7 +349,7 @@ export default function StudioMap({ mapaJson }: Props) {
                 boxShadow: '0 2px 8px rgba(0,0,0,0.4)', transition: 'all 0.15s',
               }} />
             ))}
-            <button onClick={() => setDrawings([])} title="Borrar trazos" style={fabStyle('rgba(239,68,68,0.2)', 'rgba(239,68,68,0.5)')}>
+            <button onClick={() => setDrawings([])} title="Borrar trazos" style={fabStyle('rgba(239,68,68,0.12)', 'rgba(239,68,68,0.4)')}>
               🗑️
             </button>
           </>
@@ -359,13 +359,13 @@ export default function StudioMap({ mapaJson }: Props) {
   )
 }
 
-function fabStyle(bg = 'rgba(255,255,255,0.1)', border = 'rgba(255,255,255,0.2)'): React.CSSProperties {
+function fabStyle(bg = 'rgba(0,0,0,0.07)', border = 'rgba(0,0,0,0.15)'): React.CSSProperties {
   return {
     width: 52, height: 52, borderRadius: '50%',
     background: bg, border: `1px solid ${border}`,
     cursor: 'pointer', fontSize: 22,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 2px 14px rgba(0,0,0,0.45)',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
     padding: 0,
   }
 }
