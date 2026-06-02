@@ -135,6 +135,7 @@ export function MindMap({
   const isDrawing = useRef(false)
   const livePts = useRef('')
   const allNodes = buildNodeList(mapa)
+  const nodeNavIndex = new Map(allNodes.map(n => [n.id, n.navIndex]))
 
   const branchCount = Math.min(5, Math.max(3, mapa.ramas.length))
   const angles = BRANCH_ANGLES_MAP[branchCount] ?? BRANCH_ANGLES_MAP[5]
@@ -344,8 +345,8 @@ export function MindMap({
               const ry = Math.max(58, lines.length * 23 + 40)
               const selected = focusedId === rama.id
               const dim = presentationMode && focusedId && !selected && !rama.hijos.some(h => h.id === focusedId)
-              const navIdx = 1 + i * 4
-              const nodeObj: FocusedNode = { id: rama.id, emoji: rama.emoji, texto: rama.texto, color: rama.color, explicacion: rama.explicacion, type: 'branch', children: rama.hijos.slice(0, 3).map(h => ({ id: h.id, texto: h.texto, color: h.color, explicacion: h.explicacion })), navIndex: navIdx }
+              const navIdx = nodeNavIndex.get(rama.id) ?? (1 + i * 4)
+              const nodeObj: FocusedNode = { id: rama.id, emoji: rama.emoji, texto: rama.texto, color: rama.color, explicacion: rama.explicacion, type: 'branch', children: rama.hijos.map(h => ({ id: h.id, texto: h.texto, color: h.color, explicacion: h.explicacion })), navIndex: navIdx }
               const fill = presentationMode ? rama.color : 'white'
               const textFill = presentationMode ? 'white' : rama.color
               const activeScale = selected && presentationMode ? `translate(${b.x},${b.y}) scale(1.14) translate(${-b.x},${-b.y})` : undefined
@@ -371,7 +372,7 @@ export function MindMap({
                 const rw = 190; const rh = Math.max(46, lines.length * 22 + 18)
                 const selected = focusedId === hijo.id
                 const dim = presentationMode && focusedId && !selected && focusedId !== rama.id
-                const navIdx = 1 + i * 4 + 1 + j
+                const navIdx = nodeNavIndex.get(hijo.id) ?? (1 + i * 4 + 1 + j)
                 const nodeObj: FocusedNode = { id: hijo.id, emoji: '•', texto: hijo.texto, color: hijo.color, explicacion: hijo.explicacion, type: 'child', navIndex: navIdx }
                 const textColor = presentationMode ? '#0f172a' : '#111827'
                 return (

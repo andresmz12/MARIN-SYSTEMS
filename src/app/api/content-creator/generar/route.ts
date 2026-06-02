@@ -74,19 +74,25 @@ Genera los siguientes elementos en UN SOLO JSON válido (sin markdown):
 }`
 
   const client = new Anthropic()
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4000,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  let raw: string
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    raw = message.content[0].type === 'text' ? message.content[0].text : ''
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Error al llamar a la IA: ${msg}` }, { status: 500 })
+  }
 
-  const raw = message.content[0].type === 'text' ? message.content[0].text : ''
   let result: { mapaJson: object; guion: string; titulo: string; hashtags: string[] }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
     result = match ? JSON.parse(match[0]) : { mapaJson: {}, guion: raw, titulo: tema, hashtags: [] }
   } catch {
-    return NextResponse.json({ error: 'Error al parsear respuesta', raw }, { status: 500 })
+    return NextResponse.json({ error: 'Error al parsear respuesta de la IA', raw }, { status: 500 })
   }
 
   // Save to DB (non-fatal)

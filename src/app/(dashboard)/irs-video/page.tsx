@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { MindMap, NodePanel, PresentationOverlay, MapaJson, FocusedNode, Alignment, extractSectionTimestamps } from '@/components/video-creator/MindMapSVG'
+import { useToast } from '@/components/ui/Toast'
 
 /* ── Page-specific types ── */
 interface NewsItem {
@@ -19,6 +20,7 @@ const MARKERS = ['[INTRO]', '[R1]', '[R2]', '[R3]', '[R4]', '[R5]', '[CTA]']
    Main Page
 ════════════════════════ */
 export default function IrsVideoPage() {
+  const { toast } = useToast()
   const [noticias, setNoticias] = useState<NewsItem[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [loadingNews, setLoadingNews] = useState(false)
@@ -57,12 +59,23 @@ export default function IrsVideoPage() {
   async function generateContent() {
     const item = noticias[selectedIdx]; if (!item) return
     setGenerating(true); setMapa(null); setGuion(''); setAudioSrc(null); setAlignment(null); setFocusedNode(null)
-    const res = await fetch('/api/irs-video/noticias', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary }),
-    })
-    if (res.ok) { const data = await res.json(); setMapa(data.mapaJson); setGuion(data.guionCompleto) }
+    try {
+      const res = await fetch('/api/irs-video/noticias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.mapaJson) { setMapa(data.mapaJson); setGuion(data.guionCompleto ?? '') }
+        else toast.error('La IA no generó un mapa válido. Intenta de nuevo.')
+      } else {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        toast.error(err.error ?? `Error al generar mapa (${res.status})`)
+      }
+    } catch {
+      toast.error('Error de conexión. Verifica tu internet e intenta de nuevo.')
+    }
     setGenerating(false)
   }
 
@@ -86,8 +99,14 @@ export default function IrsVideoPage() {
         setAudioSrc(URL.createObjectURL(blob))
         setAlignment(data.alignment)
         setSectionTimestamps(extractSectionTimestamps(data.alignment, guion, MARKERS))
+        toast.success('Audio listo — ponlo en AirPods y graba')
+      } else {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        toast.error(err.error ?? `Error al generar audio (${res.status})`)
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast.error('Error de conexión al generar audio.')
+    }
     setGeneratingAudio(false)
   }
 

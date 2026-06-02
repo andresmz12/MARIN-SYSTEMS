@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { MindMap, NodePanel, PresentationOverlay, MapaJson, FocusedNode, Alignment, extractSectionTimestamps } from '@/components/video-creator/MindMapSVG'
+import { useToast } from '@/components/ui/Toast'
 
 /* ── Types ── */
 interface HistoryItem {
@@ -25,6 +26,7 @@ type SocialOption = typeof SOCIAL_OPTIONS[number]
 type DurationOption = typeof DURATION_OPTIONS[number]
 
 export default function ContentCreatorPage() {
+  const { toast } = useToast()
   /* ── Form state ── */
   const [tema, setTema] = useState('')
   const [redSocial, setRedSocial] = useState<SocialOption>('TikTok')
@@ -93,13 +95,22 @@ export default function ContentCreatorPage() {
       })
       if (res.ok) {
         const data: { mapaJson: MapaJson; guion: string; titulo: string; hashtags: string[] } = await res.json()
-        setMapa(data.mapaJson)
-        setGuion(data.guion)
-        setTitulo(data.titulo)
-        setHashtags(data.hashtags ?? [])
-        saveRecentTopic(tema.trim())
+        if (data.mapaJson) {
+          setMapa(data.mapaJson)
+          setGuion(data.guion ?? '')
+          setTitulo(data.titulo ?? '')
+          setHashtags(data.hashtags ?? [])
+          saveRecentTopic(tema.trim())
+        } else {
+          toast.error('La IA no generó un mapa válido. Intenta de nuevo.')
+        }
+      } else {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        toast.error(err.error ?? `Error al generar contenido (${res.status})`)
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast.error('Error de conexión. Verifica tu internet e intenta de nuevo.')
+    }
     setGenerating(false)
   }
 
@@ -125,8 +136,14 @@ export default function ContentCreatorPage() {
         setAlignment(data.alignment)
         const ts = extractSectionTimestamps(data.alignment, guion, MARKERS)
         setSectionTimestamps(ts)
+        toast.success('Audio listo — ponlo en AirPods y graba')
+      } else {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        toast.error(err.error ?? `Error al generar audio (${res.status})`)
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast.error('Error de conexión al generar audio.')
+    }
     setGeneratingAudio(false)
   }
 
