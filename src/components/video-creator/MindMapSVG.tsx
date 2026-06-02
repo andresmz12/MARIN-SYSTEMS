@@ -134,6 +134,7 @@ export function MindMap({
   const [liveD, setLiveD] = useState<string | null>(null)
   const isDrawing = useRef(false)
   const livePts = useRef('')
+  const activePointers = useRef(new Set<number>())
   const allNodes = buildNodeList(mapa)
   const nodeNavIndex = new Map(allNodes.map(n => [n.id, n.navIndex]))
 
@@ -214,9 +215,21 @@ export function MindMap({
 
   function onPointerDown(e: React.PointerEvent) {
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    activePointers.current.add(e.pointerId)
     downPos.current = { x: e.clientX, y: e.clientY }; didDrag.current = false
-    if (mode === 'pan') dragState.current = { sx: e.clientX, sy: e.clientY, ox: tfRef.current.x, oy: tfRef.current.y }
-    else {
+    const multiTouch = activePointers.current.size > 1
+    if (mode === 'pan' || multiTouch) {
+      if (activePointers.current.size === 1)
+        dragState.current = { sx: e.clientX, sy: e.clientY, ox: tfRef.current.x, oy: tfRef.current.y }
+      // stop any active drawing stroke when second finger touches
+      if (multiTouch && isDrawing.current) {
+        if (livePts.current) {
+          setDrawings(prev => [...prev, { d: livePts.current, color: penColor, size: penSize }])
+          livePts.current = ''; setLiveD(null)
+        }
+        isDrawing.current = false
+      }
+    } else {
       isDrawing.current = true
       const { x, y } = toMap(e.clientX, e.clientY)
       livePts.current = `M ${x.toFixed(1)} ${y.toFixed(1)}`; setLiveD(livePts.current)
@@ -228,15 +241,17 @@ export function MindMap({
       const dx = e.clientX - downPos.current.x, dy = e.clientY - downPos.current.y
       if (Math.sqrt(dx * dx + dy * dy) > 8) didDrag.current = true
     }
-    if (mode === 'pan' && dragState.current)
+    const multiTouch = activePointers.current.size > 1
+    if ((mode === 'pan' || multiTouch) && dragState.current)
       setTf(t => ({ ...t, x: dragState.current!.ox + e.clientX - dragState.current!.sx, y: dragState.current!.oy + e.clientY - dragState.current!.sy }))
-    else if (mode === 'draw' && isDrawing.current) {
+    else if (mode === 'draw' && isDrawing.current && !multiTouch) {
       const { x, y } = toMap(e.clientX, e.clientY)
       livePts.current += ` L ${x.toFixed(1)} ${y.toFixed(1)}`; setLiveD(livePts.current)
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(e: React.PointerEvent) {
+    activePointers.current.delete(e.pointerId)
     dragState.current = null; downPos.current = null
     if (mode === 'draw' && isDrawing.current && livePts.current) {
       setDrawings(prev => [...prev, { d: livePts.current, color: penColor, size: penSize }])
@@ -283,7 +298,7 @@ export function MindMap({
         style={{ background: bg, cursor: mode === 'draw' ? 'crosshair' : 'grab', touchAction: 'none', userSelect: 'none' }}>
         <svg ref={svgRef} width="100%" height="100%"
           onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp} onPointerLeave={onPointerUp} style={{ display: 'block' }}>
+          onPointerUp={onPointerUp} onPointerLeave={e => { activePointers.current.delete(e.pointerId); onPointerUp(e) }} style={{ display: 'block' }}>
           <defs>
             <pattern id="grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
               <circle cx="1.5" cy="1.5" r="1.2" fill={gridColor} />
@@ -306,7 +321,7 @@ export function MindMap({
             {branches.map((rama, i) => {
               const b = bp(branchAngles[i] ?? 0)
               const active = focusedId === rama.id || rama.hijos.some(h => h.id === focusedId)
-              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth={active && presentationMode ? 9 : (presentationMode ? 6 : 5)} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.15 : (presentationMode ? 0.9 : 0.45)} />
+              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth={active && presentationMode ? 11 : (presentationMode ? 8 : 5)} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.12 : 1} />
             })}
 
             {/* Lines branches → children */}
@@ -316,25 +331,25 @@ export function MindMap({
                 const childCount = rama.hijos.slice(0, 3).length
                 const c = cp(branchAngles[i] ?? 0, j, childCount)
                 const active = focusedId === hijo.id || focusedId === rama.id
-                return <path key={`lch${i}${j}`} d={qcurve(b.x, b.y, c.x, c.y)} stroke={hijo.color} strokeWidth={presentationMode ? 3.5 : 2.5} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.1 : (presentationMode ? 0.7 : 0.4)} strokeDasharray={presentationMode ? undefined : "8 4"} />
+                return <path key={`lch${i}${j}`} d={qcurve(b.x, b.y, c.x, c.y)} stroke={rama.color} strokeWidth={presentationMode ? 4 : 2.5} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.08 : (presentationMode ? 0.85 : 0.4)} strokeDasharray={presentationMode ? undefined : "8 4"} />
               })
             )}
 
             {/* Center */}
             {(() => {
               const lines = wrap(mapa.centro.texto, 12)
-              const ry = Math.max(68, lines.length * 26 + 44)
+              const ry = Math.max(72, lines.length * 28 + 48)
               const selected = focusedId === mapa.centro.id
               const dim = presentationMode && focusedId && !selected
               return (
                 <g onClick={() => handleNodeClick({ id: mapa.centro.id, emoji: mapa.centro.emoji, texto: mapa.centro.texto, color: mapa.centro.color, explicacion: mapa.centro.explicacion, type: 'center', children: mapa.ramas.map(r => ({ id: r.id, texto: r.texto, color: r.color, explicacion: r.explicacion })), navIndex: 0 })}
-                  style={{ cursor: 'pointer', opacity: dim ? 0.35 : 1 }}
+                  style={{ cursor: 'pointer', opacity: dim ? 0.25 : 1 }}
                   filter={selected ? 'url(#glowStrong)' : 'url(#sh)'}>
-                  {presentationMode && <ellipse cx={CX} cy={CY} rx={148} ry={ry + 14} fill="none" stroke={mapa.centro.color} strokeWidth="6" strokeOpacity="0.35" />}
-                  <ellipse cx={CX} cy={CY} rx={138} ry={ry + 4} fill={mapa.centro.color} />
-                  <ellipse cx={CX} cy={CY} rx={145} ry={ry + 11} fill="none" stroke="white" strokeWidth={selected ? '5' : '2'} strokeOpacity={selected ? '1' : (presentationMode ? '0.5' : '0')} />
-                  <text x={CX} y={CY - ry + 30} textAnchor="middle" fontSize={presentationMode ? 36 : 28} fontFamily={FONT}>{mapa.centro.emoji}</text>
-                  {lines.map((line, li) => <text key={li} x={CX} y={CY - ry + 70 + li * 28} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 22 : 18} fontWeight="800" fill="white">{line}</text>)}
+                  {presentationMode && <ellipse cx={CX} cy={CY} rx={152} ry={ry + 18} fill={mapa.centro.color} opacity="0.18" />}
+                  <ellipse cx={CX} cy={CY} rx={142} ry={ry + 6} fill={mapa.centro.color} />
+                  <ellipse cx={CX} cy={CY} rx={148} ry={ry + 12} fill="none" stroke={mapa.centro.color} strokeWidth="4" strokeOpacity={presentationMode ? '0.6' : '0'} />
+                  <text x={CX} y={CY - ry + 32} textAnchor="middle" fontSize={presentationMode ? 40 : 28} fontFamily={FONT}>{mapa.centro.emoji}</text>
+                  {lines.map((line, li) => <text key={li} x={CX} y={CY - ry + 78 + li * 30} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 24 : 18} fontWeight="900" fill="white" letterSpacing={presentationMode ? '0.5' : '0'}>{line}</text>)}
                 </g>
               )
             })()}
@@ -342,24 +357,25 @@ export function MindMap({
             {/* Branches */}
             {branches.map((rama, i) => {
               const b = bp(branchAngles[i] ?? 0); const lines = wrap(rama.texto, 13)
-              const ry = Math.max(58, lines.length * 23 + 40)
+              const ry = Math.max(62, lines.length * 25 + 44)
               const selected = focusedId === rama.id
               const dim = presentationMode && focusedId && !selected && !rama.hijos.some(h => h.id === focusedId)
               const navIdx = nodeNavIndex.get(rama.id) ?? (1 + i * 4)
               const nodeObj: FocusedNode = { id: rama.id, emoji: rama.emoji, texto: rama.texto, color: rama.color, explicacion: rama.explicacion, type: 'branch', children: rama.hijos.map(h => ({ id: h.id, texto: h.texto, color: h.color, explicacion: h.explicacion })), navIndex: navIdx }
               const fill = presentationMode ? rama.color : 'white'
               const textFill = presentationMode ? 'white' : rama.color
-              const activeScale = selected && presentationMode ? `translate(${b.x},${b.y}) scale(1.14) translate(${-b.x},${-b.y})` : undefined
+              const activeScale = selected && presentationMode ? `translate(${b.x},${b.y}) scale(1.12) translate(${-b.x},${-b.y})` : undefined
               return (
                 <g key={`b${i}`} onClick={() => handleNodeClick(nodeObj)}
-                  style={{ cursor: 'pointer', opacity: dim ? 0.22 : 1, transition: 'opacity 0.4s' }}
+                  style={{ cursor: 'pointer', opacity: dim ? 0.18 : 1, transition: 'opacity 0.4s' }}
                   transform={activeScale}
                   filter={selected && presentationMode ? 'url(#glowStrong)' : 'url(#sh)'}>
-                  {selected && presentationMode && <ellipse cx={b.x} cy={b.y} rx={132} ry={ry + 14} fill={rama.color} opacity="0.25" />}
-                  <ellipse cx={b.x} cy={b.y} rx={118} ry={ry} fill={fill} stroke={presentationMode ? 'none' : rama.color} strokeWidth={3.5} />
-                  {selected && !presentationMode && <ellipse cx={b.x} cy={b.y} rx={124} ry={ry + 7} fill="none" stroke={rama.color} strokeWidth="3" strokeOpacity="0.5" />}
-                  <text x={b.x} y={b.y - ry + 28} textAnchor="middle" fontSize={presentationMode ? 30 : 22} fontFamily={FONT}>{rama.emoji}</text>
-                  {lines.map((line, li) => <text key={li} x={b.x} y={b.y - ry + 60 + li * 26} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 19 : 15} fontWeight="800" fill={textFill}>{line}</text>)}
+                  {presentationMode && <ellipse cx={b.x} cy={b.y} rx={128} ry={ry + 12} fill={rama.color} opacity={selected ? '0.22' : '0.1'} />}
+                  <ellipse cx={b.x} cy={b.y} rx={120} ry={ry + 2} fill={fill} stroke={presentationMode ? rama.color : rama.color} strokeWidth={presentationMode ? 4 : 3.5} />
+                  {selected && presentationMode && <ellipse cx={b.x} cy={b.y} rx={126} ry={ry + 8} fill="none" stroke={rama.color} strokeWidth="3" strokeOpacity="0.7" />}
+                  {selected && !presentationMode && <ellipse cx={b.x} cy={b.y} rx={126} ry={ry + 9} fill="none" stroke={rama.color} strokeWidth="3" strokeOpacity="0.5" />}
+                  <text x={b.x} y={b.y - ry + 30} textAnchor="middle" fontSize={presentationMode ? 32 : 22} fontFamily={FONT}>{rama.emoji}</text>
+                  {lines.map((line, li) => <text key={li} x={b.x} y={b.y - ry + 64 + li * 27} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 20 : 15} fontWeight="900" fill={textFill}>{line}</text>)}
                 </g>
               )
             })}
@@ -368,20 +384,19 @@ export function MindMap({
             {branches.map((rama, i) => {
               const childCount = rama.hijos.slice(0, 3).length
               return rama.hijos.slice(0, 3).map((hijo, j) => {
-                const c = cp(branchAngles[i] ?? 0, j, childCount); const lines = wrap(hijo.texto, 18)
-                const rw = 190; const rh = Math.max(46, lines.length * 22 + 18)
+                const c = cp(branchAngles[i] ?? 0, j, childCount); const lines = wrap(hijo.texto, 16)
+                const rw = 200; const rh = Math.max(50, lines.length * 24 + 22)
                 const selected = focusedId === hijo.id
                 const dim = presentationMode && focusedId && !selected && focusedId !== rama.id
                 const navIdx = nodeNavIndex.get(hijo.id) ?? (1 + i * 4 + 1 + j)
                 const nodeObj: FocusedNode = { id: hijo.id, emoji: '•', texto: hijo.texto, color: hijo.color, explicacion: hijo.explicacion, type: 'child', navIndex: navIdx }
-                const textColor = presentationMode ? '#0f172a' : '#111827'
                 return (
                   <g key={`ch${i}${j}`} onClick={() => handleNodeClick(nodeObj)}
-                    style={{ cursor: 'pointer', opacity: dim ? 0.18 : 1, transition: 'opacity 0.4s' }}
+                    style={{ cursor: 'pointer', opacity: dim ? 0.15 : 1, transition: 'opacity 0.4s' }}
                     filter={selected ? 'url(#glow)' : 'url(#sh)'}>
-                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={rw} height={rh} rx="14" fill="white" stroke={hijo.color} strokeWidth={selected ? 4 : (presentationMode ? 3 : 1.5)} />
-                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={presentationMode ? 12 : 7} height={rh} rx="6" fill={hijo.color} />
-                    {lines.map((line, li) => <text key={li} x={c.x + (presentationMode ? 8 : 6)} y={c.y + (li - (lines.length - 1) / 2) * 22 + 5} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 16 : 13} fontWeight={presentationMode ? '700' : '600'} fill={textColor}>{line}</text>)}
+                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={rw} height={rh} rx="14" fill="white" stroke={rama.color} strokeWidth={selected ? 5 : (presentationMode ? 3.5 : 1.5)} />
+                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={presentationMode ? 14 : 7} height={rh} rx="7" fill={rama.color} />
+                    {lines.map((line, li) => <text key={li} x={c.x + (presentationMode ? 10 : 6)} y={c.y + (li - (lines.length - 1) / 2) * 24 + 6} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 17 : 13} fontWeight={presentationMode ? '800' : '600'} fill="#111827">{line}</text>)}
                   </g>
                 )
               })
