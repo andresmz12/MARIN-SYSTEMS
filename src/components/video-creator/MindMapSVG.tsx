@@ -146,7 +146,8 @@ export function MindMap({
   const center = useCallback(() => {
     const el = containerRef.current; if (!el) return
     const { width, height } = el.getBoundingClientRect()
-    const scale = Math.min(width / (CX * 2 + 400), height / (CY * 2 + 300)) * 0.82
+    const mapR = BRANCH_R + CHILD_R + 130 // actual content radius in SVG coords
+    const scale = Math.min(width / (mapR * 2), height / (mapR * 2)) * 0.92
     setTf({ x: width / 2 - CX * scale, y: height / 2 - CY * scale, scale })
   }, [])
 
@@ -209,7 +210,9 @@ export function MindMap({
   useEffect(() => { if (onExportRef) onExportRef(exportPng) })
 
   function toMap(cx: number, cy: number) {
-    const rect = svgRef.current!.getBoundingClientRect(); const t = tfRef.current
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return { x: 0, y: 0 }
+    const t = tfRef.current
     return { x: (cx - rect.left - t.x) / t.scale, y: (cy - rect.top - t.y) / t.scale }
   }
 
@@ -242,8 +245,9 @@ export function MindMap({
       if (Math.sqrt(dx * dx + dy * dy) > 8) didDrag.current = true
     }
     const multiTouch = activePointers.current.size > 1
-    if ((mode === 'pan' || multiTouch) && dragState.current)
-      setTf(t => ({ ...t, x: dragState.current!.ox + e.clientX - dragState.current!.sx, y: dragState.current!.oy + e.clientY - dragState.current!.sy }))
+    const ds = dragState.current
+    if ((mode === 'pan' || multiTouch) && ds)
+      setTf(t => ({ ...t, x: ds.ox + e.clientX - ds.sx, y: ds.oy + e.clientY - ds.sy }))
     else if (mode === 'draw' && isDrawing.current && !multiTouch) {
       const { x, y } = toMap(e.clientX, e.clientY)
       livePts.current += ` L ${x.toFixed(1)} ${y.toFixed(1)}`; setLiveD(livePts.current)
@@ -321,7 +325,7 @@ export function MindMap({
             {branches.map((rama, i) => {
               const b = bp(branchAngles[i] ?? 0)
               const active = focusedId === rama.id || rama.hijos.some(h => h.id === focusedId)
-              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth={active && presentationMode ? 11 : (presentationMode ? 8 : 5)} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.12 : 1} />
+              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth={active && presentationMode ? 11 : (presentationMode ? 8 : 6)} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.12 : 0.85} />
             })}
 
             {/* Lines branches → children */}
@@ -362,8 +366,8 @@ export function MindMap({
               const dim = presentationMode && focusedId && !selected && !rama.hijos.some(h => h.id === focusedId)
               const navIdx = nodeNavIndex.get(rama.id) ?? (1 + i * 4)
               const nodeObj: FocusedNode = { id: rama.id, emoji: rama.emoji, texto: rama.texto, color: rama.color, explicacion: rama.explicacion, type: 'branch', children: rama.hijos.map(h => ({ id: h.id, texto: h.texto, color: h.color, explicacion: h.explicacion })), navIndex: navIdx }
-              const fill = presentationMode ? rama.color : 'white'
-              const textFill = presentationMode ? 'white' : rama.color
+              const fill = rama.color
+              const textFill = 'white'
               const activeScale = selected && presentationMode ? `translate(${b.x},${b.y}) scale(1.12) translate(${-b.x},${-b.y})` : undefined
               return (
                 <g key={`b${i}`} onClick={() => handleNodeClick(nodeObj)}
@@ -371,7 +375,7 @@ export function MindMap({
                   transform={activeScale}
                   filter={selected && presentationMode ? 'url(#glowStrong)' : 'url(#sh)'}>
                   {presentationMode && <ellipse cx={b.x} cy={b.y} rx={128} ry={ry + 12} fill={rama.color} opacity={selected ? '0.22' : '0.1'} />}
-                  <ellipse cx={b.x} cy={b.y} rx={120} ry={ry + 2} fill={fill} stroke={presentationMode ? rama.color : rama.color} strokeWidth={presentationMode ? 4 : 3.5} />
+                  <ellipse cx={b.x} cy={b.y} rx={120} ry={ry + 2} fill={fill} stroke="rgba(0,0,0,0.12)" strokeWidth="2" />
                   {selected && presentationMode && <ellipse cx={b.x} cy={b.y} rx={126} ry={ry + 8} fill="none" stroke={rama.color} strokeWidth="3" strokeOpacity="0.7" />}
                   {selected && !presentationMode && <ellipse cx={b.x} cy={b.y} rx={126} ry={ry + 9} fill="none" stroke={rama.color} strokeWidth="3" strokeOpacity="0.5" />}
                   <text x={b.x} y={b.y - ry + 30} textAnchor="middle" fontSize={presentationMode ? 32 : 22} fontFamily={FONT}>{rama.emoji}</text>

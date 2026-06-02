@@ -17,6 +17,20 @@ const VOICE_SETTINGS = {
   use_speaker_boost: true,
 }
 
+function parseElevenLabsError(status: number, body: string): string {
+  if (status === 401) {
+    try {
+      const j = JSON.parse(body) as { detail?: { status?: string; message?: string } | string }
+      const detail = j.detail
+      if (typeof detail === 'object' && detail?.status === 'detected_unusual_activity')
+        return 'Tu cuenta de ElevenLabs detectó actividad inusual y fue bloqueada. Necesitas una cuenta de pago en elevenlabs.io para generar audio.'
+    } catch { /* ignore */ }
+    return 'Tu cuenta de ElevenLabs no tiene acceso. Por favor actualiza a una cuenta de pago en elevenlabs.io'
+  }
+  if (status === 429) return 'Límite de ElevenLabs alcanzado. Intenta en unos minutos.'
+  return `Error de ElevenLabs (${status}). Verifica tu API key en Railway.`
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -47,7 +61,8 @@ export async function POST(req: NextRequest) {
 
     if (!resp.ok) {
       const errText = await resp.text()
-      return NextResponse.json({ error: `ElevenLabs error ${resp.status}: ${errText}` }, { status: resp.status })
+      const userMsg = parseElevenLabsError(resp.status, errText)
+      return NextResponse.json({ error: userMsg }, { status: resp.status })
     }
 
     const data = await resp.json() as {
@@ -72,7 +87,8 @@ export async function POST(req: NextRequest) {
 
   if (!resp.ok) {
     const errText = await resp.text()
-    return NextResponse.json({ error: `ElevenLabs error ${resp.status}: ${errText}` }, { status: resp.status })
+    const userMsg = parseElevenLabsError(resp.status, errText)
+    return NextResponse.json({ error: userMsg }, { status: resp.status })
   }
 
   const audioBuffer = await resp.arrayBuffer()
