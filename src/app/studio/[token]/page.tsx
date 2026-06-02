@@ -85,24 +85,6 @@ export default function StudioPage({ params }: { params: { token: string } }) {
 
   return (
     <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden' }}>
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0,
-        padding: '12px 20px',
-        background: 'linear-gradient(to bottom, rgba(250,250,248,0.97), transparent)',
-        zIndex: 10, display: 'flex', alignItems: 'center', gap: 12,
-      }}>
-        <span style={{ fontSize: 20, fontFamily: "'Caveat', cursive", color: '#1a1a2e', fontWeight: 700 }}>
-          {data!.tema}
-        </span>
-        <span style={{
-          fontSize: 11, padding: '2px 8px', borderRadius: 99,
-          background: 'rgba(99,102,241,0.12)', color: '#4338ca',
-          fontFamily: 'system-ui', letterSpacing: 0.5,
-        }}>
-          {data!.redSocial} · {data!.duracion}
-        </span>
-      </div>
-
       <div style={{ width: '100%', height: '100%' }}>
         <StudioMap mapaJson={data!.mapaJson} />
       </div>
