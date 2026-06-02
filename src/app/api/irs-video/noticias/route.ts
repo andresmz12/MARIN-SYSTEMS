@@ -1,25 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { XMLParser } from 'fast-xml-parser'
 import Anthropic from '@anthropic-ai/sdk'
 
-const IRS_RSS_URLS = [
-  'https://www.irs.gov/rss/newsroom.xml',
-  'https://www.irs.gov/rss/news-releases.xml',
-  'https://www.irs.gov/rss/irs-news.xml',
-]
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+}
 
-async function fetchIrsRss(): Promise<string> {
-  for (const url of IRS_RSS_URLS) {
+async function fetchIrsItems(): Promise<RssItem[]> {
+  // Try RSS feeds first
+  const RSS_URLS = [
+    'https://www.irs.gov/rss/newsroom.xml',
+    'https://www.irs.gov/rss/news-releases.xml',
+    'https://www.irs.gov/rss/irs-guidance.xml',
+  ]
+  for (const url of RSS_URLS) {
     try {
-      const res = await fetch(url, { next: { revalidate: 0 } })
-      if (res.ok) return await res.text()
-    } catch {
-      // try next URL
-    }
+      const res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 0 } })
+      if (!res.ok) continue
+      const ct = res.headers.get('content-type') ?? ''
+      if (!ct.includes('xml') && !ct.includes('rss')) continue
+      const xml = await res.text()
+      const itemBlocks = xml.match(/<item[\s\S]*?<\/item>/gi) ?? []
+      const items: RssItem[] = itemBlocks.slice(0, 5).map((block) => {
+        const title = (block.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) ?? block.match(/<title[^>]*>([\s\S]*?)<\/title>/))?.[1]?.trim() ?? ''
+        const url2 = (block.match(/<link[^>]*>([\s\S]*?)<\/link>/) ?? block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/))?.[1]?.trim() ?? ''
+        const desc = (block.match(/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ?? block.match(/<description[^>]*>([\s\S]*?)<\/description>/))?.[1]?.replace(/<[^>]*>/g, '').trim() ?? ''
+        const pubDate = (block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/))?.[1]?.trim() ?? new Date().toUTCString()
+        return { title, summary: desc, url: url2, pubDate }
+      }).filter((i) => i.title && i.url)
+      if (items.length > 0) return items
+    } catch { /* try next */ }
   }
-  throw new Error('Ningún feed del IRS está disponible')
+
+  // Fall back to HTML scraping
+  const res = await fetch('https://www.irs.gov/newsroom', { headers: BROWSER_HEADERS, next: { revalidate: 0 } })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const html = await res.text()
+  const items: RssItem[] = []
+  const seen = new Set<string>()
+  const linkRe = /href="(\/newsroom\/[a-z0-9][a-z0-9-]{10,})"[^>]*>\s*([^<]{10,})\s*</gi
+  let m: RegExpExecArray | null
+  while ((m = linkRe.exec(html)) !== null && items.length < 5) {
+    const path = m[1]
+    if (seen.has(path)) continue
+    seen.add(path)
+    items.push({ title: m[2].trim(), summary: '', url: `https://www.irs.gov${path}`, pubDate: new Date().toUTCString() })
+  }
+  if (items.length === 0) throw new Error('No se encontraron noticias')
+  return items
 }
 
 export interface RssItem {
@@ -48,31 +79,17 @@ export interface MapaJson {
   ramas: MapaRama[]
 }
 
-/* GET — returns the 5 most recent IRS news items from RSS */
+/* GET — returns the 5 most recent IRS news items */
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let xml: string
   try {
-    xml = await fetchIrsRss()
+    const items = await fetchIrsItems()
+    return NextResponse.json(items)
   } catch {
-    return NextResponse.json({ error: 'No se pudo obtener el feed del IRS' }, { status: 502 })
+    return NextResponse.json({ error: 'No se pudo obtener noticias del IRS' }, { status: 502 })
   }
-
-  const parser = new XMLParser({ ignoreAttributes: false })
-  const parsed = parser.parse(xml)
-  const raw: Array<Record<string, string>> = parsed?.rss?.channel?.item ?? []
-  const list = (Array.isArray(raw) ? raw : [raw]).slice(0, 5)
-
-  const items: RssItem[] = list.map((item) => ({
-    title: String(item.title ?? '').trim(),
-    summary: String(item.description ?? '').replace(/<[^>]*>/g, '').trim(),
-    url: (typeof item.link === 'string' ? item.link : String(item.guid ?? '')).trim(),
-    pubDate: String(item.pubDate ?? new Date().toUTCString()),
-  }))
-
-  return NextResponse.json(items)
 }
 
 /* POST — generate mapa conceptual + guion for one news item */
