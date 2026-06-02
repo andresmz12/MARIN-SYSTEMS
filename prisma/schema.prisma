@@ -465,3 +465,16 @@ model IrsVideoContent {
   publishedAt   DateTime
   createdAt     DateTime @default(now())
 }
+
+model StudioSession {
+  id        String   @id @default(cuid())
+  token     String   @unique @default(cuid())
+  tema      String
+  redSocial String
+  duracion  String
+  mapaJson  Json
+  guion     String
+  audioData String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
