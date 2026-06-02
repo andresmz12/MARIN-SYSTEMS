@@ -25,6 +25,29 @@ const PLATFORM_CONFIG: Record<Platform, { label: string; color: string; icon: st
   facebook: { label: 'Facebook', color: 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/30', icon: 'f' },
 }
 
+function SkeletonCard() {
+  return (
+    <div className="card animate-pulse flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-[#2a2a2a] rounded w-full" />
+          <div className="h-4 bg-[#2a2a2a] rounded w-3/4" />
+          <div className="h-3 bg-[#2a2a2a] rounded w-1/4 mt-1" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="h-3 bg-[#2a2a2a] rounded w-full" />
+        <div className="h-3 bg-[#2a2a2a] rounded w-5/6" />
+        <div className="h-3 bg-[#2a2a2a] rounded w-4/5" />
+      </div>
+      <div className="flex gap-2 pt-1 border-t border-[#2a2a2a]">
+        <div className="h-7 bg-[#2a2a2a] rounded w-28" />
+        <div className="h-7 bg-[#2a2a2a] rounded w-20" />
+      </div>
+    </div>
+  )
+}
+
 export default function IrsNewsPage() {
   const [news, setNews] = useState<IrsNewsItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,33 +60,57 @@ export default function IrsNewsPage() {
   const [generated, setGenerated] = useState<GeneratedContent | null>(null)
   const [copied, setCopied] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unused' | 'used'>('all')
+  const [autoEnriching, setAutoEnriching] = useState(false)
+  const [enrichProgress, setEnrichProgress] = useState({ current: 0, total: 0 })
 
   useEffect(() => { loadNews() }, [])
+
+  async function autoEnrich(articles: IrsNewsItem[]) {
+    const toEnrich = articles.filter(n => !n.spanishSummary)
+    if (toEnrich.length === 0) return
+
+    setAutoEnriching(true)
+    setEnrichProgress({ current: 0, total: toEnrich.length })
+
+    for (let i = 0; i < toEnrich.length; i++) {
+      try {
+        const res = await fetch(`/api/irs-news/${toEnrich[i].id}`)
+        if (res.ok) {
+          const enriched: IrsNewsItem = await res.json()
+          setNews(prev => prev.map(n => n.id === enriched.id ? enriched : n))
+        }
+      } catch { /* ignore — continue with next */ }
+      setEnrichProgress({ current: i + 1, total: toEnrich.length })
+    }
+
+    setAutoEnriching(false)
+  }
 
   async function loadNews() {
     setLoading(true)
     const res = await fetch('/api/irs-news')
-    if (res.ok) setNews(await res.json())
+    if (res.ok) {
+      const data: IrsNewsItem[] = await res.json()
+      setNews(data)
+      autoEnrich(data)
+    }
     setLoading(false)
   }
 
   async function openArticle(item: IrsNewsItem) {
     setSelectedNews(item)
     setGenerated(null)
-
-    // If already enriched, nothing to do
     if (item.spanishSummary) return
 
-    // Fetch enrichment (date + Spanish summary)
     setEnriching(true)
     try {
       const res = await fetch(`/api/irs-news/${item.id}`)
       if (res.ok) {
         const enriched: IrsNewsItem = await res.json()
         setSelectedNews(enriched)
-        setNews((prev) => prev.map((n) => n.id === enriched.id ? enriched : n))
+        setNews(prev => prev.map(n => n.id === enriched.id ? enriched : n))
       }
-    } catch { /* ignore — article still shows */ }
+    } catch { /* ignore */ }
     setEnriching(false)
   }
 
@@ -78,7 +125,12 @@ export default function IrsNewsPage() {
         setFetchError(data?.error ?? `Error ${res.status}`)
       } else {
         setFetchResult(data)
-        await loadNews()
+        const newsRes = await fetch('/api/irs-news')
+        if (newsRes.ok) {
+          const fresh: IrsNewsItem[] = await newsRes.json()
+          setNews(fresh)
+          autoEnrich(fresh)
+        }
       }
     } catch {
       setFetchError('Error de red al contactar el servidor')
@@ -106,7 +158,7 @@ export default function IrsNewsPage() {
       body: JSON.stringify({ id: item.id, used: !item.used }),
     })
     if (res.ok) {
-      setNews((prev) => prev.map((n) => (n.id === item.id ? { ...n, used: !n.used } : n)))
+      setNews(prev => prev.map(n => n.id === item.id ? { ...n, used: !n.used } : n))
       if (selectedNews?.id === item.id) setSelectedNews({ ...selectedNews, used: !selectedNews.used })
     }
   }
@@ -176,7 +228,7 @@ export default function IrsNewsPage() {
     )
   }
 
-  const filtered = news.filter((n) => {
+  const filtered = news.filter(n => {
     if (filter === 'unused') return !n.used
     if (filter === 'used') return n.used
     return true
@@ -201,7 +253,7 @@ export default function IrsNewsPage() {
 
       {fetchResult && (
         <div className="card border-green-500/30 bg-green-500/10">
-          <p className="text-sm text-green-400">✓ {fetchResult.added} noticia{fetchResult.added !== 1 ? 's' : ''} nueva{fetchResult.added !== 1 ? 's' : ''} agregada{fetchResult.added !== 1 ? 's' : ''} · {fetchResult.skipped} omitida{fetchResult.skipped !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-green-400">✓ {fetchResult.added} noticia{fetchResult.added !== 1 ? 's' : ''} nueva{fetchResult.added !== 1 ? 's' : ''} · {fetchResult.skipped} omitida{fetchResult.skipped !== 1 ? 's' : ''}</p>
         </div>
       )}
 
@@ -211,19 +263,42 @@ export default function IrsNewsPage() {
         </div>
       )}
 
+      {/* Auto-enrich progress */}
+      {autoEnriching && (
+        <div className="card border-blue-500/20 bg-blue-500/5 flex items-center gap-3">
+          <svg className="w-4 h-4 animate-spin text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-blue-400 font-medium">
+              Generando resúmenes en español… {enrichProgress.current}/{enrichProgress.total}
+            </p>
+            <div className="mt-1.5 h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${(enrichProgress.current / enrichProgress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter tabs */}
       <div className="flex gap-2">
         {(['all', 'unused', 'used'] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30' : 'text-gray-500 hover:text-gray-300 bg-[#1a1a1a] border border-[#2a2a2a]'}`}>
             {f === 'all' ? 'Todas' : f === 'unused' ? 'Sin usar' : 'Usadas'}
-            <span className="ml-1.5 text-gray-600">{f === 'all' ? news.length : f === 'unused' ? news.filter((n) => !n.used).length : news.filter((n) => n.used).length}</span>
+            <span className="ml-1.5 text-gray-600">{f === 'all' ? news.length : f === 'unused' ? news.filter(n => !n.used).length : news.filter(n => n.used).length}</span>
           </button>
         ))}
       </div>
 
       {/* News grid */}
       {loading ? (
-        <div className="text-center py-16 text-gray-600">Cargando noticias...</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-gray-500">No hay noticias. Haz clic en &quot;Actualizar noticias&quot; para obtener las últimas del IRS.</p>
@@ -242,8 +317,13 @@ export default function IrsNewsPage() {
                 {item.used && <span className="badge-win flex-shrink-0">Usado</span>}
               </div>
 
-              {item.spanishSummary && (
+              {item.spanishSummary ? (
                 <p className="text-xs text-gray-400 leading-relaxed line-clamp-3 italic">{item.spanishSummary}</p>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                  Generando resumen…
+                </div>
               )}
 
               <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-[#2a2a2a]">
