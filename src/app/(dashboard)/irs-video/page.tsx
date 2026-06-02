@@ -258,8 +258,8 @@ function MindMap({
   const branches = mapa.ramas.slice(0, 5)
   const angles = BRANCH_ANGLES.slice(0, branches.length)
 
-  const bg = presentationMode ? '#0f172a' : '#f9fafb'
-  const gridColor = presentationMode ? '#1e293b' : '#e5e7eb'
+  const bg = presentationMode ? '#ffffff' : '#f9fafb'
+  const gridColor = presentationMode ? '#e2e8f0' : '#e5e7eb'
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -303,14 +303,14 @@ function MindMap({
             </filter>
           </defs>
           <rect width="100%" height="100%" fill={bg} />
-          {!presentationMode && <rect width="100%" height="100%" fill="url(#grid)" />}
+          <rect width="100%" height="100%" fill="url(#grid)" />
 
           <g transform={gTransform}>
             {/* Lines center → branches */}
             {branches.map((rama, i) => {
               const b = bp(angles[i] ?? 0)
               const active = focusedId === rama.id || rama.hijos.some(h => h.id === focusedId)
-              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth={active ? 7 : 5} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.2 : (presentationMode ? 0.8 : 0.45)} />
+              return <path key={`lc${i}`} d={qcurve(CX, CY, b.x, b.y)} stroke={rama.color} strokeWidth={active && presentationMode ? 9 : (presentationMode ? 6 : 5)} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.15 : (presentationMode ? 0.9 : 0.45)} />
             })}
 
             {/* Lines branches → children */}
@@ -318,7 +318,7 @@ function MindMap({
               rama.hijos.slice(0, 3).map((hijo, j) => {
                 const b = bp(angles[i] ?? 0); const c = cp(angles[i] ?? 0, j)
                 const active = focusedId === hijo.id || focusedId === rama.id
-                return <path key={`lch${i}${j}`} d={qcurve(b.x, b.y, c.x, c.y)} stroke={hijo.color} strokeWidth={3} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.12 : (presentationMode ? 0.65 : 0.4)} strokeDasharray={presentationMode ? undefined : "8 4"} />
+                return <path key={`lch${i}${j}`} d={qcurve(b.x, b.y, c.x, c.y)} stroke={hijo.color} strokeWidth={presentationMode ? 3.5 : 2.5} fill="none" strokeLinecap="round" strokeOpacity={presentationMode && focusedId && !active ? 0.1 : (presentationMode ? 0.7 : 0.4)} strokeDasharray={presentationMode ? undefined : "8 4"} />
               })
             )}
 
@@ -332,8 +332,10 @@ function MindMap({
                 <g onClick={() => handleNodeClick({ id: mapa.centro.id, emoji: mapa.centro.emoji, texto: mapa.centro.texto, color: mapa.centro.color, explicacion: mapa.centro.explicacion, type: 'center', children: mapa.ramas.map(r => ({ id: r.id, texto: r.texto, color: r.color, explicacion: r.explicacion })), navIndex: 0 })}
                   style={{ cursor: 'pointer', opacity: dim ? 0.35 : 1 }}
                   filter={selected ? 'url(#glowStrong)' : 'url(#sh)'}>
-                  <ellipse cx={CX} cy={CY} rx={135} ry={ry} fill={mapa.centro.color} />
-                  <ellipse cx={CX} cy={CY} rx={142} ry={ry + 8} fill="none" stroke="white" strokeWidth={selected ? '4' : '2'} strokeOpacity={selected ? '1' : (presentationMode ? '0.35' : '0')} />
+                  {/* Outer colored halo ring in presentation mode */}
+                  {presentationMode && <ellipse cx={CX} cy={CY} rx={148} ry={ry + 14} fill="none" stroke={mapa.centro.color} strokeWidth="6" strokeOpacity="0.35" />}
+                  <ellipse cx={CX} cy={CY} rx={138} ry={ry + 4} fill={mapa.centro.color} />
+                  <ellipse cx={CX} cy={CY} rx={145} ry={ry + 11} fill="none" stroke="white" strokeWidth={selected ? '5' : '2'} strokeOpacity={selected ? '1' : (presentationMode ? '0.5' : '0')} />
                   <text x={CX} y={CY - ry + 30} textAnchor="middle" fontSize={presentationMode ? 36 : 28} fontFamily={FONT}>{mapa.centro.emoji}</text>
                   {lines.map((line, li) => <text key={li} x={CX} y={CY - ry + 70 + li * 28} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 22 : 18} fontWeight="800" fill="white">{line}</text>)}
                 </g>
@@ -350,14 +352,18 @@ function MindMap({
               const nodeObj: FocusedNode = { id: rama.id, emoji: rama.emoji, texto: rama.texto, color: rama.color, explicacion: rama.explicacion, type: 'branch', children: rama.hijos.slice(0, 3).map(h => ({ id: h.id, texto: h.texto, color: h.color, explicacion: h.explicacion })), navIndex: navIdx }
               const fill = presentationMode ? rama.color : 'white'
               const textFill = presentationMode ? 'white' : rama.color
-              const strokeW = selected ? (presentationMode ? 0 : 5) : 3.5
+              const activeScale = selected && presentationMode ? `translate(${b.x},${b.y}) scale(1.14) translate(${-b.x},${-b.y})` : undefined
               return (
-                <g key={`b${i}`} onClick={() => handleNodeClick(nodeObj)} style={{ cursor: 'pointer', opacity: dim ? 0.3 : 1 }} filter={selected ? 'url(#glowStrong)' : 'url(#sh)'}>
-                  <ellipse cx={b.x} cy={b.y} rx={118} ry={ry} fill={fill} stroke={presentationMode ? 'none' : rama.color} strokeWidth={strokeW} />
-                  {selected && presentationMode && <ellipse cx={b.x} cy={b.y} rx={128} ry={ry + 10} fill="none" stroke="white" strokeWidth="4" strokeOpacity="0.9" />}
+                <g key={`b${i}`} onClick={() => handleNodeClick(nodeObj)}
+                  style={{ cursor: 'pointer', opacity: dim ? 0.22 : 1, transition: 'opacity 0.4s' }}
+                  transform={activeScale}
+                  filter={selected && presentationMode ? 'url(#glowStrong)' : 'url(#sh)'}>
+                  {/* Outer glow ring when active in presentation */}
+                  {selected && presentationMode && <ellipse cx={b.x} cy={b.y} rx={132} ry={ry + 14} fill={rama.color} opacity="0.25" />}
+                  <ellipse cx={b.x} cy={b.y} rx={118} ry={ry} fill={fill} stroke={presentationMode ? 'none' : rama.color} strokeWidth={3.5} />
                   {selected && !presentationMode && <ellipse cx={b.x} cy={b.y} rx={124} ry={ry + 7} fill="none" stroke={rama.color} strokeWidth="3" strokeOpacity="0.5" />}
-                  <text x={b.x} y={b.y - ry + 26} textAnchor="middle" fontSize={presentationMode ? 28 : 22} fontFamily={FONT}>{rama.emoji}</text>
-                  {lines.map((line, li) => <text key={li} x={b.x} y={b.y - ry + 58 + li * 25} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 18 : 15} fontWeight="800" fill={textFill}>{line}</text>)}
+                  <text x={b.x} y={b.y - ry + 28} textAnchor="middle" fontSize={presentationMode ? 30 : 22} fontFamily={FONT}>{rama.emoji}</text>
+                  {lines.map((line, li) => <text key={li} x={b.x} y={b.y - ry + 60 + li * 26} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 19 : 15} fontWeight="800" fill={textFill}>{line}</text>)}
                 </g>
               )
             })}
@@ -371,13 +377,14 @@ function MindMap({
                 const dim = presentationMode && focusedId && !selected && focusedId !== rama.id
                 const navIdx = 1 + i * 4 + 1 + j
                 const nodeObj: FocusedNode = { id: hijo.id, emoji: '•', texto: hijo.texto, color: hijo.color, explicacion: hijo.explicacion, type: 'child', navIndex: navIdx }
-                const fill = presentationMode ? hijo.color + '28' : 'white'
-                const textColor = presentationMode ? 'white' : '#111827'
-                const borderColor = hijo.color
+                const textColor = presentationMode ? '#0f172a' : '#111827'
                 return (
-                  <g key={`ch${i}${j}`} onClick={() => handleNodeClick(nodeObj)} style={{ cursor: 'pointer', opacity: dim ? 0.25 : 1 }} filter={selected ? 'url(#glow)' : 'url(#sh)'}>
-                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={rw} height={rh} rx="14" fill={presentationMode ? '#1e3a5f' : fill} stroke={borderColor} strokeWidth={selected ? 3.5 : (presentationMode ? 2.5 : 1.5)} />
-                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={presentationMode ? 10 : 7} height={rh} rx="6" fill={hijo.color} />
+                  <g key={`ch${i}${j}`} onClick={() => handleNodeClick(nodeObj)}
+                    style={{ cursor: 'pointer', opacity: dim ? 0.18 : 1, transition: 'opacity 0.4s' }}
+                    filter={selected ? 'url(#glow)' : 'url(#sh)'}>
+                    {/* White card with colored left accent */}
+                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={rw} height={rh} rx="14" fill="white" stroke={hijo.color} strokeWidth={selected ? 4 : (presentationMode ? 3 : 1.5)} />
+                    <rect x={c.x - rw / 2} y={c.y - rh / 2} width={presentationMode ? 12 : 7} height={rh} rx="6" fill={hijo.color} />
                     {lines.map((line, li) => <text key={li} x={c.x + (presentationMode ? 8 : 6)} y={c.y + (li - (lines.length - 1) / 2) * 22 + 5} textAnchor="middle" fontFamily={FONT} fontSize={presentationMode ? 16 : 13} fontWeight={presentationMode ? '700' : '600'} fill={textColor}>{line}</text>)}
                   </g>
                 )
@@ -396,20 +403,20 @@ function MindMap({
           </div>
         )}
 
-        {/* Presentation mode — floating draw toolbar (top-left, semi-transparent) */}
+        {/* Presentation mode — floating draw toolbar (top-left, light theme) */}
         {presentationMode && (
-          <div className="absolute top-4 left-4 z-30 flex items-center gap-2 px-3 py-2 rounded-2xl" style={{ background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div className="flex rounded-lg overflow-hidden border border-white/20">
-              <button onClick={() => setMode('pan')} className={`px-3 py-1.5 text-xs font-semibold transition-colors ${mode === 'pan' ? 'bg-white text-gray-900' : 'text-white/70 hover:text-white'}`}>🖐</button>
-              <button onClick={() => setMode('draw')} className={`px-3 py-1.5 text-xs font-semibold transition-colors ${mode === 'draw' ? 'bg-white text-gray-900' : 'text-white/70 hover:text-white'}`}>✏️</button>
+          <div className="absolute top-4 left-4 z-30 flex items-center gap-2 px-3 py-2 rounded-2xl bg-white shadow-lg border border-gray-200">
+            <div className="flex rounded-lg overflow-hidden border border-gray-200">
+              <button onClick={() => setMode('pan')} className={`px-3 py-1.5 text-xs font-semibold transition-colors ${mode === 'pan' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>🖐</button>
+              <button onClick={() => setMode('draw')} className={`px-3 py-1.5 text-xs font-semibold transition-colors ${mode === 'draw' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>✏️</button>
             </div>
             {mode === 'draw' && (
               <>
-                <div className="flex gap-1.5">{PEN_COLORS.map(c => <button key={c} onClick={() => setPenColor(c)} style={{ background: c, outline: penColor === c ? '3px solid white' : '2px solid rgba(255,255,255,0.25)', outlineOffset: '2px' }} className="w-6 h-6 rounded-full" />)}</div>
-                <div className="w-px h-5 bg-white/20" />
-                <div className="flex gap-1">{[2, 4, 7, 12].map(s => <button key={s} onClick={() => setPenSize(s)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${penSize === s ? 'bg-white/20' : 'hover:bg-white/10'}`}><div style={{ width: s * 2, height: s * 2, background: penColor, borderRadius: '50%' }} /></button>)}</div>
-                <div className="w-px h-5 bg-white/20" />
-                <button onClick={() => setDrawings([])} className="text-xs text-red-400 hover:text-red-300 font-medium px-1">🗑</button>
+                <div className="flex gap-1.5">{PEN_COLORS.filter(c => c !== '#ffffff').map(c => <button key={c} onClick={() => setPenColor(c)} style={{ background: c, outline: penColor === c ? `3px solid ${c}` : '2px solid #e5e7eb', outlineOffset: '2px' }} className="w-6 h-6 rounded-full" />)}</div>
+                <div className="w-px h-5 bg-gray-200" />
+                <div className="flex gap-1">{[2, 4, 7, 12].map(s => <button key={s} onClick={() => setPenSize(s)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${penSize === s ? 'bg-gray-100' : 'hover:bg-gray-50'}`}><div style={{ width: s * 2, height: s * 2, background: penColor, borderRadius: '50%' }} /></button>)}</div>
+                <div className="w-px h-5 bg-gray-200" />
+                <button onClick={() => setDrawings([])} className="text-xs text-red-500 hover:text-red-700 font-medium px-1">🗑</button>
               </>
             )}
           </div>
@@ -551,10 +558,10 @@ function PresentationOverlay({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0f172a' }}>
-      {/* Exit button */}
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Exit button — dark on white */}
       <button onClick={onExit}
-        className="absolute top-4 right-4 z-10 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2 text-sm font-medium transition-colors">
+        className="absolute top-4 right-4 z-10 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full px-4 py-2 text-sm font-semibold transition-colors border border-gray-200 shadow-sm">
         ✕ Salir
       </button>
 
@@ -567,13 +574,13 @@ function PresentationOverlay({
         />
       </div>
 
-      {/* Bottom HUD */}
-      <div className="flex-shrink-0 px-6 py-4 flex flex-col gap-3" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
+      {/* Bottom HUD — clean white bar */}
+      <div className="flex-shrink-0 px-6 py-4 flex flex-col gap-2.5 bg-white border-t-2" style={{ borderColor: activeColor }}>
         {/* Current section name */}
         {activeName && (
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full flex-shrink-0 animate-pulse" style={{ background: activeColor }} />
-            <span className="text-white font-semibold text-lg tracking-wide">{activeName}</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ background: activeColor, boxShadow: `0 0 8px ${activeColor}` }} />
+            <span className="font-bold text-xl tracking-wide" style={{ color: activeColor }}>{activeName}</span>
           </div>
         )}
 
@@ -581,19 +588,19 @@ function PresentationOverlay({
         <div className="flex items-center gap-4">
           {audioSrc ? (
             <>
-              <button onClick={togglePlay} className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 font-bold transition-colors" style={{ background: activeColor }}>
+              <button onClick={togglePlay} className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 font-bold text-white shadow-lg transition-transform active:scale-95" style={{ background: activeColor }}>
                 {playing ? '⏸' : '▶'}
               </button>
-              <button onClick={restart} className="text-white/50 hover:text-white text-sm transition-colors flex-shrink-0">↺</button>
-              <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
+              <button onClick={restart} className="text-gray-400 hover:text-gray-600 text-lg transition-colors flex-shrink-0">↺</button>
+              <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: activeColor }} />
               </div>
-              <span className="text-white/60 text-sm flex-shrink-0 tabular-nums">
+              <span className="text-gray-500 text-sm flex-shrink-0 tabular-nums font-medium">
                 {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')} / {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
               </span>
             </>
           ) : (
-            <p className="text-white/50 text-sm">Genera el audio del video primero para sincronizar el mapa</p>
+            <p className="text-gray-400 text-sm">Genera el audio del video primero para sincronizar el mapa</p>
           )}
         </div>
       </div>

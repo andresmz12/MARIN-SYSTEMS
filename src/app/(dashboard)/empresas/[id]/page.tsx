@@ -410,7 +410,7 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
                       <span className={`text-sm font-medium ${TASK_STATUS_COLORS[task.status] ?? 'text-gray-200'}`}>{task.title}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority] ?? ''}`}>{task.priority}</span>
                       {isOverdue(task) && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/20 text-red-400 border-red-500/40 font-semibold">VENCIDA</span>
+                        <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">VENCIDA</span>
                       )}
                     </div>
                     {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
@@ -472,7 +472,7 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
                         </span>
                       </div>
                       {isOverdue(task) && (
-                        <span className="mt-1.5 inline-block text-[10px] px-1.5 py-0.5 rounded border bg-red-500/20 text-red-400 border-red-500/40 font-semibold">
+                        <span className="mt-1.5 inline-block text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
                           VENCIDA
                         </span>
                       )}
