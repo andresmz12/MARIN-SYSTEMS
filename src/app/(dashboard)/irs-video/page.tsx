@@ -13,27 +13,28 @@ interface MapaJson {
 interface ElevenVoice { voice_id: string; name: string }
 
 /* ── Layout constants ── */
-const W = 1200
-const H = 750
+const W = 1400
+const H = 860
 const CX = W / 2
 const CY = H / 2
-const BRANCH_R = 240
-const CHILD_R = 145
-const BRANCH_ANGLES = [-120, -45, 45, 120]
+const BRANCH_R = 290
+const CHILD_R = 175
+const BRANCH_ANGLES = [-115, -40, 40, 115]
 const RAD = (d: number) => (d * Math.PI) / 180
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
 
 function branchPos(angle: number) {
   return { x: CX + BRANCH_R * Math.cos(RAD(angle)), y: CY + BRANCH_R * Math.sin(RAD(angle)) }
 }
 function childPos(angle: number, idx: number) {
   const { x: bx, y: by } = branchPos(angle)
-  const a = angle + ([-28, 28][idx] ?? 0)
+  const a = angle + ([-30, 30][idx] ?? 0)
   return { x: bx + CHILD_R * Math.cos(RAD(a)), y: by + CHILD_R * Math.sin(RAD(a)) }
 }
 function curve(x1: number, y1: number, x2: number, y2: number) {
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
   const dx = x2 - x1, dy = y2 - y1
-  return `M ${x1} ${y1} Q ${mx - dy * 0.12} ${my + dx * 0.12} ${x2} ${y2}`
+  return `M ${x1} ${y1} Q ${mx - dy * 0.15} ${my + dx * 0.15} ${x2} ${y2}`
 }
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(' ')
@@ -50,7 +51,6 @@ function wrapText(text: string, maxChars: number): string[] {
 
 /* ── Interactive Mind Map ── */
 function MindMap({ mapa }: { mapa: MapaJson }) {
-  const font = "'Caveat', cursive"
   const containerRef = useRef<HTMLDivElement>(null)
   const [tf, setTf] = useState({ x: 0, y: 0, scale: 1 })
   const drag = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null)
@@ -150,17 +150,22 @@ function MindMap({ mapa }: { mapa: MapaJson }) {
         style={{ display: 'block', width: '100%', height: '100%', transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.scale})`, transformOrigin: '0 0', willChange: 'transform' }}
       >
         <defs>
-          <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1.2" fill="#d1d5db" />
+          <pattern id="dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.3" fill="#e5e7eb" />
           </pattern>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.12" />
+          </filter>
         </defs>
-        <rect width={W} height={H} fill="white" />
+
+        {/* Background */}
+        <rect width={W} height={H} fill="#fafafa" />
         <rect width={W} height={H} fill="url(#dots)" />
 
         {/* Lines center → branches */}
         {mapa.ramas.map((rama, i) => {
           const bp = branchPos(BRANCH_ANGLES[i] ?? 0)
-          return <path key={`lc${i}`} d={curve(CX, CY, bp.x, bp.y)} stroke={rama.color} strokeWidth="3.5" fill="none" strokeLinecap="round" strokeOpacity="0.7" />
+          return <path key={`lc${i}`} d={curve(CX, CY, bp.x, bp.y)} stroke={rama.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeOpacity="0.5" />
         })}
 
         {/* Lines branches → children */}
@@ -168,43 +173,89 @@ function MindMap({ mapa }: { mapa: MapaJson }) {
           rama.hijos.map((hijo, j) => {
             const bp = branchPos(BRANCH_ANGLES[i] ?? 0)
             const cp = childPos(BRANCH_ANGLES[i] ?? 0, j)
-            return <path key={`lr${i}h${j}`} d={curve(bp.x, bp.y, cp.x, cp.y)} stroke={hijo.color} strokeWidth="2" fill="none" strokeLinecap="round" strokeOpacity="0.8" />
+            return <path key={`lr${i}h${j}`} d={curve(bp.x, bp.y, cp.x, cp.y)} stroke={hijo.color} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeOpacity="0.5" strokeDasharray="6 3" />
           })
         )}
 
-        {/* Center node */}
-        <ellipse cx={CX} cy={CY} rx={96} ry={52} fill={mapa.centro.color} />
-        <text x={CX} y={CY - 10} textAnchor="middle" fontFamily={font} fontSize="26" fill="white">{mapa.centro.emoji}</text>
-        {wrapText(mapa.centro.texto, 14).map((line, i, arr) => (
-          <text key={i} x={CX} y={CY + 8 + (i - (arr.length - 1) / 2) * 19} textAnchor="middle" fontFamily={font} fontSize="17" fontWeight="700" fill="white">{line}</text>
-        ))}
+        {/* ── Center node ── */}
+        {(() => {
+          const lines = wrapText(mapa.centro.texto, 12)
+          const totalH = 28 + lines.length * 22
+          const ry = Math.max(58, totalH / 2 + 14)
+          return (
+            <g filter="url(#shadow)">
+              <ellipse cx={CX} cy={CY} rx={115} ry={ry} fill={mapa.centro.color} />
+              {/* emoji */}
+              <text x={CX} y={CY - ry + 32} textAnchor="middle" fontSize="24" fontFamily={FONT}>{mapa.centro.emoji}</text>
+              {/* text lines */}
+              {lines.map((line, li) => (
+                <text key={li}
+                  x={CX}
+                  y={CY - ry + 32 + 28 + li * 22}
+                  textAnchor="middle"
+                  fontFamily={FONT}
+                  fontSize="17"
+                  fontWeight="700"
+                  fill="white"
+                  letterSpacing="0.3"
+                >{line}</text>
+              ))}
+            </g>
+          )
+        })()}
 
-        {/* Branch nodes */}
+        {/* ── Branch nodes ── */}
         {mapa.ramas.map((rama, i) => {
           const bp = branchPos(BRANCH_ANGLES[i] ?? 0)
-          const lines = wrapText(rama.texto, 13)
+          const lines = wrapText(rama.texto, 12)
+          const totalH = 26 + lines.length * 20
+          const ry = Math.max(50, totalH / 2 + 12)
           return (
-            <g key={`rama${i}`}>
-              <ellipse cx={bp.x} cy={bp.y} rx={82} ry={44} fill="white" stroke={rama.color} strokeWidth="3" />
-              <text x={bp.x} y={bp.y - 8} textAnchor="middle" fontFamily={font} fontSize="22">{rama.emoji}</text>
+            <g key={`rama${i}`} filter="url(#shadow)">
+              <ellipse cx={bp.x} cy={bp.y} rx={100} ry={ry} fill="white" stroke={rama.color} strokeWidth="3" />
+              {/* colored top band */}
+              <ellipse cx={bp.x} cy={bp.y - ry + 16} rx={100} ry={16} fill={rama.color} opacity="0.15" />
+              {/* emoji */}
+              <text x={bp.x} y={bp.y - ry + 22} textAnchor="middle" fontSize="20" fontFamily={FONT}>{rama.emoji}</text>
+              {/* text */}
               {lines.map((line, li) => (
-                <text key={li} x={bp.x} y={bp.y + 8 + (li - (lines.length - 1) / 2) * 17} textAnchor="middle" fontFamily={font} fontSize="15" fontWeight="700" fill={rama.color}>{line}</text>
+                <text key={li}
+                  x={bp.x}
+                  y={bp.y - ry + 22 + 26 + li * 20}
+                  textAnchor="middle"
+                  fontFamily={FONT}
+                  fontSize="14"
+                  fontWeight="700"
+                  fill={rama.color}
+                  letterSpacing="0.2"
+                >{line}</text>
               ))}
             </g>
           )
         })}
 
-        {/* Child nodes */}
+        {/* ── Child nodes ── */}
         {mapa.ramas.map((rama, i) =>
           rama.hijos.map((hijo, j) => {
             const cp = childPos(BRANCH_ANGLES[i] ?? 0, j)
-            const lines = wrapText(hijo.texto, 15)
-            const rw = 118, rh = 18 + lines.length * 18
+            const lines = wrapText(hijo.texto, 16)
+            const rw = 148
+            const rh = 16 + lines.length * 19 + 10
             return (
-              <g key={`h${i}${j}`}>
-                <rect x={cp.x - rw / 2} y={cp.y - rh / 2} width={rw} height={rh} rx="10" fill="white" stroke={hijo.color} strokeWidth="2" />
+              <g key={`h${i}${j}`} filter="url(#shadow)">
+                <rect x={cp.x - rw / 2} y={cp.y - rh / 2} width={rw} height={rh} rx="10" fill="white" stroke={hijo.color} strokeWidth="2.5" />
+                {/* left color bar */}
+                <rect x={cp.x - rw / 2} y={cp.y - rh / 2} width={5} height={rh} rx="10" fill={hijo.color} opacity="0.8" />
                 {lines.map((line, li) => (
-                  <text key={li} x={cp.x} y={cp.y + (li - (lines.length - 1) / 2) * 17 + 6} textAnchor="middle" fontFamily={font} fontSize="13" fontWeight="600" fill={hijo.color}>{line}</text>
+                  <text key={li}
+                    x={cp.x + 3}
+                    y={cp.y + (li - (lines.length - 1) / 2) * 19 + 6}
+                    textAnchor="middle"
+                    fontFamily={FONT}
+                    fontSize="13"
+                    fontWeight="600"
+                    fill="#1f2937"
+                  >{line}</text>
                 ))}
               </g>
             )
