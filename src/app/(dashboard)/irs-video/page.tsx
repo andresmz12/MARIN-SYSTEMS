@@ -83,7 +83,7 @@ function buildNodeList(mapa: MapaJson): FocusedNode[] {
 
 /* ── Map layout ── */
 const CX = 1200; const CY = 750
-const BRANCH_R = 370; const CHILD_R = 255
+const BRANCH_R = 450; const CHILD_R = 270
 const BRANCH_ANGLES = [-126, -54, 18, 90, 162]
 const RAD = (d: number) => (d * Math.PI) / 180
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
@@ -91,8 +91,11 @@ const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
 function bp(a: number) { return { x: CX + BRANCH_R * Math.cos(RAD(a)), y: CY + BRANCH_R * Math.sin(RAD(a)) } }
 function cp(a: number, idx: number) {
   const { x: bx, y: by } = bp(a)
-  const aa = a + ([-40, 0, 40][idx] ?? 0)
-  return { x: bx + CHILD_R * Math.cos(RAD(aa)), y: by + CHILD_R * Math.sin(RAD(aa)) }
+  // Place children radially outward + perpendicular spread so they never overlap adjacent branches
+  const dx = Math.cos(RAD(a)), dy = Math.sin(RAD(a))
+  const px = -dy, py = dx // perpendicular unit vector
+  const spread = ([-145, 0, 145][idx] ?? 0)
+  return { x: bx + CHILD_R * dx + spread * px, y: by + CHILD_R * dy + spread * py }
 }
 function qcurve(x1: number, y1: number, x2: number, y2: number) {
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1
@@ -245,7 +248,7 @@ function MindMap({
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Toolbar (hidden in presentation mode) */}
+      {/* Toolbar — normal mode */}
       {!presentationMode && (
         <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200 flex-wrap flex-shrink-0">
           <div className="flex rounded-lg overflow-hidden border border-gray-200">
@@ -347,8 +350,8 @@ function MindMap({
             {/* Children */}
             {branches.map((rama, i) =>
               rama.hijos.slice(0, 3).map((hijo, j) => {
-                const c = cp(angles[i] ?? 0, j); const lines = wrap(hijo.texto, 20)
-                const rw = 210; const rh = Math.max(46, lines.length * 22 + 18)
+                const c = cp(angles[i] ?? 0, j); const lines = wrap(hijo.texto, 18)
+                const rw = 190; const rh = Math.max(46, lines.length * 22 + 18)
                 const selected = focusedId === hijo.id
                 const dim = presentationMode && focusedId && !selected && focusedId !== rama.id
                 const navIdx = 1 + i * 4 + 1 + j
@@ -375,6 +378,25 @@ function MindMap({
         {!presentationMode && (
           <div className="absolute bottom-3 left-3 text-xs text-gray-400 pointer-events-none select-none">
             Toca un nodo para ver la explicación · Arrastra para mover · Scroll para zoom
+          </div>
+        )}
+
+        {/* Presentation mode — floating draw toolbar (top-left, semi-transparent) */}
+        {presentationMode && (
+          <div className="absolute top-4 left-4 z-30 flex items-center gap-2 px-3 py-2 rounded-2xl" style={{ background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="flex rounded-lg overflow-hidden border border-white/20">
+              <button onClick={() => setMode('pan')} className={`px-3 py-1.5 text-xs font-semibold transition-colors ${mode === 'pan' ? 'bg-white text-gray-900' : 'text-white/70 hover:text-white'}`}>🖐</button>
+              <button onClick={() => setMode('draw')} className={`px-3 py-1.5 text-xs font-semibold transition-colors ${mode === 'draw' ? 'bg-white text-gray-900' : 'text-white/70 hover:text-white'}`}>✏️</button>
+            </div>
+            {mode === 'draw' && (
+              <>
+                <div className="flex gap-1.5">{PEN_COLORS.map(c => <button key={c} onClick={() => setPenColor(c)} style={{ background: c, outline: penColor === c ? '3px solid white' : '2px solid rgba(255,255,255,0.25)', outlineOffset: '2px' }} className="w-6 h-6 rounded-full" />)}</div>
+                <div className="w-px h-5 bg-white/20" />
+                <div className="flex gap-1">{[2, 4, 7, 12].map(s => <button key={s} onClick={() => setPenSize(s)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${penSize === s ? 'bg-white/20' : 'hover:bg-white/10'}`}><div style={{ width: s * 2, height: s * 2, background: penColor, borderRadius: '50%' }} /></button>)}</div>
+                <div className="w-px h-5 bg-white/20" />
+                <button onClick={() => setDrawings([])} className="text-xs text-red-400 hover:text-red-300 font-medium px-1">🗑</button>
+              </>
+            )}
           </div>
         )}
       </div>
