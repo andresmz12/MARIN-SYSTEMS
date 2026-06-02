@@ -12,10 +12,11 @@ export async function GET(
   if (session.expiresAt < new Date()) return NextResponse.json({ error: 'expired' }, { status: 410 })
 
   return NextResponse.json({
-    tema: session.tema,
-    redSocial: session.redSocial,
-    duracion: session.duracion,
-    mapaJson: session.mapaJson,
-    guion: session.guion,
+    tema:       session.tema,
+    redSocial:  session.redSocial,
+    duracion:   session.duracion,
+    mapaJson:   session.mapaJson,
+    guion:      session.guion,
+    timestamps: session.timestamps ?? [],
   })
 }
