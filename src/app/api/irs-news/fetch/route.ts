@@ -50,30 +50,25 @@ async function scrapeIrsNewsroom(): Promise<NewsItem[]> {
   const items: NewsItem[] = []
   const seen = new Set<string>()
 
-  // Match article links: /newsroom/slug-with-words (not category pages ending in common words)
-  const linkRe = /href="(\/newsroom\/[a-z0-9][a-z0-9-]{10,})"[^>]*>\s*([^<]{10,})\s*</gi
+  // Match news release links — IRS uses /newsroom/ir-YYYY-NNN or /newsroom/irs-verb-noun style
+  // Exclude short navigation links and known category pages
+  const NAV_SLUGS = new Set([
+    'newsroom', 'news-releases-and-fact-sheets', 'multimedia-center', 'archive-of-news-releases',
+    'irs-guidance-and-other-announcements', 'commissioners-comments-statements-and-remarks',
+    'tax-tips', 'e-news-subscriptions', 'irs-news', 'tax-statistics',
+  ])
+  const linkRe = /href="(\/newsroom\/(ir-\d{4}-\d+|irs-[a-z][a-z0-9-]{15,}))"[^>]*>\s*([^<]{15,})\s*</gi
   let m: RegExpExecArray | null
   while ((m = linkRe.exec(html)) !== null) {
     const path = m[1]
-    const text = m[2].trim()
-    if (seen.has(path)) continue
+    const slug = m[2]
+    const text = m[3].trim()
+    if (seen.has(path) || NAV_SLUGS.has(slug)) continue
     seen.add(path)
     const fullUrl = `https://www.irs.gov${path}`
     items.push({ title: text, url: fullUrl, summary: '', publishedAt: new Date() })
     if (items.length >= 30) break
   }
-
-  // Extract dates from nearby content (best-effort — if missing, we use today)
-  const dateRe = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/g
-  const dates: Date[] = []
-  let dm: RegExpExecArray | null
-  while ((dm = dateRe.exec(html)) !== null) {
-    const d = new Date(dm[0])
-    if (!isNaN(d.getTime())) dates.push(d)
-  }
-  items.forEach((item, i) => {
-    if (dates[i]) item.publishedAt = dates[i]
-  })
 
   return items
 }
