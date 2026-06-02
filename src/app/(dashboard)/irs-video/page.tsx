@@ -106,6 +106,44 @@ export default function IrsVideoPage() {
     setGeneratingAudio(false)
   }
 
+  /* ── Studio Link state ── */
+  const [generatingStudio, setGeneratingStudio] = useState(false)
+  const [studioUrl, setStudioUrl] = useState<string | null>(null)
+  const [studioCopied, setStudioCopied] = useState(false)
+
+  async function generateStudioLink() {
+    if (!mapa || !guion) return
+    setGeneratingStudio(true)
+    setStudioUrl(null)
+    try {
+      const res = await fetch('/api/studio/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mapaJson: mapa,
+          guion,
+          tema: noticias[selectedIdx]?.title ?? 'IRS News',
+          redSocial: 'TikTok',
+          duracion: '60s',
+        }),
+      })
+      const body = await res.json() as { url?: string; error?: string }
+      if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`)
+      setStudioUrl(body.url!)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error generando Studio Link')
+    }
+    setGeneratingStudio(false)
+  }
+
+  function copyStudioUrl() {
+    if (!studioUrl) return
+    navigator.clipboard.writeText(studioUrl).then(() => {
+      setStudioCopied(true)
+      setTimeout(() => setStudioCopied(false), 2000)
+    })
+  }
+
   const selected = noticias[selectedIdx]
   const hasAudio = !!audioSrc
   const hasMap = !!mapa
@@ -119,6 +157,31 @@ export default function IrsVideoPage() {
           markers={MARKERS}
           onExit={() => setPresentationMode(false)}
         />
+      )}
+
+      {/* Studio Link modal */}
+      {studioUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="card w-full max-w-md p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-primary)]">📱 Studio Link listo</h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Ábrelo en tu iPad — mapa fullscreen + audio</p>
+              </div>
+              <button onClick={() => setStudioUrl(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl leading-none">×</button>
+            </div>
+            <div className="flex gap-2">
+              <input readOnly value={studioUrl} className="input flex-1 text-xs font-mono" />
+              <button onClick={copyStudioUrl} className="btn-primary text-xs px-3 whitespace-nowrap">
+                {studioCopied ? '✅' : '📋 Copiar'}
+              </button>
+            </div>
+            <a href={studioUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs w-full flex items-center justify-center gap-1.5">
+              🔗 Abrir en nueva pestaña
+            </a>
+            <p className="text-[10px] text-[var(--text-muted)] text-center">Expira en 24 horas</p>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)', minHeight: 600 }}>
@@ -148,6 +211,17 @@ export default function IrsVideoPage() {
             {hasMap && (
               <button onClick={generateAudio} disabled={generatingAudio} className="btn-secondary text-xs flex items-center gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50">
                 {generatingAudio ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio'}`}
+              </button>
+            )}
+            {hasMap && (
+              <button
+                onClick={generateStudioLink}
+                disabled={generatingStudio}
+                className="btn-secondary text-xs flex items-center gap-1.5 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 disabled:opacity-50"
+              >
+                {generatingStudio
+                  ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</>
+                  : '📱 Studio Link'}
               </button>
             )}
             {hasMap && (
