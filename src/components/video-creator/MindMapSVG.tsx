@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, memo } from 'react'
+
+const NOOP_CLICK = () => {}
 
 /* ── Types ── */
 export interface MapaHijo { id: string; texto: string; color: string; explicacion: string }
@@ -111,7 +113,7 @@ export function extractSectionTimestamps(alignment: Alignment, script: string, m
 /* ════════════════════════
    Mind Map SVG
 ════════════════════════ */
-export function MindMap({
+export const MindMap = memo(function MindMap({
   mapa, focusedId, presentationMode, onNodeClick, onExportRef,
 }: {
   mapa: MapaJson
@@ -273,8 +275,8 @@ export function MindMap({
   const branches = mapa.ramas.slice(0, 5)
   const branchAngles = angles.slice(0, branches.length)
 
-  const bg = presentationMode ? '#ffffff' : '#f9fafb'
-  const gridColor = presentationMode ? '#e2e8f0' : '#e5e7eb'
+  const bg = presentationMode ? '#0f172a' : '#f9fafb'
+  const gridColor = presentationMode ? '#1e293b' : '#e5e7eb'
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -439,7 +441,7 @@ export function MindMap({
       </div>
     </div>
   )
-}
+})
 
 /* ════════════════════════
    Node Info Panel (normal mode)
@@ -519,33 +521,37 @@ export function PresentationOverlay({
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
+  const [displayTime, setDisplayTime] = useState(0)   // throttled — only for progress bar
   const [duration, setDuration] = useState(0)
   const [activeBranchIdx, setActiveBranchIdx] = useState(-1) // -1 = center/intro
+  const lastDisplayRef = useRef(0)
 
-  const totalSections = markers.length
+  // Single handler: throttle progress bar updates + only update branch when it changes
+  function handleTimeUpdate(e: React.SyntheticEvent<HTMLAudioElement>) {
+    const t = (e.target as HTMLAudioElement).currentTime
+    const dur = (e.target as HTMLAudioElement).duration || 0
 
-  // Determine active branch from current time
-  useEffect(() => {
-    if (!audioSrc) return
+    // Refresh progress bar at most once per 400ms
+    if (t - lastDisplayRef.current >= 0.4) {
+      lastDisplayRef.current = t
+      setDisplayTime(t)
+    }
+
+    // Calculate active branch
     let active = -1
-    for (let i = sectionTimestamps.length - 1; i >= 0; i--) {
-      const ts = sectionTimestamps[i]
-      if (ts >= 0 && currentTime >= ts) { active = i - 1; break }
+    if (audioSrc && sectionTimestamps.some(ts => ts >= 0)) {
+      for (let i = sectionTimestamps.length - 1; i >= 0; i--) {
+        const ts = sectionTimestamps[i]
+        if (ts >= 0 && t >= ts) { active = i - 1; break }
+      }
+    } else if (dur > 0) {
+      // Fallback: uniform timing
+      const secDur = dur / markers.length
+      active = Math.min(Math.floor(t / secDur) - 1, mapa.ramas.length - 1)
     }
-    setActiveBranchIdx(active)
-  }, [currentTime, sectionTimestamps, audioSrc])
 
-  // Fallback: uniform timing when no alignment
-  useEffect(() => {
-    if (alignment || !duration || sectionTimestamps.every(t => t < 0)) {
-      return
-    }
-    const secDur = duration / totalSections
-    const t = currentTime
-    const idx = Math.floor(t / secDur) - 1
-    setActiveBranchIdx(Math.min(idx, mapa.ramas.length - 1))
-  }, [currentTime, duration, alignment, sectionTimestamps, totalSections, mapa.ramas.length])
+    setActiveBranchIdx(prev => prev === active ? prev : active)
+  }
 
   const activeFocusId = activeBranchIdx < 0
     ? mapa.centro.id
@@ -569,15 +575,16 @@ export function PresentationOverlay({
     a.currentTime = 0; a.play(); setPlaying(true)
   }
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const progress = duration > 0 ? (displayTime / duration) * 100 : 0
 
   // Silence unused script param warning
   void script
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0f172a' }}>
       <button onClick={onExit}
-        className="absolute top-4 right-4 z-10 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full px-4 py-2 text-sm font-semibold transition-colors border border-gray-200 shadow-sm">
+        className="absolute top-4 right-4 z-10 rounded-full px-4 py-2 text-sm font-semibold transition-colors shadow-sm"
+        style={{ background: 'rgba(255,255,255,0.12)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.18)' }}>
         ✕ Salir
       </button>
 
@@ -586,15 +593,15 @@ export function PresentationOverlay({
         <MindMap
           mapa={mapa} focusedId={activeFocusId}
           presentationMode={true}
-          onNodeClick={() => {}}
+          onNodeClick={NOOP_CLICK}
         />
       </div>
 
       {/* Bottom HUD */}
-      <div className="flex-shrink-0 px-6 py-4 flex flex-col gap-2.5 bg-white border-t-2" style={{ borderColor: activeColor }}>
+      <div className="flex-shrink-0 px-6 py-4 flex flex-col gap-2.5 border-t-2" style={{ background: '#0f172a', borderColor: activeColor }}>
         {activeName && (
           <div className="flex items-center gap-2.5">
-            <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ background: activeColor, boxShadow: `0 0 8px ${activeColor}` }} />
+            <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ background: activeColor, boxShadow: `0 0 10px ${activeColor}` }} />
             <span className="font-bold text-xl tracking-wide" style={{ color: activeColor }}>{activeName}</span>
           </div>
         )}
@@ -605,23 +612,23 @@ export function PresentationOverlay({
               <button onClick={togglePlay} className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 font-bold text-white shadow-lg transition-transform active:scale-95" style={{ background: activeColor }}>
                 {playing ? '⏸' : '▶'}
               </button>
-              <button onClick={restart} className="text-gray-400 hover:text-gray-600 text-lg transition-colors flex-shrink-0">↺</button>
-              <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+              <button onClick={restart} className="text-lg transition-colors flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>↺</button>
+              <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.12)' }}>
                 <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: activeColor }} />
               </div>
-              <span className="text-gray-500 text-sm flex-shrink-0 tabular-nums font-medium">
-                {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')} / {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
+              <span className="text-sm flex-shrink-0 tabular-nums font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                {Math.floor(displayTime / 60)}:{String(Math.floor(displayTime % 60)).padStart(2, '0')} / {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
               </span>
             </>
           ) : (
-            <p className="text-gray-400 text-sm">Genera el audio del video primero para sincronizar el mapa</p>
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>Genera el audio del video primero para sincronizar el mapa</p>
           )}
         </div>
       </div>
 
       {audioSrc && (
         <audio ref={audioRef} src={audioSrc} preload="auto"
-          onTimeUpdate={e => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
+          onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={e => setDuration((e.target as HTMLAudioElement).duration)}
           onEnded={() => setPlaying(false)}
         />

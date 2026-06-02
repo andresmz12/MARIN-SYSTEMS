@@ -27,15 +27,20 @@ export async function POST(req: NextRequest) {
   const { text } = await req.json() as { text: string }
   if (!text) return NextResponse.json({ error: 'text requerido' }, { status: 400 })
 
-  const resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ANGIE_VOICE_ID}`, {
-    method: 'POST',
-    headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      model_id: 'eleven_multilingual_v2',
-      voice_settings: VOICE_SETTINGS,
-    }),
-  })
+  let resp: Response
+  try {
+    resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ANGIE_VOICE_ID}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: VOICE_SETTINGS,
+      }),
+    })
+  } catch {
+    return NextResponse.json({ error: 'Error de conexión con ElevenLabs. Verifica la red del servidor.' }, { status: 503 })
+  }
 
   if (!resp.ok) {
     const userMsg = parseElevenLabsError(resp.status)
