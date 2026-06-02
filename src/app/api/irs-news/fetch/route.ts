@@ -109,6 +109,9 @@ export async function POST() {
     return NextResponse.json({ error: 'No se encontraron noticias en el IRS' }, { status: 502 })
   }
 
+  // Delete unused articles so stale/bad data is replaced on every refresh
+  await prisma.irsNews.deleteMany({ where: { used: false } })
+
   let added = 0
   let skipped = 0
 
