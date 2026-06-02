@@ -11,7 +11,6 @@ interface NewsItem {
 interface HistoryItem {
   id: string; titulo: string; guionCompleto: string; mapaJson: MapaJson; createdAt: string
 }
-interface ElevenVoice { voice_id: string; name: string }
 
 /* ── Section markers for IRS Video (5 branches) ── */
 const MARKERS = ['[INTRO]', '[R1]', '[R2]', '[R3]', '[R4]', '[R5]', '[CTA]']
@@ -29,13 +28,8 @@ export default function IrsVideoPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [scriptOpen, setScriptOpen] = useState(false)
-  const [elevenKey, setElevenKey] = useState('')
-  const [voices, setVoices] = useState<ElevenVoice[]>([])
-  const [voiceId, setVoiceId] = useState('')
-  const [loadingVoices, setLoadingVoices] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
   const [audioSrc, setAudioSrc] = useState<string | null>(null)
   const [alignment, setAlignment] = useState<Alignment | null>(null)
@@ -44,13 +38,7 @@ export default function IrsVideoPage() {
   const [focusedNode, setFocusedNode] = useState<FocusedNode | null>(null)
   const [allNodes, setAllNodes] = useState<FocusedNode[]>([])
 
-  useEffect(() => {
-    const k = localStorage.getItem('elevenlabs_key')
-    const v = localStorage.getItem('elevenlabs_voice')
-    if (k) setElevenKey(k)
-    if (v) setVoiceId(v)
-    loadNoticias()
-  }, [])
+  useEffect(() => { loadNoticias() }, [])
 
   async function loadNoticias() {
     setLoadingNews(true); setMapa(null); setGuion(''); setAudioSrc(null); setAlignment(null); setFocusedNode(null)
@@ -79,17 +67,15 @@ export default function IrsVideoPage() {
   }
 
   async function generateAudio() {
-    if (!guion || !voiceId || !elevenKey) return
+    if (!guion) return
     setGeneratingAudio(true)
     if (audioSrc) { URL.revokeObjectURL(audioSrc); setAudioSrc(null) }
-
     const cleanGuion = guion.replace(/\[(INTRO|R[1-5]|CTA)\]\s*/g, '')
-
     try {
       const res = await fetch('/api/irs-video/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanGuion, voiceId, apiKey: elevenKey, withTimestamps: true }),
+        body: JSON.stringify({ text: cleanGuion, withTimestamps: true }),
       })
       if (res.ok) {
         const data: { audioBase64: string; alignment: Alignment } = await res.json()
@@ -97,27 +83,12 @@ export default function IrsVideoPage() {
         const bytes = new Uint8Array(binary.length)
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
         const blob = new Blob([bytes], { type: 'audio/mpeg' })
-        const url = URL.createObjectURL(blob)
-        setAudioSrc(url)
+        setAudioSrc(URL.createObjectURL(blob))
         setAlignment(data.alignment)
-        const ts = extractSectionTimestamps(data.alignment, guion, MARKERS)
-        setSectionTimestamps(ts)
+        setSectionTimestamps(extractSectionTimestamps(data.alignment, guion, MARKERS))
       }
     } catch { /* ignore */ }
     setGeneratingAudio(false)
-  }
-
-  async function loadVoices() {
-    if (!elevenKey) return
-    localStorage.setItem('elevenlabs_key', elevenKey)
-    setLoadingVoices(true)
-    const res = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': elevenKey } })
-    if (res.ok) {
-      const data = await res.json(); const list: ElevenVoice[] = data.voices ?? []
-      setVoices(list)
-      if (list.length && !voiceId) { setVoiceId(list[0].voice_id); localStorage.setItem('elevenlabs_voice', list[0].voice_id) }
-    }
-    setLoadingVoices(false)
   }
 
   const selected = noticias[selectedIdx]
@@ -126,7 +97,6 @@ export default function IrsVideoPage() {
 
   return (
     <>
-      {/* Presentation Mode */}
       {presentationMode && mapa && (
         <PresentationOverlay
           mapa={mapa} script={guion} audioSrc={audioSrc}
@@ -157,44 +127,21 @@ export default function IrsVideoPage() {
             <button onClick={loadNoticias} disabled={loadingNews} className="btn-secondary text-xs px-2.5 py-1.5">{loadingNews ? '…' : '↺'} Cargar</button>
             {selected?.spanishSummary && <button onClick={() => setSummaryOpen(v => !v)} className={`btn-secondary text-xs px-2.5 py-1.5 ${summaryOpen ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : ''}`}>📰</button>}
             <button onClick={() => { setShowHistory(v => !v); if (!showHistory) loadHistory() }} className={`btn-secondary text-xs px-2.5 py-1.5 ${showHistory ? 'bg-[var(--bg-hover)]' : ''}`}>🕒 Historial</button>
-            <button onClick={() => setShowSettings(v => !v)} className={`btn-secondary text-xs px-2.5 py-1.5 ${showSettings ? 'bg-[var(--bg-hover)]' : ''}`}>⚙️</button>
             <button onClick={generateContent} disabled={!selected || generating} className="btn-primary text-xs flex items-center gap-1.5">
               {generating ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : '⚡ Generar mapa'}
             </button>
             {hasMap && (
-              <button onClick={generateAudio} disabled={generatingAudio || !voiceId || !elevenKey} className="btn-secondary text-xs flex items-center gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50">
+              <button onClick={generateAudio} disabled={generatingAudio} className="btn-secondary text-xs flex items-center gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50">
                 {generatingAudio ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio'}`}
               </button>
             )}
             {hasMap && (
-              <button onClick={() => setPresentationMode(true)}
-                className="btn-primary text-xs flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 border-0">
+              <button onClick={() => setPresentationMode(true)} className="btn-primary text-xs flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 border-0">
                 🎬 Modo Presentación
               </button>
             )}
           </div>
         </div>
-
-        {/* Settings */}
-        {showSettings && (
-          <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)] flex items-end gap-3 flex-wrap">
-            <div className="flex-1 min-w-48">
-              <p className="label">API Key ElevenLabs</p>
-              <input type="password" value={elevenKey} onChange={e => setElevenKey(e.target.value)} placeholder="sk-..." className="input text-xs" />
-            </div>
-            <button onClick={loadVoices} disabled={!elevenKey || loadingVoices} className="btn-secondary text-xs whitespace-nowrap mb-0.5">{loadingVoices ? '…' : 'Cargar voces'}</button>
-            {voices.length > 0 && (
-              <div className="flex-1 min-w-40">
-                <p className="label">Voz</p>
-                <select value={voiceId} onChange={e => { setVoiceId(e.target.value); localStorage.setItem('elevenlabs_voice', e.target.value) }} className="input text-xs">
-                  {voices.map(v => <option key={v.voice_id} value={v.voice_id}>{v.name}</option>)}
-                </select>
-              </div>
-            )}
-            {hasAudio && <p className="text-xs text-green-500 mb-0.5">✓ Audio listo · sincronización activada</p>}
-            {hasMap && !voiceId && <p className="text-xs text-amber-500 mb-0.5">Configura ElevenLabs para activar el audio</p>}
-          </div>
-        )}
 
         {/* Summary */}
         {summaryOpen && selected?.spanishSummary && (
@@ -203,12 +150,12 @@ export default function IrsVideoPage() {
           </div>
         )}
 
-        {/* Script */}
+        {/* Script + Audio panel */}
         {guion && (
           <div className="flex-shrink-0 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)]">
             <button onClick={() => setScriptOpen(v => !v)} className="w-full flex items-center gap-2 px-4 py-2 hover:bg-[var(--bg-hover)] text-left">
               <span className="text-xs font-medium text-[var(--text-secondary)]">📜 Guion ({guion.split(' ').length} palabras)</span>
-              {hasAudio && <span className="text-xs text-green-500 ml-1">🎙 Audio sincronizado</span>}
+              {hasAudio && <span className="text-xs text-green-500 ml-1">🎙 Audio listo — Angie 🇨🇴</span>}
               <svg className={`w-3.5 h-3.5 text-gray-500 ml-auto transition-transform ${scriptOpen ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
             {scriptOpen && (
@@ -217,7 +164,7 @@ export default function IrsVideoPage() {
                 {audioSrc && (
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     <audio src={audioSrc} controls className="w-56" />
-                    <button onClick={() => { const a = document.createElement('a'); a.href = audioSrc!; a.download = 'guion-irs.mp3'; a.click() }} className="btn-secondary text-xs">⬇ MP3</button>
+                    <button onClick={() => { const a = document.createElement('a'); a.href = audioSrc!; a.download = 'audio-angie.mp3'; a.click() }} className="btn-secondary text-xs">⬇ MP3</button>
                   </div>
                 )}
               </div>
@@ -255,7 +202,7 @@ export default function IrsVideoPage() {
                 <svg className="w-16 h-16 opacity-15" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 10l4.553-2.069A1 1 0 0121 8.82V15a1 1 0 01-.553.894L15 18M15 10l-6 2.7M15 10V18M9 12.7L4.447 10.631A1 1 0 014 9.82V4a1 1 0 011.447-.894L9 5M9 12.7V5m0 7.7l6-2.7" /></svg>
                 <div className="text-center space-y-1.5">
                   <p className="text-sm font-medium text-gray-500">Selecciona una noticia y genera el mapa</p>
-                  <p className="text-xs text-gray-400">Luego genera el audio → activa el Modo Presentación → graba con tu celular</p>
+                  <p className="text-xs text-gray-400">Genera el mapa → audio con Angie → Modo Presentación → graba con tu celular</p>
                 </div>
               </div>
             )}
@@ -275,6 +222,24 @@ export default function IrsVideoPage() {
                   <NodePanel node={focusedNode} allNodes={allNodes} onNavigate={n => setFocusedNode(n)} onClose={() => setFocusedNode(null)} />
                 )}
               </>
+            )}
+
+            {/* Audio status chip */}
+            {hasMap && !hasAudio && !generatingAudio && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white border border-purple-200 shadow-lg rounded-full px-4 py-2 text-xs text-gray-600">
+                <span>Voz: <strong>Angie</strong> · Español Latino 🇨🇴</span>
+              </div>
+            )}
+            {generatingAudio && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-purple-50 border border-purple-300 shadow-lg rounded-full px-4 py-2 text-xs text-purple-700">
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                Generando audio con Angie…
+              </div>
+            )}
+            {hasAudio && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-green-50 border border-green-300 shadow-lg rounded-full px-4 py-2 text-xs text-green-700">
+                ✅ Audio listo — ponlo en AirPods y graba el mapa
+              </div>
             )}
           </div>
         </div>
