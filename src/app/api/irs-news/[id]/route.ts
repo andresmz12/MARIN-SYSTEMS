@@ -82,12 +82,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const client = new Anthropic()
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
+      max_tokens: 500,
       messages: [{
         role: 'user',
-        content: `Eres un experto en impuestos para latinos en EE.UU. Resume esta noticia del IRS en español en 3-4 oraciones claras y directas. Explica qué significa para los contribuyentes y si hay alguna acción que deban tomar. Sin tecnicismos innecesarios.
+        content: `Eres un maestro que explica noticias del IRS a personas que nunca han estudiado impuestos. Tu trabajo es tomar una noticia del IRS y explicarla de forma TAN sencilla que hasta un niño de 5 años pudiera entenderla — sin tecnicismos, sin palabras raras, con ejemplos de la vida cotidiana.
 
-Título: ${article.title}
+Escribe un resumen en español de 4-5 oraciones que:
+1. Diga QUÉ está pasando en palabras simples (como si le contaras a un amigo)
+2. Explique A QUIÉN afecta con un ejemplo concreto ("si eres mesero...", "si tienes un negocio...")
+3. Diga QUÉ tiene que hacer la persona (o si no necesita hacer nada)
+4. Mencione fechas o números importantes si los hay
+
+Usa palabras de todos los días. Si hay que usar un término técnico, explícalo entre paréntesis.
+
+Título de la noticia: ${article.title}
 Contenido: ${articleText}
 
 Responde SOLO con el resumen en español, sin introducción ni formato especial.`,
