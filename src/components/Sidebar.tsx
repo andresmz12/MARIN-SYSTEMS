@@ -98,6 +98,16 @@ const mainNavItems = [
       </svg>
     ),
   },
+  {
+    href: '/content-creator',
+    label: 'Content Creator',
+    icon: (
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4" />
+      </svg>
+    ),
+  },
 ]
 
 interface SidebarProps {
@@ -267,6 +277,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {navLink('/metas', 'Metas', mainNavItems[5].icon)}
           {navLink('/irs-news', 'IRS News', mainNavItems[6].icon)}
           {navLink('/irs-video', 'IRS Video', mainNavItems[7].icon)}
+          {navLink('/content-creator', 'Content Creator', mainNavItems[8].icon)}
         </nav>
 
         {/* Bottom */}
