@@ -4,28 +4,22 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.5',
-}
-
-export interface MapaNode {
-  id: string
-  emoji: string
-  texto: string
-  color: string
-}
 export interface MapaHijo {
   id: string
   texto: string
   color: string
+  explicacion: string
 }
-export interface MapaRama extends MapaNode {
+export interface MapaRama {
+  id: string
+  emoji: string
+  texto: string
+  color: string
+  explicacion: string
   hijos: MapaHijo[]
 }
 export interface MapaJson {
-  centro: MapaNode
+  centro: { id: string; emoji: string; texto: string; color: string; explicacion: string }
   ramas: MapaRama[]
 }
 
@@ -35,17 +29,14 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const news = await prisma.irsNews.findMany({
-      orderBy: { publishedAt: 'desc' },
-      take: 30,
-    })
+    const news = await prisma.irsNews.findMany({ orderBy: { publishedAt: 'desc' }, take: 30 })
     return NextResponse.json(news)
   } catch {
     return NextResponse.json({ error: 'Error al obtener noticias' }, { status: 500 })
   }
 }
 
-/* POST — generate mapa conceptual + guion, then save to DB */
+/* POST — generate educational mind map + narration script */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -59,94 +50,105 @@ export async function POST(req: NextRequest) {
 
   const client = new Anthropic()
 
-  const contextLine = spanishSummary
-    ? `\nContexto en español: ${spanishSummary}`
-    : summary
-    ? `\nResumen: ${summary}`
-    : ''
+  const context = spanishSummary || summary || ''
 
-  const prompt = `Eres un experto en impuestos para la comunidad hispana en EE.UU.
+  const prompt = `Eres un educador financiero que crea contenido para la comunidad hispana en EE.UU. Tu objetivo es explicar temas del IRS de forma clara, útil y memorable — como si fuera una clase sencilla para alguien que nunca ha entendido de impuestos.
 
-A partir de esta noticia del IRS, genera DOS cosas:
+A partir de esta noticia del IRS, genera un mapa mental educativo con explicaciones detalladas.
 
-1. Un mapa mental RICO EN INFORMACIÓN con EXACTAMENTE 5 ramas y 3 hijos por rama.
-   Los textos de los hijos deben ser FRASES COMPLETAS E INFORMATIVAS (no solo palabras sueltas).
-   Incluye números reales, fechas, montos o porcentajes cuando aplique.
+ESTRUCTURA JSON (5 ramas, 3 hijos por rama, con "explicacion" en cada elemento):
 
-Estructura JSON exacta:
 {
-  "centro": { "id": "c", "emoji": "🏛", "texto": "TÍTULO (máx 4 palabras)", "color": "#1e3a5f" },
+  "centro": {
+    "id": "c",
+    "emoji": "🏛",
+    "texto": "TÍTULO CORTO (máx 4 palabras)",
+    "color": "#1e3a5f",
+    "explicacion": "2-3 oraciones que presentan el tema. ¿Qué es? ¿A quién afecta? ¿Por qué importa ahora? Usa lenguaje de conversación, no técnico."
+  },
   "ramas": [
     {
-      "id": "r1", "emoji": "📌", "texto": "Qué es (4-5 palabras)", "color": "#dc2626",
+      "id": "r1",
+      "emoji": "📌",
+      "texto": "Qué es (3-4 palabras)",
+      "color": "#dc2626",
+      "explicacion": "2-3 oraciones que explican esta categoría con un ejemplo concreto. Responde: ¿qué significa esto para alguien normal?",
       "hijos": [
-        { "id": "r1h1", "texto": "frase informativa específica (5-8 palabras)", "color": "#fca5a5" },
-        { "id": "r1h2", "texto": "frase informativa específica (5-8 palabras)", "color": "#fca5a5" },
-        { "id": "r1h3", "texto": "frase informativa específica (5-8 palabras)", "color": "#fca5a5" }
+        { "id": "r1h1", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto. Incluye cifras, fechas o ejemplos reales cuando sea posible." },
+        { "id": "r1h2", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto." },
+        { "id": "r1h3", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto." }
       ]
     },
     {
-      "id": "r2", "emoji": "💡", "texto": "Cómo funciona (4-5 palabras)", "color": "#2563eb",
+      "id": "r2",
+      "emoji": "💡",
+      "texto": "Cómo funciona (3-4 palabras)",
+      "color": "#2563eb",
+      "explicacion": "2-3 oraciones explicando el mecanismo. Usa una analogía cotidiana si ayuda.",
       "hijos": [
-        { "id": "r2h1", "texto": "frase informativa específica (5-8 palabras)", "color": "#93c5fd" },
-        { "id": "r2h2", "texto": "frase informativa específica (5-8 palabras)", "color": "#93c5fd" },
-        { "id": "r2h3", "texto": "frase informativa específica (5-8 palabras)", "color": "#93c5fd" }
+        { "id": "r2h1", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." },
+        { "id": "r2h2", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." },
+        { "id": "r2h3", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." }
       ]
     },
     {
-      "id": "r3", "emoji": "✅", "texto": "Qué debo hacer (4-5 palabras)", "color": "#16a34a",
+      "id": "r3",
+      "emoji": "✅",
+      "texto": "Qué debes hacer (3-4 palabras)",
+      "color": "#16a34a",
+      "explicacion": "2-3 oraciones con los pasos concretos que debe tomar el contribuyente. Sé específico y práctico.",
       "hijos": [
-        { "id": "r3h1", "texto": "acción concreta con detalle (5-8 palabras)", "color": "#86efac" },
-        { "id": "r3h2", "texto": "acción concreta con detalle (5-8 palabras)", "color": "#86efac" },
-        { "id": "r3h3", "texto": "acción concreta con detalle (5-8 palabras)", "color": "#86efac" }
+        { "id": "r3h1", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." },
+        { "id": "r3h2", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." },
+        { "id": "r3h3", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." }
       ]
     },
     {
-      "id": "r4", "emoji": "📅", "texto": "Fechas y montos (4-5 palabras)", "color": "#d97706",
+      "id": "r4",
+      "emoji": "📅",
+      "texto": "Fechas y montos (3-4 palabras)",
+      "color": "#d97706",
+      "explicacion": "2-3 oraciones sobre los números y fechas clave. Di exactamente cuánto y cuándo.",
       "hijos": [
-        { "id": "r4h1", "texto": "fecha o monto específico (5-8 palabras)", "color": "#fcd34d" },
-        { "id": "r4h2", "texto": "fecha o monto específico (5-8 palabras)", "color": "#fcd34d" },
-        { "id": "r4h3", "texto": "fecha o monto específico (5-8 palabras)", "color": "#fcd34d" }
+        { "id": "r4h1", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." },
+        { "id": "r4h2", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." },
+        { "id": "r4h3", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." }
       ]
     },
     {
-      "id": "r5", "emoji": "⚠️", "texto": "Errores comunes (4-5 palabras)", "color": "#7c3aed",
+      "id": "r5",
+      "emoji": "⚠️",
+      "texto": "Errores que evitar (3-4 palabras)",
+      "color": "#7c3aed",
+      "explicacion": "2-3 oraciones sobre los errores más comunes y sus consecuencias. Que la gente diga: 'uy, casi cometo ese error'.",
       "hijos": [
-        { "id": "r5h1", "texto": "error o riesgo específico (5-8 palabras)", "color": "#c4b5fd" },
-        { "id": "r5h2", "texto": "error o riesgo específico (5-8 palabras)", "color": "#c4b5fd" },
-        { "id": "r5h3", "texto": "error o riesgo específico (5-8 palabras)", "color": "#c4b5fd" }
+        { "id": "r5h1", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico y su consecuencia." },
+        { "id": "r5h2", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico." },
+        { "id": "r5h3", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico." }
       ]
     }
   ]
 }
 
-Ejemplos de frases BUENAS (informativas):
-✓ "Aplica a trabajadores independientes 1099"
-✓ "Multa de hasta $5,000 por no reportar"
-✓ "Presentar antes del 15 de octubre"
-✓ "Descargar formulario W-9 actualizado"
-
-Ejemplos de frases MALAS (demasiado genéricas):
-✗ "Más información"
-✗ "Ver detalles"
-✗ "Aplica a todos"
-
-2. Un guion de 50-65 segundos en español latino conversacional.
-   - Gancho impactante al inicio (¿Sabías que...? / ¡Atención si eres...! / Esto te puede costar...)
-   - Menciona cifras, fechas y hechos concretos de la noticia
-   - Cubre las 5 áreas del mapa en orden
-   - Termina con llamada a la acción específica y directa
-   - Sin muletillas, sin "básicamente", sin "en resumen"
+REGLAS para las explicaciones:
+- Lenguaje de conversación, como hablarle a un amigo
+- Sin jerga técnica — si usas un término técnico, explícalo inmediatamente
+- Incluye ejemplos reales: "Por ejemplo, si eres plomero independiente..."
+- Incluye cifras concretas cuando las haya: "$500 de multa", "15 de abril", "30 días"
+- Cada explicación debe responder: "¿esto a mí qué me importa?"
 
 NOTICIA:
-Título: ${title}${contextLine}
+Título: ${title}
+${context ? `Contexto: ${context}` : ''}
 
-Responde SOLO con JSON válido (sin markdown, sin texto extra):
+También genera un guion narrado de 60-75 segundos que recorra los 5 temas del mapa, en español latino conversacional, con gancho al inicio y llamada a la acción al final.
+
+Responde SOLO con JSON válido (sin markdown):
 { "mapaJson": {...}, "guionCompleto": "..." }`
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 3000,
+    max_tokens: 4000,
     messages: [{ role: 'user', content: prompt }],
   })
 
@@ -160,7 +162,7 @@ Responde SOLO con JSON válido (sin markdown, sin texto extra):
     return NextResponse.json({ error: 'Error al parsear respuesta de IA', raw }, { status: 500 })
   }
 
-  // Save to DB (non-fatal if fails)
+  // Save to history (non-fatal)
   try {
     await prisma.irsVideoContent.create({
       data: {
@@ -170,7 +172,7 @@ Responde SOLO con JSON válido (sin markdown, sin texto extra):
         publishedAt: new Date(),
       },
     })
-  } catch { /* ignore — return result anyway */ }
+  } catch { /* ignore */ }
 
   return NextResponse.json(result)
 }
