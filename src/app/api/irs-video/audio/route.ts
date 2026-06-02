@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-const ANGIE_VOICE_ID = 'YPh7OporwNAJ28F5IQrm'
+const VOICE_ID = '9AHim1BsYT5o3WGDtPE0'
 
 const VOICE_SETTINGS = {
   stability: 0.5,
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   let resp: Response
   try {
-    resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ANGIE_VOICE_ID}`, {
+    resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

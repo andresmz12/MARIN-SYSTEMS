@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 60
 
-const ANGIE_VOICE_ID = 'YPh7OporwNAJ28F5IQrm'
+const VOICE_ID = '9AHim1BsYT5o3WGDtPE0'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   let audioData: string
   try {
-    const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ANGIE_VOICE_ID}`, {
+    const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

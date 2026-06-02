@@ -240,7 +240,7 @@ export default function ContentCreatorPage() {
               <button onClick={generateAudio} disabled={generatingAudio} className="btn-secondary text-xs flex items-center gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50">
                 {generatingAudio
                   ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</>
-                  : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio con Angie'}`}
+                  : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio con Andrés'}`}
               </button>
             )}
             {hasMap && (
@@ -267,7 +267,7 @@ export default function ContentCreatorPage() {
           <div className="flex-shrink-0 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)]">
             <button onClick={() => setScriptOpen(v => !v)} className="w-full flex items-center gap-2 px-4 py-2 hover:bg-[var(--bg-hover)] text-left">
               <span className="text-xs font-medium text-[var(--text-secondary)]">📜 Guion ({guion.split(' ').length} palabras)</span>
-              {hasAudio && <span className="text-xs text-green-500 ml-1">🎙 Audio listo — Angie 🇨🇴</span>}
+              {hasAudio && <span className="text-xs text-green-500 ml-1">🎙 Audio listo — Andrés</span>}
               <svg className={`w-3.5 h-3.5 text-gray-500 ml-auto transition-transform ${scriptOpen ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
