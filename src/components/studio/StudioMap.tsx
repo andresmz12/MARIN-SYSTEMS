@@ -32,10 +32,10 @@ const DRAW_COLORS = ['#f59e0b', '#ef4444', '#22c55e', '#3b82f6', '#a855f7', '#1a
 
 // Layout constants (relative to minDim)
 const K_BRANCH_DIST = 0.26   // center → branch circle center
-const K_CHILD_DIST  = 0.44   // center → child pill center
+const K_CHILD_DIST  = 0.52   // center → child pill center
 const K_CENTER_R    = 0.090  // center circle radius
 const K_BRANCH_R    = 0.072  // branch circle radius
-const CHILD_W       = 128    // child pill width (fixed px, scales via zoom)
+const CHILD_W       = 132    // child pill width (fixed px, scales via zoom)
 const CHILD_LINE_H  = 21     // child pill line height
 
 function polarToXY(angle: number, r: number) {
@@ -84,10 +84,10 @@ export default function StudioMap({ mapaJson }: Props) {
       if (!autoFitDone.current && width > 100) {
         autoFitDone.current = true
         const minD = Math.min(w, h)
-        // Furthest content point: child pill center + half pill height + margin
+        // Furthest content: child pill center + half pill diagonal + margin
         const childDist = minD * K_CHILD_DIST
-        const contentR  = childDist + CHILD_W * 0.5 + 24
-        const targetR   = Math.min(w, h) / 2 - 24
+        const contentR  = childDist + CHILD_W * 0.55 + 20
+        const targetR   = Math.min(w, h) / 2 - 30
         setZoom(Math.min(1, targetR / contentR))
       }
     })
@@ -177,8 +177,9 @@ export default function StudioMap({ mapaJson }: Props) {
   const CDIST     = minDim * K_CHILD_DIST
   const CR        = minDim * K_CENTER_R
   const BR        = minDim * K_BRANCH_R
-  // Spread: tighter for more branches so children don't cross adjacent sectors
-  const SPREAD    = branchCount <= 4 ? 0.40 : 0.28
+  // Spread 0.40 rad per step: at CDIST*0.52, same-branch arc = 0.40*CDIST > CHILD_W
+  // and adjacent-branch gap for 5 branches = (72°-46°)*CDIST ≈ 183px > CHILD_W ✓
+  const SPREAD = 0.40
 
   const tfm = `translate(${(size.w / 2 + pan.x).toFixed(1)},${(size.h / 2 + pan.y).toFixed(1)}) scale(${zoom})`
 
@@ -214,19 +215,28 @@ export default function StudioMap({ mapaJson }: Props) {
           {ramas.map((branch, i) => {
             const a  = startAngle + i * angleStep
             const bp = polarToXY(a, BDIST)
+            // Unit vector pointing outward from center through this branch
+            const outX = bp.x / BDIST
+            const outY = bp.y / BDIST
+            // Bezier tension: control point goes outward from branch ~40% of branch→child distance
+            const tension = (CDIST - BDIST) * 0.45
+            const qx = bp.x + outX * tension
+            const qy = bp.y + outY * tension
             return (
               <g key={`ln${i}`}>
-                {/* center → branch */}
-                <line x1={0} y1={0} x2={bp.x} y2={bp.y}
-                  stroke={branch.color} strokeWidth={2.5}
-                  strokeOpacity={0.4} strokeDasharray="7 5" />
-                {/* branch → each child */}
+                {/* center → branch: solid spoke */}
+                <line x1={outX * (minDim * K_CENTER_R * 1.05)} y1={outY * (minDim * K_CENTER_R * 1.05)}
+                  x2={bp.x - outX * BR} y2={bp.y - outY * BR}
+                  stroke={branch.color} strokeWidth={2.5} strokeOpacity={0.5} />
+                {/* branch → each child: curved bezier */}
                 {(branch.hijos ?? []).map((_, j) => {
                   const ca = a + (j - (branch.hijos.length - 1) / 2) * SPREAD
                   const cp = polarToXY(ca, CDIST)
                   return (
-                    <line key={j} x1={bp.x} y1={bp.y} x2={cp.x} y2={cp.y}
-                      stroke={branch.color} strokeWidth={1.5} strokeOpacity={0.35} />
+                    <path key={j}
+                      d={`M ${bp.x.toFixed(1)} ${bp.y.toFixed(1)} Q ${qx.toFixed(1)} ${qy.toFixed(1)} ${cp.x.toFixed(1)} ${cp.y.toFixed(1)}`}
+                      stroke={branch.color} strokeWidth={1.5} strokeOpacity={0.4}
+                      fill="none" />
                   )
                 })}
               </g>
