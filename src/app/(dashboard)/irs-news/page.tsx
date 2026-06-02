@@ -29,6 +29,7 @@ export default function IrsNewsPage() {
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
   const [fetchResult, setFetchResult] = useState<{ added: number; skipped: number } | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [selectedNews, setSelectedNews] = useState<IrsNewsItem | null>(null)
   const [generating, setGenerating] = useState<Platform | null>(null)
   const [generated, setGenerated] = useState<GeneratedContent | null>(null)
@@ -49,11 +50,18 @@ export default function IrsNewsPage() {
   async function handleFetch() {
     setFetching(true)
     setFetchResult(null)
-    const res = await fetch('/api/irs-news/fetch', { method: 'POST' })
-    if (res.ok) {
+    setFetchError(null)
+    try {
+      const res = await fetch('/api/irs-news/fetch', { method: 'POST' })
       const data = await res.json()
-      setFetchResult(data)
-      await loadNews()
+      if (!res.ok) {
+        setFetchError(data?.error ?? `Error ${res.status}`)
+      } else {
+        setFetchResult(data)
+        await loadNews()
+      }
+    } catch (e) {
+      setFetchError('Error de red al contactar el servidor')
     }
     setFetching(false)
   }
@@ -233,6 +241,12 @@ export default function IrsNewsPage() {
           <p className="text-sm text-green-400">
             ✓ {fetchResult.added} noticia{fetchResult.added !== 1 ? 's' : ''} nueva{fetchResult.added !== 1 ? 's' : ''} agregada{fetchResult.added !== 1 ? 's' : ''} · {fetchResult.skipped} omitida{fetchResult.skipped !== 1 ? 's' : ''}
           </p>
+        </div>
+      )}
+
+      {fetchError && (
+        <div className="card border-red-500/30 bg-red-500/10">
+          <p className="text-sm text-red-400">⚠ {fetchError}</p>
         </div>
       )}
 
