@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MindMap, NodePanel, PresentationOverlay, MapaJson, FocusedNode, Alignment, extractSectionTimestamps } from '@/components/video-creator/MindMapSVG'
+import { MindMap, NodePanel, PresentationOverlay, MapaJson, FocusedNode, Alignment } from '@/components/video-creator/MindMapSVG'
 import { useToast } from '@/components/ui/Toast'
 
 /* ── Types ── */
@@ -123,19 +123,13 @@ export default function ContentCreatorPage() {
       const res = await fetch('/api/irs-video/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanGuion, withTimestamps: true }),
+        body: JSON.stringify({ text: cleanGuion }),
       })
       if (res.ok) {
-        const data: { audioBase64: string; alignment: Alignment } = await res.json()
-        const binary = atob(data.audioBase64)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        const blob = new Blob([bytes], { type: 'audio/mpeg' })
-        const url = URL.createObjectURL(blob)
-        setAudioSrc(url)
-        setAlignment(data.alignment)
-        const ts = extractSectionTimestamps(data.alignment, guion, MARKERS)
-        setSectionTimestamps(ts)
+        const blob = await res.blob()
+        setAudioSrc(URL.createObjectURL(blob))
+        setAlignment(null)
+        setSectionTimestamps([])
         toast.success('Audio listo — ponlo en AirPods y graba')
       } else {
         const err = await res.json().catch(() => ({})) as { error?: string }
