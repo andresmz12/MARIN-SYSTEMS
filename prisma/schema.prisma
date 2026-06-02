@@ -428,13 +428,14 @@ model CompanyRevenue {
 }
 
 model IrsNews {
-  id          String   @id @default(cuid())
-  title       String
-  summary     String
-  url         String   @unique
-  publishedAt DateTime
-  used        Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  title          String
+  summary        String
+  spanishSummary String?
+  url            String   @unique
+  publishedAt    DateTime
+  used           Boolean  @default(false)
+  createdAt      DateTime @default(now())
 }
 
 model IrsVideoContent {
