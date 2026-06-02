@@ -62,6 +62,6 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? ''
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? ''
   return NextResponse.json({ url: `${baseUrl}/studio/${studioSession.token}` })
 }
