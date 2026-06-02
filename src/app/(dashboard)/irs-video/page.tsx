@@ -197,10 +197,11 @@ export default function IrsVideoPage() {
   const [audioReady, setAudioReady] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  /* Load saved ElevenLabs key */
+  /* Load saved ElevenLabs key + auto-load news on mount */
   useEffect(() => {
     const saved = localStorage.getItem('elevenlabs_key')
     if (saved) setElevenKey(saved)
+    loadNoticias()
   }, [])
 
   async function loadNoticias() {

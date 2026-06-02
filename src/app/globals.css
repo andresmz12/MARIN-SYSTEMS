@@ -58,10 +58,12 @@ body {
 
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm;
+    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none;
   }
 
   .btn-secondary {
     @apply font-medium px-4 py-2 rounded-lg transition-colors text-sm;
+    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none;
     background-color: var(--bg-border);
     color: var(--text-primary);
   }
