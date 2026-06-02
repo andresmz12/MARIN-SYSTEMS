@@ -4,17 +4,36 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { XMLParser } from 'fast-xml-parser'
 
-const IRS_RSS_URL = 'https://www.irs.gov/rss/newsroom.xml'
+const IRS_RSS_URLS = [
+  'https://www.irs.gov/rss/newsroom.xml',
+  'https://www.irs.gov/rss/news-releases.xml',
+  'https://www.irs.gov/rss/irs-news.xml',
+]
 
 function extractText(val: unknown): string {
   if (typeof val === 'string') return val.trim()
   if (typeof val === 'number') return String(val)
   if (val && typeof val === 'object') {
     const obj = val as Record<string, unknown>
-    // fast-xml-parser wraps text nodes as { '#text': '...' }
     if ('#text' in obj) return String(obj['#text']).trim()
   }
   return ''
+}
+
+async function fetchIrsRss(): Promise<string> {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (compatible; MarinSystems/1.0)',
+    'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+  }
+  for (const url of IRS_RSS_URLS) {
+    try {
+      const res = await fetch(url, { headers, next: { revalidate: 0 } })
+      if (res.ok) return await res.text()
+    } catch {
+      // try next URL
+    }
+  }
+  throw new Error('Ningún feed del IRS está disponible en este momento')
 }
 
 export async function POST() {
@@ -23,15 +42,7 @@ export async function POST() {
 
   let xml: string
   try {
-    const res = await fetch(IRS_RSS_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MarinSystems/1.0; +https://marin-systems.com)',
-        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-      },
-      next: { revalidate: 0 },
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    xml = await res.text()
+    xml = await fetchIrsRss()
   } catch (err) {
     return NextResponse.json(
       { error: `No se pudo obtener el feed del IRS: ${err instanceof Error ? err.message : err}` },

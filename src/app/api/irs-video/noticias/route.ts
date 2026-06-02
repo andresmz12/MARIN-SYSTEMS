@@ -4,7 +4,23 @@ import { authOptions } from '@/lib/auth'
 import { XMLParser } from 'fast-xml-parser'
 import Anthropic from '@anthropic-ai/sdk'
 
-const IRS_RSS = 'https://www.irs.gov/rss/newsroom.xml'
+const IRS_RSS_URLS = [
+  'https://www.irs.gov/rss/newsroom.xml',
+  'https://www.irs.gov/rss/news-releases.xml',
+  'https://www.irs.gov/rss/irs-news.xml',
+]
+
+async function fetchIrsRss(): Promise<string> {
+  for (const url of IRS_RSS_URLS) {
+    try {
+      const res = await fetch(url, { next: { revalidate: 0 } })
+      if (res.ok) return await res.text()
+    } catch {
+      // try next URL
+    }
+  }
+  throw new Error('Ningún feed del IRS está disponible')
+}
 
 export interface RssItem {
   title: string
@@ -39,9 +55,7 @@ export async function GET() {
 
   let xml: string
   try {
-    const res = await fetch(IRS_RSS, { next: { revalidate: 0 } })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    xml = await res.text()
+    xml = await fetchIrsRss()
   } catch {
     return NextResponse.json({ error: 'No se pudo obtener el feed del IRS' }, { status: 502 })
   }
