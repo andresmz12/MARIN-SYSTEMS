@@ -129,12 +129,28 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
     return () => ro.disconnect()
   }, [])
 
-  // ── Wheel zoom ──
+  // ── Wheel zoom (zoom toward cursor) ──
   useEffect(() => {
     const el = svgRef.current; if (!el) return
     const fn = (e: WheelEvent) => {
       e.preventDefault()
-      setZoom(z => Math.max(0.2, Math.min(4, z * (e.deltaY > 0 ? 0.93 : 1.07))))
+      const factor  = e.deltaY > 0 ? 0.93 : 1.07
+      const oldZoom = zoomRef.current
+      const newZoom = Math.max(0.2, Math.min(4, oldZoom * factor))
+      const rect    = el.getBoundingClientRect()
+      // cursor relative to SVG viewport center
+      const cx = e.clientX - rect.left - rect.width  / 2
+      const cy = e.clientY - rect.top  - rect.height / 2
+      // keep the point under cursor fixed
+      const p = panRef.current
+      const newPan = {
+        x: cx - (cx - p.x) * (newZoom / oldZoom),
+        y: cy - (cy - p.y) * (newZoom / oldZoom),
+      }
+      panRef.current  = newPan
+      zoomRef.current = newZoom
+      setPan(newPan)
+      setZoom(newZoom)
     }
     el.addEventListener('wheel', fn, { passive: false })
     return () => el.removeEventListener('wheel', fn)
@@ -190,7 +206,8 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
       curPts.current = [d]; setCurPath(d)
     } else {
       isDragging.current = true
-      dragStart.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }
+      // use ref to avoid stale state when autopan was running
+      dragStart.current = { x: e.clientX, y: e.clientY, px: panRef.current.x, py: panRef.current.y }
     }
   }
 
@@ -200,8 +217,24 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
       isDragging.current = false; isDrawing.current = false
       const pts  = Array.from(activePtr.current.values())
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
-      if (lastPinch.current !== null)
-        setZoom(z => Math.max(0.2, Math.min(4, z * dist / lastPinch.current!)))
+      if (lastPinch.current !== null && svgRef.current) {
+        const factor  = dist / lastPinch.current
+        const oldZoom = zoomRef.current
+        const newZoom = Math.max(0.2, Math.min(4, oldZoom * factor))
+        const rect    = svgRef.current.getBoundingClientRect()
+        // pinch midpoint relative to SVG viewport center
+        const cx = (pts[0].x + pts[1].x) / 2 - rect.left - rect.width  / 2
+        const cy = (pts[0].y + pts[1].y) / 2 - rect.top  - rect.height / 2
+        const p  = panRef.current
+        const newPan = {
+          x: cx - (cx - p.x) * (newZoom / oldZoom),
+          y: cy - (cy - p.y) * (newZoom / oldZoom),
+        }
+        panRef.current  = newPan
+        zoomRef.current = newZoom
+        setPan(newPan)
+        setZoom(newZoom)
+      }
       lastPinch.current = dist; return
     }
     lastPinch.current = null
@@ -339,7 +372,7 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
         width={size.w} height={size.h}
         overflow="visible"
         style={{ position: 'absolute', inset: 0, touchAction: 'none', userSelect: 'none',
-                 cursor: drawMode ? 'crosshair' : 'grab' }}
+                 cursor: drawMode ? 'crosshair' : isDragging.current ? 'grabbing' : 'grab' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -357,7 +390,7 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
         <rect width={size.w} height={size.h} fill="#fafaf8" />
         <rect width={size.w} height={size.h} fill="url(#sdots)" opacity={0.3} />
 
-        <g transform={tfm}>
+        <g transform={tfm} style={{ willChange: 'transform' }}>
 
           {/* ── Connectors ─────────────────────────────── */}
           {bNodes.map(({ br, m: bm, hijos, spread }, i) => {
