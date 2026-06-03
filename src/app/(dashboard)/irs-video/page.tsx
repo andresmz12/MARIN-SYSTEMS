@@ -63,7 +63,7 @@ export default function IrsVideoPage() {
       const res = await fetch('/api/irs-video/noticias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary }),
+        body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary, newsUrl: item.url }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -125,6 +125,7 @@ export default function IrsVideoPage() {
           tema: noticias[selectedIdx]?.title ?? 'IRS News',
           redSocial: 'TikTok',
           duracion: '60s',
+          irsNewsUrl: noticias[selectedIdx]?.url,
         }),
       })
       const body = await res.json() as { url?: string; error?: string }

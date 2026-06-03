@@ -3,9 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
-import { writeFile, unlink } from 'fs/promises'
+import { writeFile, unlink, readFile } from 'fs/promises'
 import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHash } from 'crypto'
 
 export const maxDuration = 120
 
@@ -215,14 +215,31 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ELEVENLABS_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ELEVENLABS_API_KEY no configurado' }, { status: 500 })
 
-  const { tema, redSocial, duracion, mapaJson: mapaJsonInput, guion: guionInput } = await req.json() as {
+  const { tema, redSocial, duracion, mapaJson: mapaJsonInput, guion: guionInput, irsNewsUrl } = await req.json() as {
     tema: string; redSocial: string; duracion: string
-    mapaJson?: any; guion?: string
+    mapaJson?: any; guion?: string; irsNewsUrl?: string
   }
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
 
-  // Rate limit: 20 studio links per user per 24h
-  const userId = session.user.id
+  const userId  = session.user.id
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? ''
+
+  // ─── Content creator dedup (before rate limit — no new session created) ─
+  if (!irsNewsUrl) {
+    const temaHash = createHash('md5')
+      .update(`${tema}-${redSocial ?? 'TikTok'}-${duracion ?? '60s'}`)
+      .digest('hex')
+    const existing = await prisma.studioSession.findFirst({
+      where: { userId, temaHash, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: { token: true, audioPath: true },
+    })
+    if (existing && (!existing.audioPath || existsSync(existing.audioPath))) {
+      return NextResponse.json({ url: `${baseUrl}/studio/${existing.token}` })
+    }
+  }
+
+  // ─── Rate limit ───────────────────────────────────────────────
   const recent = await prisma.studioSession.count({
     where: { userId, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
   })
@@ -230,16 +247,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Límite diario alcanzado (${DAILY_LIMIT} por día)` }, { status: 429 })
   }
 
-  // Cleanup expired sessions in the background (non-blocking)
   cleanupExpired()
 
-  // Step 1: Use provided map or generate with Claude
+  // ─── Step 1: Map + guion ──────────────────────────────────────
   let mapaJson: any
   let guionCompleto: string
   let timestamps: any
+  let cachedAudioPath: string | undefined
 
-  if (mapaJsonInput && guionInput) {
-    // Skip Claude — use the map already shown to the user
+  if (irsNewsUrl) {
+    // IRS path: prefer DB cache, fall back to page-provided values
+    const cached = await prisma.irsNoticia.findUnique({ where: { guid: irsNewsUrl } })
+    if (cached?.mapaJson && cached.resumen) {
+      mapaJson      = cached.mapaJson
+      guionCompleto = cached.resumen
+      timestamps    = cached.timestamps ?? calcularTimestamps(mapaJson, guionCompleto)
+      const irsAudio = `/tmp/irs-audio-${createHash('md5').update(irsNewsUrl).digest('hex')}.mp3`
+      if (existsSync(irsAudio)) cachedAudioPath = irsAudio
+    } else {
+      mapaJson      = mapaJsonInput
+      guionCompleto = guionInput ?? ''
+      timestamps    = calcularTimestamps(mapaJson, guionCompleto)
+    }
+  } else if (mapaJsonInput && guionInput) {
     mapaJson      = mapaJsonInput
     guionCompleto = guionInput
     timestamps    = calcularTimestamps(mapaJson, guionCompleto)
@@ -260,40 +290,59 @@ export async function POST(req: NextRequest) {
     timestamps    = calcularTimestamps(mapaJson, guionCompleto)
   }
 
-  // Step 2: ElevenLabs — get audio + real character-level timestamps
+  // ─── Step 2: Audio ────────────────────────────────────────────
   let audioBuffer: Buffer
-  try {
-    const result = await generarAudio(apiKey, guionCompleto)
-    audioBuffer  = result.buffer
-    timestamps   = calcularTimestamps(mapaJson, guionCompleto, result.alignment)
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Error generando audio' },
-      { status: 503 },
-    )
+  if (cachedAudioPath) {
+    audioBuffer = await readFile(cachedAudioPath)
+  } else {
+    try {
+      const result = await generarAudio(apiKey, guionCompleto)
+      audioBuffer  = result.buffer
+      timestamps   = calcularTimestamps(mapaJson, guionCompleto, result.alignment)
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Error generando audio' },
+        { status: 503 },
+      )
+    }
   }
 
-  // Step 3: Save audio to /tmp, generate token first
+  // ─── Step 3: Save audio ───────────────────────────────────────
   const token     = randomUUID().replace(/-/g, '')
   const audioPath = `/tmp/audio-${token}.mp3`
   await writeFile(audioPath, audioBuffer)
 
-  // Step 4: Save to DB
+  // ─── Step 4: Save session ─────────────────────────────────────
+  const temaHash = !irsNewsUrl
+    ? createHash('md5').update(`${tema}-${redSocial ?? 'TikTok'}-${duracion ?? '60s'}`).digest('hex')
+    : undefined
+
   await prisma.studioSession.create({
     data: {
-      token,
-      userId,
-      tema,
+      token, userId, tema,
       redSocial: redSocial ?? 'TikTok',
       duracion:  duracion  ?? '60s',
-      mapaJson,
-      guion: guionCompleto,
-      audioPath,
-      timestamps,
+      mapaJson, guion: guionCompleto, audioPath, timestamps,
+      temaHash,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
   })
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? ''
+  // ─── Step 5: Persist IRS audio cache (fire-and-forget) ────────
+  if (irsNewsUrl && !cachedAudioPath) {
+    const irsAudio = `/tmp/irs-audio-${createHash('md5').update(irsNewsUrl).digest('hex')}.mp3`
+    writeFile(irsAudio, audioBuffer).then(() =>
+      prisma.irsNoticia.upsert({
+        where: { guid: irsNewsUrl },
+        create: {
+          guid: irsNewsUrl, titulo: tema.slice(0, 200), descripcion: '',
+          resumen: guionCompleto, mapaJson: mapaJson as object,
+          audioPath: irsAudio, timestamps, pubDate: new Date(),
+        },
+        update: { audioPath: irsAudio, timestamps },
+      })
+    ).catch(() => {})
+  }
+
   return NextResponse.json({ url: `${baseUrl}/studio/${token}` })
 }

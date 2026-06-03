@@ -41,12 +41,18 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { title, summary, spanishSummary } = await req.json() as {
-    title: string
-    summary: string
-    spanishSummary?: string
+  const { title, summary, spanishSummary, newsUrl } = await req.json() as {
+    title: string; summary: string; spanishSummary?: string; newsUrl?: string
   }
   if (!title) return NextResponse.json({ error: 'title requerido' }, { status: 400 })
+
+  // ─── Cache check ────────────────────────────────────────────────
+  if (newsUrl) {
+    const cached = await prisma.irsNoticia.findUnique({ where: { guid: newsUrl } })
+    if (cached?.mapaJson) {
+      return NextResponse.json({ mapaJson: cached.mapaJson, guionCompleto: cached.resumen })
+    }
+  }
 
   const client = new Anthropic()
 
@@ -179,6 +185,25 @@ Responde SOLO con JSON válido (sin markdown):
     result = match ? JSON.parse(match[0]) : { mapaJson: null, guionCompleto: raw }
   } catch {
     return NextResponse.json({ error: 'Error al parsear respuesta de IA', raw }, { status: 500 })
+  }
+
+  // ─── Save to IrsNoticia cache (non-fatal) ──────────────────────
+  if (newsUrl) {
+    prisma.irsNoticia.upsert({
+      where: { guid: newsUrl },
+      create: {
+        guid: newsUrl,
+        titulo: title.slice(0, 200),
+        descripcion: (summary || '').slice(0, 1000),
+        resumen: result.guionCompleto,
+        mapaJson: result.mapaJson as object,
+        pubDate: new Date(),
+      },
+      update: {
+        resumen: result.guionCompleto,
+        mapaJson: result.mapaJson as object,
+      },
+    }).catch(() => {})
   }
 
   // Save to history (non-fatal)

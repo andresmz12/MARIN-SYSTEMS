@@ -478,6 +478,22 @@ model StudioSession {
   audioData  String?
   audioPath  String?
   timestamps Json?
+  temaHash   String?
   expiresAt  DateTime
   createdAt DateTime @default(now())
+
+  @@index([userId, temaHash])
+}
+
+model IrsNoticia {
+  id          String   @id @default(cuid())
+  guid        String   @unique
+  titulo      String
+  descripcion String
+  resumen     String
+  mapaJson    Json?
+  audioPath   String?
+  timestamps  Json?
+  pubDate     DateTime
+  createdAt   DateTime @default(now())
 }
