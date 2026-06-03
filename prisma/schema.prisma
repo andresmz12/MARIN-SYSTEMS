@@ -469,6 +469,7 @@ model IrsVideoContent {
 model StudioSession {
   id        String   @id @default(cuid())
   token     String   @unique @default(cuid())
+  userId    String?
   tema      String
   redSocial String
   duracion  String

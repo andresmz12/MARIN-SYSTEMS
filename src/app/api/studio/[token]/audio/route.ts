@@ -4,7 +4,7 @@ import { createReadStream, existsSync } from 'fs'
 import { stat } from 'fs/promises'
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { token: string } }
 ) {
   const { token } = params
@@ -16,11 +16,29 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   if (session.expiresAt < new Date()) return NextResponse.json({ error: 'expired' }, { status: 410 })
 
-  // Prefer file stream; fall back to legacy base64 in DB
+  // ── File stream (new sessions) ──
   if (session.audioPath && existsSync(session.audioPath)) {
     const { size } = await stat(session.audioPath)
-    const stream   = createReadStream(session.audioPath)
-    return new NextResponse(stream as any, {
+    const range    = req.headers.get('range')
+
+    if (range) {
+      const m     = range.match(/bytes=(\d*)-(\d*)/)
+      const start = m && m[1] ? parseInt(m[1]) : 0
+      const end   = m && m[2] ? parseInt(m[2]) : size - 1
+      const len   = end - start + 1
+      return new NextResponse(createReadStream(session.audioPath, { start, end }) as any, {
+        status: 206,
+        headers: {
+          'Content-Type':   'audio/mpeg',
+          'Content-Length': String(len),
+          'Content-Range':  `bytes ${start}-${end}/${size}`,
+          'Accept-Ranges':  'bytes',
+          'Cache-Control':  'public, max-age=3600',
+        },
+      })
+    }
+
+    return new NextResponse(createReadStream(session.audioPath) as any, {
       headers: {
         'Content-Type':   'audio/mpeg',
         'Content-Length': String(size),
@@ -30,7 +48,7 @@ export async function GET(
     })
   }
 
-  // Legacy: serve from base64 stored in DB
+  // ── Legacy base64 fallback ──
   if (session.audioData) {
     const buf = Buffer.from(session.audioData, 'base64')
     return new NextResponse(buf, {

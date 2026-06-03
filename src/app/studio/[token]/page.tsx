@@ -26,6 +26,14 @@ interface SessionData {
 
 type State = 'loading' | 'ready' | 'error'
 
+function isValidMapa(mapa: any): boolean {
+  return !!(
+    mapa?.centro?.id && mapa?.centro?.color &&
+    Array.isArray(mapa?.ramas) && mapa.ramas.length > 0 &&
+    mapa.ramas.every((r: any) => r?.id && r?.color && Array.isArray(r?.hijos))
+  )
+}
+
 export default function StudioPage({ params }: { params: { token: string } }) {
   const { token } = params
   const [state,    setState]    = useState<State>('loading')
@@ -33,6 +41,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const [errorMsg, setErrorMsg] = useState('')
 
   const [playing,      setPlaying]      = useState(false)
+  const [audioReady,   setAudioReady]   = useState(false)
   const [showGuion,    setShowGuion]    = useState(false)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [progreso,     setProgreso]     = useState(0)
@@ -48,15 +57,20 @@ export default function StudioPage({ params }: { params: { token: string } }) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error === 'expired' ? 'Este enlace ha expirado.' : 'Contenido no encontrado.')
         }
-        return res.json() as Promise<SessionData>
+        return res.json()
       })
-      .then((d) => { setData(d); setState('ready') })
+      .then((d) => {
+        if (!isValidMapa(d?.mapaJson)) throw new Error('El mapa de este studio es inválido.')
+        d.timestamps = d.timestamps ?? []
+        setData(d as SessionData)
+        setState('ready')
+      })
       .catch((e) => { setErrorMsg(e.message); setState('error') })
   }, [token])
 
   function loop() {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !tsRef.current.length) return
     const t = audio.currentTime
     const active = tsRef.current.find(n => t >= n.inicio && t < n.fin) ?? null
     setActiveNodeId(active?.id ?? null)
@@ -77,9 +91,10 @@ export default function StudioPage({ params }: { params: { token: string } }) {
     }))
   }
 
-  function handlePlay()  { rafRef.current = requestAnimationFrame(loop); setPlaying(true)  }
-  function handlePause() { cancelAnimationFrame(rafRef.current); setPlaying(false) }
-  function handleEnded() {
+  function handleCanPlay()  { setAudioReady(true) }
+  function handlePlay()     { rafRef.current = requestAnimationFrame(loop); setPlaying(true) }
+  function handlePause()    { cancelAnimationFrame(rafRef.current); setPlaying(false) }
+  function handleEnded()    {
     cancelAnimationFrame(rafRef.current)
     setActiveNodeId(null)
     setProgreso(0)
@@ -88,7 +103,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
 
   function toggleAudio() {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !audioReady) return
     audio.paused ? audio.play() : audio.pause()
   }
 
@@ -121,12 +136,13 @@ export default function StudioPage({ params }: { params: { token: string } }) {
     <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden', colorScheme: 'light' }}>
       <style>{`html,body{background:#fafaf8 !important;color-scheme:light !important;}`}</style>
 
-      {/* Hidden audio element — preloads immediately */}
+      {/* Hidden audio element — preloads on mount */}
       <audio
         ref={audioRef}
         src={`/api/studio/${token}/audio`}
         preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
+        onCanPlay={handleCanPlay}
         onPlay={handlePlay}
         onPause={handlePause}
         onEnded={handleEnded}
@@ -138,19 +154,25 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         <StudioMap mapaJson={data!.mapaJson} activeNodeId={activeNodeId} />
       </div>
 
-      {/* Play/pause */}
-      <button onClick={toggleAudio}
+      {/* Play/pause — dimmed while audio not ready */}
+      <button
+        onClick={toggleAudio}
+        disabled={!audioReady}
         style={{
           position: 'fixed', bottom: 32, right: 24,
           width: 64, height: 64, borderRadius: '50%',
           background: playing ? '#ef4444' : centerColor,
-          border: 'none', cursor: 'pointer',
+          border: 'none', cursor: audioReady ? 'pointer' : 'default',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 28, boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
-          transition: 'background 0.2s', zIndex: 50,
+          transition: 'background 0.2s, opacity 0.2s',
+          opacity: audioReady ? 1 : 0.45,
+          zIndex: 50,
         }}
-        title={playing ? 'Pausar' : 'Reproducir'}>
-        {playing ? '⏸' : '▶️'}
+        title={audioReady ? (playing ? 'Pausar' : 'Reproducir') : 'Cargando audio…'}>
+        {!audioReady
+          ? <span style={{ width: 22, height: 22, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+          : playing ? '⏸' : '▶️'}
       </button>
 
       {/* Script toggle */}
@@ -201,6 +223,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         }} />
       </div>
 
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

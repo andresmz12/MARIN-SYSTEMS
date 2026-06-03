@@ -3,13 +3,31 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
-import { writeFile } from 'fs/promises'
+import { writeFile, unlink } from 'fs/promises'
+import { existsSync } from 'fs'
 import { randomUUID } from 'crypto'
 
 export const maxDuration = 120
 
 const VOICE_ID   = '9AHim1BsYT5o3WGDtPE0'
 const CLAUDE_SYS = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
+const DAILY_LIMIT = 20
+
+// ─── Cleanup expired sessions (fire-and-forget) ───────────────
+async function cleanupExpired() {
+  try {
+    const expired = await prisma.studioSession.findMany({
+      where: { expiresAt: { lt: new Date() } },
+      select: { id: true, audioPath: true },
+    })
+    for (const s of expired) {
+      if (s.audioPath && existsSync(s.audioPath)) await unlink(s.audioPath).catch(() => {})
+    }
+    if (expired.length) {
+      await prisma.studioSession.deleteMany({ where: { id: { in: expired.map(s => s.id) } } })
+    }
+  } catch { /* non-fatal */ }
+}
 
 // ─── Claude ──────────────────────────────────────────────────
 async function generarMapa(tema: string, redSocial: string, duracion: string): Promise<any> {
@@ -81,7 +99,7 @@ function construirGuion(mapa: any): string {
   return parts.join(' ')
 }
 
-// ─── Proportional timestamps (0–1) ───────────────────────────
+// ─── Proportional timestamps (0–1); last node always ends at 1 ─
 function calcularTimestamps(mapa: any, guionCompleto: string) {
   const totalW = guionCompleto.split(/\s+/).filter(Boolean).length
   const orden: { id: string; guion: string }[] = []
@@ -95,10 +113,11 @@ function calcularTimestamps(mapa: any, guionCompleto: string) {
   if (mapa.cta) orden.push({ id: 'cta', guion: mapa.cta })
 
   let acum = 0
-  return orden.map(nodo => {
+  return orden.map((nodo, i) => {
     const w    = nodo.guion.split(/\s+/).filter(Boolean).length
     const prop = w / Math.max(totalW, 1)
-    const ts   = { id: nodo.id, inicio: acum, fin: acum + prop }
+    const fin  = i === orden.length - 1 ? 1.0 : acum + prop  // last node always reaches 1.0
+    const ts   = { id: nodo.id, inicio: acum, fin }
     acum += prop
     return ts
   })
@@ -121,17 +140,19 @@ async function generarAudio(apiKey: string, text: string): Promise<Buffer> {
           signal: AbortSignal.timeout(60_000),
         },
       )
-      if (res.status === 401) throw new Error('API key inválida')
-      if (res.status === 429) throw new Error('Sin créditos disponibles')
-      if (!res.ok) throw new Error(`ElevenLabs HTTP ${res.status}`)
+      if (res.status === 401) throw new Error('API key de ElevenLabs inválida')
+      if (res.status === 429) throw new Error('Sin créditos disponibles en ElevenLabs')
+      if (res.status === 400) throw new Error('El texto es demasiado largo o tiene caracteres inválidos')
+      if (res.status === 503) throw new Error('ElevenLabs está en mantenimiento, intenta en unos minutos')
+      if (!res.ok) throw new Error(`ElevenLabs error ${res.status}`)
       return Buffer.from(await res.arrayBuffer())
     } catch (err) {
-      console.error(`ElevenLabs intento ${attempt} falló:`, err)
+      console.error(`[studio/create] ElevenLabs intento ${attempt}:`, err)
       if (attempt === 3) throw err
       await new Promise(r => setTimeout(r, 2000 * attempt))
     }
   }
-  throw new Error('No se pudo generar el audio')
+  throw new Error('No se pudo generar el audio después de 3 intentos')
 }
 
 // ─── Handler ─────────────────────────────────────────────────
@@ -146,6 +167,18 @@ export async function POST(req: NextRequest) {
     tema: string; redSocial: string; duracion: string
   }
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
+
+  // Rate limit: 20 studio links per user per 24h
+  const userId = session.user.id
+  const recent = await prisma.studioSession.count({
+    where: { userId, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+  })
+  if (recent >= DAILY_LIMIT) {
+    return NextResponse.json({ error: `Límite diario alcanzado (${DAILY_LIMIT} por día)` }, { status: 429 })
+  }
+
+  // Cleanup expired sessions in the background (non-blocking)
+  cleanupExpired()
 
   // Step 1: Claude
   let mapaJson: any
@@ -181,6 +214,7 @@ export async function POST(req: NextRequest) {
   await prisma.studioSession.create({
     data: {
       token,
+      userId,
       tema,
       redSocial: redSocial ?? 'TikTok',
       duracion:  duracion  ?? '60s',
