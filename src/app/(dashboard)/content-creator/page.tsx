@@ -159,16 +159,26 @@ export default function ContentCreatorPage() {
   }
 
   async function generateStudioLink() {
-    if (!tema.trim()) return
+    if (!mapa) return
     setGeneratingStudio(true)
-    setStudioPhase('mapa')
+    setStudioPhase(guion ? 'audio' : 'mapa')
     setStudioUrl(null)
-    const phaseTimer = setTimeout(() => setStudioPhase('audio'), 5000)
+    if (!guion) {
+      const phaseTimer = setTimeout(() => setStudioPhase('audio'), 5000)
+      // store timer ref inline — cleared in finally
+      ;(generateStudioLink as any)._timer = phaseTimer
+    }
     try {
       const res = await fetch('/api/studio/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tema, redSocial, duracion }),
+        body: JSON.stringify({
+          tema,
+          redSocial,
+          duracion,
+          mapaJson: mapa,
+          guion: guion || undefined,
+        }),
       })
       const body = await res.json() as { url?: string; error?: string }
       if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`)
@@ -176,7 +186,7 @@ export default function ContentCreatorPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error generando Studio Link')
     } finally {
-      clearTimeout(phaseTimer)
+      clearTimeout((generateStudioLink as any)._timer)
       setStudioPhase('idle')
       setGeneratingStudio(false)
     }
@@ -248,7 +258,7 @@ export default function ContentCreatorPage() {
                   : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio con Andrés'}`}
               </button>
             )}
-            {!!tema.trim() && (
+            {hasMap && (
               <button
                 onClick={generateStudioLink}
                 disabled={generatingStudio}
@@ -474,6 +484,24 @@ export default function ContentCreatorPage() {
                     onNavigate={n => setFocusedNode(n)}
                     onClose={() => setFocusedNode(null)}
                   />
+                )}
+
+                {/* Audio status chips */}
+                {!hasAudio && !generatingAudio && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white border border-purple-200 shadow-lg rounded-full px-4 py-2 text-xs text-gray-600">
+                    <span>Voz: <strong>Andrés</strong> (voz clonada)</span>
+                  </div>
+                )}
+                {generatingAudio && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-purple-50 border border-purple-300 shadow-lg rounded-full px-4 py-2 text-xs text-purple-700">
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                    Generando audio con Andrés…
+                  </div>
+                )}
+                {hasAudio && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-green-50 border border-green-300 shadow-lg rounded-full px-4 py-2 text-xs text-green-700">
+                    ✅ Audio listo — ponlo en AirPods y graba el mapa
+                  </div>
                 )}
               </div>
             )}

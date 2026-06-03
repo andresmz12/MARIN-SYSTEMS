@@ -186,8 +186,9 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ELEVENLABS_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ELEVENLABS_API_KEY no configurado' }, { status: 500 })
 
-  const { tema, redSocial, duracion } = await req.json() as {
+  const { tema, redSocial, duracion, mapaJson: mapaJsonInput, guion: guionInput } = await req.json() as {
     tema: string; redSocial: string; duracion: string
+    mapaJson?: any; guion?: string
   }
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
 
@@ -203,23 +204,32 @@ export async function POST(req: NextRequest) {
   // Cleanup expired sessions in the background (non-blocking)
   cleanupExpired()
 
-  // Step 1: Claude (up to 3 attempts if generic content detected)
+  // Step 1: Use provided map or generate with Claude
   let mapaJson: any
-  try {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      mapaJson = await generarMapa(tema, redSocial ?? 'TikTok', duracion ?? '60s')
-      if (!hasGenericContent(mapaJson)) break
-      if (attempt === 3) break  // use last attempt even if still generic
-    }
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Error generando mapa' },
-      { status: 500 },
-    )
-  }
+  let guionCompleto: string
+  let timestamps: any
 
-  const guionCompleto = construirGuion(mapaJson)
-  const timestamps    = calcularTimestamps(mapaJson, guionCompleto)
+  if (mapaJsonInput && guionInput) {
+    // Skip Claude — use the map already shown to the user
+    mapaJson      = mapaJsonInput
+    guionCompleto = guionInput
+    timestamps    = calcularTimestamps(mapaJson, guionCompleto)
+  } else {
+    try {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        mapaJson = await generarMapa(tema, redSocial ?? 'TikTok', duracion ?? '60s')
+        if (!hasGenericContent(mapaJson)) break
+        if (attempt === 3) break
+      }
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Error generando mapa' },
+        { status: 500 },
+      )
+    }
+    guionCompleto = construirGuion(mapaJson)
+    timestamps    = calcularTimestamps(mapaJson, guionCompleto)
+  }
 
   // Step 2: ElevenLabs
   let audioBuffer: Buffer
