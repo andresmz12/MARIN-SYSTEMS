@@ -45,6 +45,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const [showGuion,    setShowGuion]    = useState(false)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [progreso,     setProgreso]     = useState(0)
+  const [downloading,  setDownloading]  = useState(false)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef   = useRef<number>(0)
@@ -108,14 +109,20 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   }
 
   async function handleDescargar() {
-    const res = await fetch(`/api/studio/${token}/audio`)
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `video-audio-${token}.mp3`
-    a.click()
-    URL.revokeObjectURL(url)
+    if (downloading) return
+    setDownloading(true)
+    try {
+      const res = await fetch(`/api/studio/${token}/audio`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `video-audio-${token}.mp3`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   if (state === 'loading') {
@@ -160,6 +167,24 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         style={{ display: 'none' }}
       />
 
+      {/* Topic title — top left */}
+      <div style={{
+        position: 'fixed', top: 16, left: 16, zIndex: 40,
+        background: 'rgba(255,255,255,0.88)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(0,0,0,0.08)',
+        borderRadius: 12, padding: '6px 14px',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: 13, fontWeight: 600,
+        color: '#1a1a2e',
+        maxWidth: 'calc(100dvw - 32px)',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+        pointerEvents: 'none',
+      }}>
+        {data!.tema}
+      </div>
+
       {/* Map fills entire viewport */}
       <div style={{ width: '100%', height: '100%' }}>
         <StudioMap mapaJson={data!.mapaJson} activeNodeId={activeNodeId} />
@@ -168,16 +193,21 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       {/* Download audio */}
       <button
         onClick={handleDescargar}
+        disabled={downloading}
         style={{
           position: 'fixed', bottom: 108, right: 24,
           width: 56, height: 56, borderRadius: '50%',
           border: 'none', background: '#fff',
           boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-          fontSize: 22, cursor: 'pointer', zIndex: 50,
+          fontSize: 22, cursor: downloading ? 'default' : 'pointer',
+          zIndex: 50, opacity: downloading ? 0.65 : 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'opacity 0.2s',
         }}
-        title="Descargar MP3">
-        ⬇️
+        title={downloading ? 'Descargando…' : 'Descargar MP3'}>
+        {downloading
+          ? <span style={{ width: 20, height: 20, borderRadius: '50%', border: '2.5px solid rgba(0,0,0,0.15)', borderTopColor: '#6366f1', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+          : '⬇️'}
       </button>
 
       {/* Play/pause — dimmed while audio not ready */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 interface Child  { id: string; texto: string; color: string }
 interface Branch { id: string; emoji: string; texto: string; color: string; hijos: Child[] }
@@ -263,70 +263,90 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  DYNAMIC LAYOUT
+  //  DYNAMIC LAYOUT — memoized so the collision loop only runs
+  //  when the map data or viewport size actually changes
   // ══════════════════════════════════════════════════════════════
-  const { centro, ramas } = mapaJson
-  const nBranch   = ramas.length
-  const minDim    = Math.min(size.w, size.h)
-  const sectorDeg = 360 / nBranch
-  const startA    = -Math.PI / 2
-  const stepA     = (2 * Math.PI) / nBranch
+  const layout = useMemo(() => {
+    const { centro, ramas } = mapaJson
+    const nBranch   = ramas.length
+    const minDim    = Math.min(size.w, size.h)
+    const sectorDeg = 360 / nBranch
+    const startA    = -Math.PI / 2
+    const stepA     = (2 * Math.PI) / nBranch
 
-  const CF = Math.max(15, minDim * 0.023)
-  const BF = Math.max(13, minDim * 0.020)
-  const HF = Math.max(12, minDim * 0.017)
+    const CF = Math.max(15, minDim * 0.023)
+    const BF = Math.max(13, minDim * 0.020)
+    const HF = Math.max(12, minDim * 0.017)
 
-  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 130, 165)
-  const bNodes = ramas.map(br => ({
-    br,
-    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 110, 140),
-    hijos: br.hijos.map(h => ({
-      h,
-      m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 85, 108),
-    })),
-    spread: spreadStep(br.hijos.length, sectorDeg),
-  }))
+    const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 130, 165)
+    const bNodes = ramas.map(br => ({
+      br,
+      m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 110, 140),
+      hijos: br.hijos.map(h => ({
+        h,
+        m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 85, 108),
+      })),
+      spread: spreadStep(br.hijos.length, sectorDeg),
+    }))
 
-  // Iterative collision resolution — expand until no overlaps remain
-  let BDIST = minDim * 0.28
-  let CADD  = minDim * 0.22
+    let BDIST = minDim * 0.28
+    let CADD  = minDim * 0.22
 
-  for (let iter = 0; iter < 50; iter++) {
+    for (let iter = 0; iter < 50; iter++) {
+      const CDIST = BDIST + CADD
+      const boxes: Box[] = [{ x: 0, y: 0, w: cNode.w, h: cNode.h }]
+      for (let i = 0; i < bNodes.length; i++) {
+        const a  = startA + i * stepA
+        const bp = polar(a, BDIST)
+        const { m, hijos, spread } = bNodes[i]
+        boxes.push({ x: bp.x, y: bp.y, w: m.w, h: m.h })
+        for (let j = 0; j < hijos.length; j++) {
+          const ca = a + (j - (hijos.length - 1) / 2) * spread
+          const cp = polar(ca, CDIST)
+          boxes.push({ x: cp.x, y: cp.y, w: hijos[j].m.w, h: hijos[j].m.h })
+        }
+      }
+      let col = false
+      outer: for (let a2 = 0; a2 < boxes.length; a2++)
+        for (let b2 = a2 + 1; b2 < boxes.length; b2++)
+          if (overlaps(boxes[a2], boxes[b2])) { col = true; break outer }
+      if (!col) break
+      if (iter % 3 !== 2) CADD  += minDim * 0.018
+      else                BDIST += minDim * 0.012
+    }
+
     const CDIST = BDIST + CADD
-    const boxes: Box[] = [{ x: 0, y: 0, w: cNode.w, h: cNode.h }]
+
+    const maxNodeR = Math.max(
+      Math.max(cNode.w, cNode.h) / 2,
+      ...bNodes.flatMap(bn => [
+        Math.max(bn.m.w, bn.m.h) / 2,
+        ...bn.hijos.map(hj => Math.max(hj.m.w, hj.m.h) / 2),
+      ]),
+    )
+    const contentR = CDIST + maxNodeR + 16
+    const targetR  = Math.min(size.w, size.h) / 2 - 24
+    const fitZoom  = Math.min(1, targetR / contentR)
+
+    const positions: Record<string, { x: number; y: number }> = { [centro.id]: { x: 0, y: 0 } }
     for (let i = 0; i < bNodes.length; i++) {
       const a  = startA + i * stepA
       const bp = polar(a, BDIST)
-      const { m, hijos, spread } = bNodes[i]
-      boxes.push({ x: bp.x, y: bp.y, w: m.w, h: m.h })
-      for (let j = 0; j < hijos.length; j++) {
-        const ca = a + (j - (hijos.length - 1) / 2) * spread
+      positions[bNodes[i].br.id] = { x: bp.x, y: bp.y }
+      for (let j = 0; j < bNodes[i].hijos.length; j++) {
+        const ca = a + (j - (bNodes[i].hijos.length - 1) / 2) * bNodes[i].spread
         const cp = polar(ca, CDIST)
-        boxes.push({ x: cp.x, y: cp.y, w: hijos[j].m.w, h: hijos[j].m.h })
+        positions[bNodes[i].hijos[j].h.id] = { x: cp.x, y: cp.y }
       }
     }
-    let col = false
-    outer: for (let a2 = 0; a2 < boxes.length; a2++)
-      for (let b2 = a2 + 1; b2 < boxes.length; b2++)
-        if (overlaps(boxes[a2], boxes[b2])) { col = true; break outer }
-    if (!col) break
-    if (iter % 3 !== 2) CADD  += minDim * 0.018
-    else                BDIST += minDim * 0.012
-  }
 
-  const CDIST = BDIST + CADD
+    return { centro, ramas, nBranch, startA, stepA, cNode, bNodes, BDIST, CDIST, CADD, fitZoom, positions, CF, BF, HF }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapaJson, size.w, size.h])
 
-  // Compute fit zoom based on actual max node radius
-  const maxNodeR = Math.max(
-    Math.max(cNode.w, cNode.h) / 2,
-    ...bNodes.flatMap(bn => [
-      Math.max(bn.m.w, bn.m.h) / 2,
-      ...bn.hijos.map(hj => Math.max(hj.m.w, hj.m.h) / 2),
-    ]),
-  )
-  const contentR = CDIST + maxNodeR + 16
-  const targetR  = Math.min(size.w, size.h) / 2 - 24
-  const fitZoom  = Math.min(1, targetR / contentR)
+  const { centro, ramas, nBranch, startA, stepA, cNode, bNodes, BDIST, CDIST, CADD, fitZoom, positions, CF, BF, HF } = layout
+
+  nodePositions.current = positions
 
   useEffect(() => {
     if (!firstFit.current && size.w !== 800) {
@@ -335,20 +355,6 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.w])
-
-  // Build nodePositions for autopan
-  const positions: Record<string, { x: number; y: number }> = { [centro.id]: { x: 0, y: 0 } }
-  for (let i = 0; i < bNodes.length; i++) {
-    const a  = startA + i * stepA
-    const bp = polar(a, BDIST)
-    positions[bNodes[i].br.id] = { x: bp.x, y: bp.y }
-    for (let j = 0; j < bNodes[i].hijos.length; j++) {
-      const ca = a + (j - (bNodes[i].hijos.length - 1) / 2) * bNodes[i].spread
-      const cp = polar(ca, CDIST)
-      positions[bNodes[i].hijos[j].h.id] = { x: cp.x, y: cp.y }
-    }
-  }
-  nodePositions.current = positions
 
   const isAnyActive = !!activeNodeId
   const tfm = `translate(${(size.w/2 + pan.x).toFixed(1)},${(size.h/2 + pan.y).toFixed(1)}) scale(${zoom})`
