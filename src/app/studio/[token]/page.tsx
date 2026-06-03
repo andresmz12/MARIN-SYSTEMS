@@ -2,15 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { MapaJsonStudio } from '@/components/studio/StudioMap'
 
+// Load StudioMap client-only (uses ResizeObserver)
 const StudioMap = dynamic(() => import('@/components/studio/StudioMap'), { ssr: false })
+
+interface MapaJson {
+  centro: { id: string; emoji?: string; texto: string; color: string }
+  ramas: Array<{
+    id: string; emoji?: string; texto: string; color: string
+    hijos: Array<{ id: string; texto: string; color: string }>
+  }>
+}
 
 type PageState = 'loading' | 'expired' | 'ready'
 
 export default function StudioPage({ params }: { params: { token: string } }) {
   const [state, setState] = useState<PageState>('loading')
-  const [mapa, setMapa] = useState<MapaJsonStudio | null>(null)
+  const [mapa, setMapa] = useState<MapaJson | null>(null)
 
   useEffect(() => {
     fetch(`/api/studio/${params.token}`)
@@ -21,7 +29,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       })
       .then(data => {
         if (!data) return
-        setMapa(data.mapaJson as MapaJsonStudio)
+        setMapa(data.mapaJson as MapaJson)
         setState('ready')
       })
       .catch(() => setState('expired'))
