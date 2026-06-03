@@ -6,33 +6,36 @@ import { prisma } from '@/lib/prisma'
 export const maxDuration = 60
 
 const VOICE_ID = '9AHim1BsYT5o3WGDtPE0'
-const WPM = 130 // average Spanish speech rate
 
-function wc(text: string): number {
-  return text ? text.trim().split(/\s+/).filter(Boolean).length : 0
-}
+interface NodeEntry { id: string; guion: string }
 
-function generateTimestamps(mapaJson: any) {
-  const result: Array<{ nodoId: string; inicio: number; fin: number }> = []
-  let t = 0
-
-  function addNode(id: string, guion: string) {
-    const secs = (wc(guion) / WPM) * 60
-    const start = Math.round(t * 10) / 10
-    const end   = Math.round((t + secs) * 10) / 10
-    result.push({ nodoId: id, inicio: start, fin: end })
-    t += secs
-  }
-
-  const { centro, ramas } = mapaJson
-  addNode(centro.id, centro.guion ?? '')
-  for (const rama of ramas ?? []) {
-    addNode(rama.id, rama.guion ?? '')
+function buildOrder(mapaJson: any): NodeEntry[] {
+  const order: NodeEntry[] = []
+  order.push({ id: mapaJson.centro.id, guion: mapaJson.centro.guion ?? '' })
+  for (const rama of mapaJson.ramas ?? []) {
+    order.push({ id: rama.id, guion: rama.guion ?? '' })
     for (const hijo of rama.hijos ?? []) {
-      addNode(hijo.id, hijo.guion ?? '')
+      order.push({ id: hijo.id, guion: hijo.guion ?? '' })
     }
   }
-  return result
+  if (mapaJson.cta) order.push({ id: 'cta', guion: mapaJson.cta })
+  return order
+}
+
+function buildGuionCompleto(order: NodeEntry[]): string {
+  return order.map(n => n.guion.trim()).filter(Boolean).join(' ')
+}
+
+function buildProportionalTimestamps(order: NodeEntry[], guionCompleto: string) {
+  const totalW = guionCompleto.split(/\s+/).filter(Boolean).length
+  let acum = 0
+  return order.map(nodo => {
+    const w = nodo.guion.split(/\s+/).filter(Boolean).length
+    const prop = w / Math.max(totalW, 1)
+    const ts = { id: nodo.id, inicio: acum, fin: acum + prop }
+    acum += prop
+    return ts
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -42,18 +45,19 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ELEVENLABS_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ELEVENLABS_API_KEY no configurado' }, { status: 500 })
 
-  const { mapaJson, guion, tema, redSocial, duracion } = await req.json() as {
-    mapaJson: object
-    guion: string
+  const { mapaJson, tema, redSocial, duracion } = await req.json() as {
+    mapaJson: any
     tema: string
     redSocial: string
     duracion: string
   }
-  if (!mapaJson || !guion || !tema) {
-    return NextResponse.json({ error: 'mapaJson, guion y tema son requeridos' }, { status: 400 })
+  if (!mapaJson || !tema) {
+    return NextResponse.json({ error: 'mapaJson y tema son requeridos' }, { status: 400 })
   }
 
-  const cleanGuion = guion.trim()
+  const order         = buildOrder(mapaJson)
+  const guionCompleto = buildGuionCompleto(order)
+  const timestamps    = buildProportionalTimestamps(order, guionCompleto)
 
   let audioData: string
   try {
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: cleanGuion,
+        text: guionCompleto,
         model_id: 'eleven_multilingual_v2',
         voice_settings: { stability: 0.5, similarity_boost: 0.80, style: 0.25, use_speaker_boost: true },
       }),
@@ -77,15 +81,13 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const timestamps = generateTimestamps(mapaJson as any)
-
   const studioSession = await prisma.studioSession.create({
     data: {
       tema,
       redSocial: redSocial ?? 'TikTok',
       duracion: duracion ?? '60s',
       mapaJson,
-      guion: cleanGuion,
+      guion: guionCompleto,
       audioData,
       timestamps,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),

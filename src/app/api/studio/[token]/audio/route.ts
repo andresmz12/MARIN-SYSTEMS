@@ -17,9 +17,10 @@ export async function GET(
   const buf = Buffer.from(session.audioData, 'base64')
   return new NextResponse(buf, {
     headers: {
-      'Content-Type': 'audio/mpeg',
+      'Content-Type':   'audio/mpeg',
       'Content-Length': String(buf.length),
-      'Cache-Control': 'private, max-age=86400',
+      'Accept-Ranges':  'bytes',
+      'Cache-Control':  'public, max-age=86400',
     },
   })
 }

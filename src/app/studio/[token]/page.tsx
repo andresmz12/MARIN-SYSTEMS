@@ -13,15 +13,17 @@ interface MapaJson {
   }>
 }
 
+// Proportions (0–1) stored in DB; converted to seconds after audio loads
+interface PropTs { id: string; inicio: number; fin: number }
+
 interface SessionData {
   tema: string
   redSocial: string
   duracion: string
   mapaJson: MapaJson
   guion: string
+  timestamps: PropTs[]
 }
-
-interface NodeTs { id: string; inicio: number; fin: number }
 
 type State = 'loading' | 'ready' | 'error'
 
@@ -35,14 +37,11 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const [showGuion,    setShowGuion]    = useState(false)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [progreso,     setProgreso]     = useState(0)
-  const [timestamps,   setTimestamps]   = useState<NodeTs[]>([])
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const rafRef   = useRef<number>(0)
-  // keep latest timestamps accessible inside the RAF loop without stale closure
-  const tsRef    = useRef<NodeTs[]>([])
-
-  useEffect(() => { tsRef.current = timestamps }, [timestamps])
+  // real-seconds timestamps set once audio duration is known
+  const tsRef    = useRef<PropTs[]>([])
 
   useEffect(() => {
     fetch(`/api/studio/${token}`)
@@ -57,26 +56,12 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       .catch((e) => { setErrorMsg(e.message); setState('error') })
   }, [token])
 
-  function buildTimestamps(duracion: number, mapa: MapaJson): NodeTs[] {
-    const orden: string[] = [mapa.centro.id]
-    mapa.ramas.forEach(rama => {
-      orden.push(rama.id)
-      rama.hijos.forEach(hijo => orden.push(hijo.id))
-    })
-    const porNodo = duracion / orden.length
-    return orden.map((id, i) => ({
-      id,
-      inicio: i * porNodo,
-      fin: (i + 1) * porNodo,
-    }))
-  }
-
   function loop() {
     const audio = audioRef.current
     if (!audio) return
     const t = audio.currentTime
-    const activo = tsRef.current.find(n => t >= n.inicio && t < n.fin) ?? null
-    setActiveNodeId(activo?.id ?? null)
+    const active = tsRef.current.find(n => t >= n.inicio && t < n.fin) ?? null
+    setActiveNodeId(active?.id ?? null)
     setProgreso(t / (audio.duration || 1))
     if (!audio.paused && !audio.ended) {
       rafRef.current = requestAnimationFrame(loop)
@@ -90,9 +75,13 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       const el = new Audio(`/api/studio/${token}/audio`)
 
       el.onloadedmetadata = () => {
-        const ts = buildTimestamps(el.duration, data.mapaJson)
-        setTimestamps(ts)
-        tsRef.current = ts
+        const dur = el.duration
+        // Convert proportions → real seconds
+        tsRef.current = data.timestamps.map(ts => ({
+          id:    ts.id,
+          inicio: ts.inicio * dur,
+          fin:   ts.fin   * dur,
+        }))
       }
 
       el.onplay = () => {
@@ -115,12 +104,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       audioRef.current = el
     }
 
-    const audio = audioRef.current
-    if (audio.paused) {
-      audio.play()
-    } else {
-      audio.pause()
-    }
+    audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause()
   }
 
   if (state === 'loading') {
@@ -156,7 +140,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         <StudioMap mapaJson={data!.mapaJson} activeNodeId={activeNodeId} />
       </div>
 
-      {/* Play/pause button */}
+      {/* Play/pause */}
       <button onClick={toggleAudio}
         style={{
           position: 'fixed', bottom: 32, right: 24,

@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 
+const SYSTEM = `Eres experto en contenido educativo viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO con JSON válido. Sin markdown. Sin texto extra.`
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -13,64 +15,56 @@ export async function POST(req: NextRequest) {
   }
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
 
-  const prompt = `Eres un experto en contenido viral para latinos en EE.UU. sobre impuestos, LLC, ITIN y servicios financieros. Tu contenido es educativo, en español latino conversacional, como si le explicaras a un amigo. Nunca uses términos muy técnicos sin explicarlos primero.
+  const prompt = `Crea un mapa conceptual y guion para un video sobre: "${tema}"
+Red social: ${redSocial}
+Duración: ${duracion}
 
-Genera contenido sobre este tema: "${tema}"
-Red social destino: ${redSocial}
-Duración objetivo: ${duracion}
+El guion se construye NODO POR NODO en este orden exacto:
+centro → rama1 → hijo1a → hijo1b → rama2 → hijo2a → hijo2b → rama3 → hijo3a → hijo3b → rama4 → hijo4a → hijo4b → cta
 
-Genera UN SOLO JSON válido (sin markdown, sin texto antes o después):
+Cada nodo tiene su propio texto corto para el mapa Y su propia frase para el audio. Deben decir lo mismo.
 
+Responde con este JSON exacto:
 {
-  "mapaJson": {
-    "centro": {
-      "id": "centro",
-      "emoji": "🎯",
-      "texto": "TÍTULO CORTO (máx 4 palabras)",
-      "color": "#1e3a5f",
-      "guion": "1-2 oraciones introduciendo el tema de forma clara. ¿Qué es? ¿A quién ayuda?"
-    },
-    "ramas": [
-      {
-        "id": "r1", "emoji": "📌", "texto": "Categoría 1 (3-4 palabras)", "color": "#dc2626",
-        "guion": "1-2 oraciones explicando esta categoría con un ejemplo concreto.",
-        "hijos": [
-          { "id": "r1h1", "texto": "punto clave (4-6 palabras)", "color": "#fca5a5", "guion": "1 oración específica sobre este punto." },
-          { "id": "r1h2", "texto": "punto clave (4-6 palabras)", "color": "#fca5a5", "guion": "1 oración específica sobre este punto." }
-        ]
-      },
-      {
-        "id": "r2", "emoji": "💡", "texto": "Categoría 2 (3-4 palabras)", "color": "#2563eb",
-        "guion": "1-2 oraciones explicando esta categoría.",
-        "hijos": [
-          { "id": "r2h1", "texto": "punto clave", "color": "#93c5fd", "guion": "1 oración." },
-          { "id": "r2h2", "texto": "punto clave", "color": "#93c5fd", "guion": "1 oración." }
-        ]
-      },
-      {
-        "id": "r3", "emoji": "✅", "texto": "Categoría 3 (3-4 palabras)", "color": "#16a34a",
-        "guion": "1-2 oraciones con pasos concretos o beneficios.",
-        "hijos": [
-          { "id": "r3h1", "texto": "punto clave", "color": "#86efac", "guion": "1 oración." },
-          { "id": "r3h2", "texto": "punto clave", "color": "#86efac", "guion": "1 oración." }
-        ]
-      },
-      {
-        "id": "r4", "emoji": "⚡", "texto": "Categoría 4 (3-4 palabras)", "color": "#d97706",
-        "guion": "1-2 oraciones sobre datos clave, fechas o montos importantes.",
-        "hijos": [
-          { "id": "r4h1", "texto": "punto clave", "color": "#fcd34d", "guion": "1 oración." },
-          { "id": "r4h2", "texto": "punto clave", "color": "#fcd34d", "guion": "1 oración." }
-        ]
-      }
-    ]
+  "centro": {
+    "id": "centro",
+    "emoji": "⚠️",
+    "texto": "Texto corto para el mapa",
+    "color": "#c0392b",
+    "guion": "Frase completa que dice la voz sobre este nodo. 1-2 oraciones."
   },
-  "cta": "Frase final call to action. ¿Tienes preguntas? Escríbeme y te ayudo 👇",
-  "titulo": "Título optimizado para ${redSocial} (max 60 chars, con emoji al inicio)",
-  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+  "ramas": [
+    {
+      "id": "r1",
+      "emoji": "💸",
+      "texto": "Texto corto para el mapa",
+      "color": "#e67e22",
+      "guion": "Frase completa que dice la voz sobre esta rama. 1-2 oraciones.",
+      "hijos": [
+        {
+          "id": "h1a",
+          "texto": "Texto corto para el mapa",
+          "color": "#f39c12",
+          "guion": "Frase corta sobre este punto. 1 oración."
+        },
+        {
+          "id": "h1b",
+          "texto": "Texto corto para el mapa",
+          "color": "#f39c12",
+          "guion": "Frase corta sobre este punto. 1 oración."
+        }
+      ]
+    }
+  ],
+  "cta": "Frase final. Escríbeme y te ayudo 👇"
 }
 
-IMPORTANTE: Cada campo "guion" debe sonar natural al hablar en voz alta, fluir de uno al siguiente, y cubrir exactamente lo que dice el nodo. El audio se construye concatenando todos los guiones en orden.`
+REGLAS CRÍTICAS:
+- texto del nodo: máximo 3 palabras por línea, máximo 2 líneas
+- guion del nodo: debe explicar exactamente lo que dice el texto. Si el texto dice "Multa $500" el guion dice "Si no declaras a tiempo, el IRS te puede multar con 500 dólares"
+- El texto y el guion del mismo nodo deben ser COHERENTES entre sí
+- 4 ramas siempre, 2 hijos por rama siempre
+- Colores hex vibrantes, diferentes por rama`
 
   const client = new Anthropic()
   let raw: string
@@ -78,6 +72,7 @@ IMPORTANTE: Cada campo "guion" debe sonar natural al hablar en voz alta, fluir d
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
+      system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
     })
     raw = message.content[0].type === 'text' ? message.content[0].text : ''
@@ -86,19 +81,19 @@ IMPORTANTE: Cada campo "guion" debe sonar natural al hablar en voz alta, fluir d
     return NextResponse.json({ error: `Error al llamar a la IA: ${msg}` }, { status: 500 })
   }
 
-  let parsed: { mapaJson: any; cta: string; titulo: string; hashtags: string[] }
+  let parsed: { centro: any; ramas: any[]; cta: string; titulo?: string; hashtags?: string[] }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
     parsed = match ? JSON.parse(match[0]) : null
-    if (!parsed?.mapaJson) throw new Error('JSON inválido')
+    if (!parsed?.centro || !parsed?.ramas) throw new Error('JSON inválido')
   } catch {
     return NextResponse.json({ error: 'Error al parsear respuesta de la IA', raw }, { status: 500 })
   }
 
-  // Build full guion by concatenating all node guiones in order
-  const guion = buildGuion(parsed.mapaJson, parsed.cta ?? '')
-
-  const result = { mapaJson: parsed.mapaJson, guion, titulo: parsed.titulo, hashtags: parsed.hashtags }
+  const mapaJson = { centro: parsed.centro, ramas: parsed.ramas, cta: parsed.cta ?? '' }
+  const guion = buildGuion(mapaJson, parsed.cta ?? '')
+  const titulo = parsed.titulo ?? tema
+  const hashtags = parsed.hashtags ?? []
 
   try {
     await prisma.contentCreatorHistory.create({
@@ -107,15 +102,15 @@ IMPORTANTE: Cada campo "guion" debe sonar natural al hablar en voz alta, fluir d
         tema: tema.slice(0, 200),
         redSocial,
         duracion,
-        mapaJson: result.mapaJson as object,
-        guion: result.guion,
-        titulo: result.titulo,
-        hashtags: result.hashtags,
+        mapaJson: mapaJson as object,
+        guion,
+        titulo,
+        hashtags,
       },
     })
   } catch { /* ignore */ }
 
-  return NextResponse.json(result)
+  return NextResponse.json({ mapaJson, guion, titulo, hashtags })
 }
 
 function buildGuion(mapaJson: any, cta: string): string {
