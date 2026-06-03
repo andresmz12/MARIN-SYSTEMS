@@ -107,6 +107,17 @@ export default function StudioPage({ params }: { params: { token: string } }) {
     audio.paused ? audio.play() : audio.pause()
   }
 
+  async function handleDescargar() {
+    const res = await fetch(`/api/studio/${token}/audio`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `video-audio-${token}.mp3`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (state === 'loading') {
     return (
       <div style={{ minHeight: '100dvh', background: '#fafaf8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -153,6 +164,21 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       <div style={{ width: '100%', height: '100%' }}>
         <StudioMap mapaJson={data!.mapaJson} activeNodeId={activeNodeId} />
       </div>
+
+      {/* Download audio */}
+      <button
+        onClick={handleDescargar}
+        style={{
+          position: 'fixed', bottom: 108, right: 24,
+          width: 56, height: 56, borderRadius: '50%',
+          border: 'none', background: '#fff',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+          fontSize: 22, cursor: 'pointer', zIndex: 50,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+        title="Descargar MP3">
+        ⬇️
+      </button>
 
       {/* Play/pause — dimmed while audio not ready */}
       <button
