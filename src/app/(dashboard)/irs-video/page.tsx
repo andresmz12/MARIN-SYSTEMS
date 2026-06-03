@@ -1,346 +1,213 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MindMap, NodePanel, PresentationOverlay, MapaJson, FocusedNode, Alignment } from '@/components/video-creator/MindMapSVG'
 import { useToast } from '@/components/ui/Toast'
 
-/* ── Page-specific types ── */
 interface NewsItem {
-  id: string; title: string; summary: string
-  spanishSummary?: string | null; url: string; publishedAt: string
-}
-interface HistoryItem {
-  id: string; titulo: string; guionCompleto: string; mapaJson: MapaJson; createdAt: string
+  id: string
+  title: string
+  summary: string
+  spanishSummary?: string | null
+  url: string
+  publishedAt: string
 }
 
-/* ── Section markers for IRS Video (5 branches) ── */
-const MARKERS = ['[INTRO]', '[R1]', '[R2]', '[R3]', '[R4]', '[R5]', '[CTA]']
+const LOADING_MSGS = ['Generando mapa educativo...', 'Elaborando el guion...', 'Preparando tu Studio...']
 
-/* ════════════════════════
-   Main Page
-════════════════════════ */
+type PageState = 'form' | 'loading' | 'done'
+
 export default function IrsVideoPage() {
   const { toast } = useToast()
+  const [pageState, setPageState] = useState<PageState>('form')
   const [noticias, setNoticias] = useState<NewsItem[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [loadingNews, setLoadingNews] = useState(false)
-  const [mapa, setMapa] = useState<MapaJson | null>(null)
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0)
+  const [studioUrl, setStudioUrl] = useState('')
   const [guion, setGuion] = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
-  const [history, setHistory] = useState<HistoryItem[]>([])
-  const [loadingHistory, setLoadingHistory] = useState(false)
-  const [summaryOpen, setSummaryOpen] = useState(false)
-  const [scriptOpen, setScriptOpen] = useState(false)
-  const [generatingAudio, setGeneratingAudio] = useState(false)
-  const [audioSrc, setAudioSrc] = useState<string | null>(null)
-  const [alignment, setAlignment] = useState<Alignment | null>(null)
-  const [sectionTimestamps, setSectionTimestamps] = useState<number[]>([])
-  const [presentationMode, setPresentationMode] = useState(false)
-  const [focusedNode, setFocusedNode] = useState<FocusedNode | null>(null)
-  const [allNodes, setAllNodes] = useState<FocusedNode[]>([])
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => { loadNoticias() }, [])
 
+  useEffect(() => {
+    if (pageState !== 'loading') return
+    const id = setInterval(() => setLoadingMsgIdx(i => (i + 1) % LOADING_MSGS.length), 3000)
+    return () => clearInterval(id)
+  }, [pageState])
+
   async function loadNoticias() {
-    setLoadingNews(true); setMapa(null); setGuion(''); setAudioSrc(null); setAlignment(null); setFocusedNode(null)
-    const res = await fetch('/api/irs-news')
-    if (res.ok) { const data: NewsItem[] = await res.json(); setNoticias(data); setSelectedIdx(0) }
+    setLoadingNews(true)
+    try {
+      const res = await fetch('/api/irs-video/noticias')
+      if (res.ok) {
+        const data: NewsItem[] = await res.json()
+        setNoticias(data)
+        setSelectedIdx(0)
+      }
+    } catch { /* ignore */ }
     setLoadingNews(false)
   }
 
-  async function loadHistory() {
-    setLoadingHistory(true)
-    const res = await fetch('/api/irs-video/history')
-    if (res.ok) setHistory(await res.json())
-    setLoadingHistory(false)
-  }
-
-  async function generateContent() {
-    const item = noticias[selectedIdx]; if (!item) return
-    setGenerating(true); setMapa(null); setGuion(''); setAudioSrc(null); setAlignment(null); setFocusedNode(null)
+  async function handleGenerate() {
+    const item = noticias[selectedIdx]
+    if (!item) return
+    setPageState('loading')
+    setLoadingMsgIdx(0)
     try {
       const res = await fetch('/api/irs-video/noticias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary, newsUrl: item.url }),
+        body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary }),
       })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.mapaJson) { setMapa(data.mapaJson); setGuion(data.guionCompleto ?? '') }
-        else toast.error('La IA no generó un mapa válido. Intenta de nuevo.')
-      } else {
-        const err = await res.json().catch(() => ({})) as { error?: string }
-        toast.error(err.error ?? `Error al generar mapa (${res.status})`)
+      const data = await res.json() as { url?: string; guionCompleto?: string; error?: string }
+      if (!res.ok || !data.url) {
+        toast.error(data.error ?? `Error al generar mapa (${res.status})`)
+        setPageState('form')
+        return
       }
+      setStudioUrl(data.url)
+      setGuion(data.guionCompleto ?? '')
+      setPageState('done')
     } catch {
       toast.error('Error de conexión. Verifica tu internet e intenta de nuevo.')
+      setPageState('form')
     }
-    setGenerating(false)
   }
 
-  async function generateAudio() {
-    if (!guion) return
-    setGeneratingAudio(true)
-    if (audioSrc) { URL.revokeObjectURL(audioSrc); setAudioSrc(null) }
-    const cleanGuion = guion.replace(/\[(INTRO|R[1-5]|CTA)\]\s*/g, '')
-    try {
-      const res = await fetch('/api/irs-video/audio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanGuion }),
-      })
-      if (res.ok) {
-        const blob = await res.blob()
-        setAudioSrc(URL.createObjectURL(blob))
-        setAlignment(null)
-        setSectionTimestamps([])
-        toast.success('Audio listo — ponlo en AirPods y graba')
-      } else {
-        const err = await res.json().catch(() => ({})) as { error?: string }
-        toast.error(err.error ?? `Error al generar audio (${res.status})`)
-      }
-    } catch {
-      toast.error('Error de conexión al generar audio.')
-    }
-    setGeneratingAudio(false)
-  }
-
-  /* ── Studio Link state ── */
-  const [generatingStudio, setGeneratingStudio] = useState(false)
-  const [studioUrl, setStudioUrl] = useState<string | null>(null)
-  const [studioCopied, setStudioCopied] = useState(false)
-
-  async function generateStudioLink() {
-    if (!mapa || !guion) return
-    setGeneratingStudio(true)
-    setStudioUrl(null)
-    try {
-      const res = await fetch('/api/studio/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mapaJson: mapa,
-          guion,
-          tema: noticias[selectedIdx]?.title ?? 'IRS News',
-          redSocial: 'TikTok',
-          duracion: '60s',
-          irsNewsUrl: noticias[selectedIdx]?.url,
-        }),
-      })
-      const body = await res.json() as { url?: string; error?: string }
-      if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`)
-      setStudioUrl(body.url!)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error generando Studio Link')
-    }
-    setGeneratingStudio(false)
-  }
-
-  function copyStudioUrl() {
-    if (!studioUrl) return
-    navigator.clipboard.writeText(studioUrl).then(() => {
-      setStudioCopied(true)
-      setTimeout(() => setStudioCopied(false), 2000)
+  function handleCopyGuion() {
+    navigator.clipboard.writeText(guion).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  const selected = noticias[selectedIdx]
-  const hasAudio = !!audioSrc
-  const hasMap = !!mapa
+  function handleReset() {
+    setPageState('form')
+    setStudioUrl('')
+    setGuion('')
+    setCopied(false)
+  }
 
   return (
-    <>
-      {presentationMode && mapa && (
-        <PresentationOverlay
-          mapa={mapa} script={guion} audioSrc={audioSrc}
-          alignment={alignment} sectionTimestamps={sectionTimestamps}
-          markers={MARKERS}
-          onExit={() => setPresentationMode(false)}
-        />
-      )}
+    <div className="flex flex-col items-center justify-start px-4 py-10 min-h-full">
+      <div className="w-full max-w-xl">
 
-      {/* Studio Link modal */}
-      {studioUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="card w-full max-w-md p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-base font-bold text-[var(--text-primary)]">📱 Studio Link listo</h3>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">Ábrelo en tu iPad — mapa fullscreen + audio</p>
-              </div>
-              <button onClick={() => setStudioUrl(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl leading-none">×</button>
-            </div>
-            <div className="flex gap-2">
-              <input readOnly value={studioUrl} className="input flex-1 text-xs font-mono" />
-              <button onClick={copyStudioUrl} className="btn-primary text-xs px-3 whitespace-nowrap">
-                {studioCopied ? '✅' : '📋 Copiar'}
-              </button>
-            </div>
-            <a href={studioUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs w-full flex items-center justify-center gap-1.5">
-              🔗 Abrir en nueva pestaña
-            </a>
-            <p className="text-[10px] text-[var(--text-muted)] text-center">Expira en 24 horas</p>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)', minHeight: 600 }}>
-
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)] flex-shrink-0">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-lg">🎬</span>
-            <h1 className="text-base font-bold text-[var(--text-primary)]">IRS Video Creator</h1>
-          </div>
-
-          {noticias.length > 0 ? (
-            <select value={selectedIdx} onChange={e => setSelectedIdx(Number(e.target.value))} className="input flex-1 min-w-0 max-w-sm text-xs">
-              {noticias.map((n, i) => <option key={n.id} value={i}>{n.title.slice(0, 70)}{n.title.length > 70 ? '…' : ''}</option>)}
-            </select>
-          ) : (
-            <p className="text-xs text-gray-500 flex-1">Ve a IRS News y actualiza las noticias primero</p>
-          )}
-
-          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
-            <button onClick={loadNoticias} disabled={loadingNews} className="btn-secondary text-xs px-2.5 py-1.5">{loadingNews ? '…' : '↺'} Cargar</button>
-            {selected?.spanishSummary && <button onClick={() => setSummaryOpen(v => !v)} className={`btn-secondary text-xs px-2.5 py-1.5 ${summaryOpen ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : ''}`}>📰</button>}
-            <button onClick={() => { setShowHistory(v => !v); if (!showHistory) loadHistory() }} className={`btn-secondary text-xs px-2.5 py-1.5 ${showHistory ? 'bg-[var(--bg-hover)]' : ''}`}>🕒 Historial</button>
-            <button onClick={generateContent} disabled={!selected || generating} className="btn-primary text-xs flex items-center gap-1.5">
-              {generating ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : '⚡ Generar mapa'}
-            </button>
-            {hasMap && (
-              <button onClick={generateAudio} disabled={generatingAudio} className="btn-secondary text-xs flex items-center gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50">
-                {generatingAudio ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</> : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio'}`}
-              </button>
-            )}
-            {hasMap && (
-              <button
-                onClick={generateStudioLink}
-                disabled={generatingStudio}
-                className="btn-secondary text-xs flex items-center gap-1.5 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 disabled:opacity-50"
-              >
-                {generatingStudio
-                  ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</>
-                  : '📱 Studio Link'}
-              </button>
-            )}
-            {hasMap && (
-              <button onClick={() => setPresentationMode(true)} className="btn-primary text-xs flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 border-0">
-                🎬 Modo Presentación
-              </button>
-            )}
-          </div>
+        <div className="flex items-center gap-2 mb-8">
+          <span className="text-2xl">🏛</span>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">IRS Video Creator</h1>
         </div>
 
-        {/* Summary */}
-        {summaryOpen && selected?.spanishSummary && (
-          <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--bg-border)] bg-blue-500/5">
-            <p className="text-xs text-gray-400 leading-relaxed">{selected.spanishSummary}</p>
-          </div>
-        )}
-
-        {/* Script + Audio panel */}
-        {guion && (
-          <div className="flex-shrink-0 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)]">
-            <button onClick={() => setScriptOpen(v => !v)} className="w-full flex items-center gap-2 px-4 py-2 hover:bg-[var(--bg-hover)] text-left">
-              <span className="text-xs font-medium text-[var(--text-secondary)]">📜 Guion ({guion.split(' ').length} palabras)</span>
-              {hasAudio && <span className="text-xs text-green-500 ml-1">🎙 Audio listo — Andrés</span>}
-              <svg className={`w-3.5 h-3.5 text-gray-500 ml-auto transition-transform ${scriptOpen ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </button>
-            {scriptOpen && (
-              <div className="px-4 pb-3 flex gap-2 items-start">
-                <textarea readOnly value={guion} className="input resize-none text-xs leading-relaxed flex-1" rows={5} />
-                {audioSrc && (
-                  <div className="flex flex-col gap-2 flex-shrink-0">
-                    <audio src={audioSrc} controls className="w-56" />
-                    <button onClick={() => { const a = document.createElement('a'); a.href = audioSrc!; a.download = 'audio-angie.mp3'; a.click() }} className="btn-secondary text-xs">⬇ MP3</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Main content */}
-        <div className="flex flex-1 min-h-0">
-          {/* History sidebar */}
-          {showHistory && (
-            <div className="w-64 flex-shrink-0 border-r border-[var(--bg-border)] bg-[var(--bg-sidebar)] flex flex-col overflow-hidden">
-              <div className="px-3 py-2.5 border-b border-[var(--bg-border)] flex items-center justify-between">
-                <p className="text-xs font-semibold text-[var(--text-primary)]">Mapas guardados</p>
-                <button onClick={() => setShowHistory(false)} className="text-gray-600 hover:text-gray-400"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
-              </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-[var(--bg-border)]">
-                {loadingHistory ? <div className="py-8 text-center text-xs text-gray-600">Cargando…</div>
-                  : history.length === 0 ? <div className="py-8 px-3 text-center text-xs text-gray-600">Aún no hay mapas.</div>
-                  : history.map(item => (
-                    <button key={item.id} onClick={() => { setMapa(item.mapaJson); setGuion(item.guionCompleto); setAudioSrc(null); setAlignment(null); setFocusedNode(null); setShowHistory(false) }}
-                      className="w-full text-left px-3 py-3 hover:bg-[var(--bg-hover)]">
-                      <p className="text-xs font-medium text-[var(--text-primary)] line-clamp-2 leading-snug">{item.titulo}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{new Date(item.createdAt).toLocaleDateString('es-CO', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                    </button>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* Map */}
-          <div className="flex-1 min-w-0 relative">
-            {!mapa && !generating && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-400 bg-gray-50">
-                <svg className="w-16 h-16 opacity-15" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 10l4.553-2.069A1 1 0 0121 8.82V15a1 1 0 01-.553.894L15 18M15 10l-6 2.7M15 10V18M9 12.7L4.447 10.631A1 1 0 014 9.82V4a1 1 0 011.447-.894L9 5M9 12.7V5m0 7.7l6-2.7" /></svg>
-                <div className="text-center space-y-1.5">
-                  <p className="text-sm font-medium text-gray-500">Selecciona una noticia y genera el mapa</p>
-                  <p className="text-xs text-gray-400">Genera el mapa → audio con Andrés → Modo Presentación → graba con tu celular</p>
-                </div>
-              </div>
-            )}
-            {generating && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-50">
-                <svg className="w-10 h-10 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 font-medium">Generando mapa educativo con IA…</p>
-                  <p className="text-xs text-gray-400 mt-1">5 temas · 15 puntos · explicaciones detalladas · guion estructurado</p>
-                </div>
-              </div>
-            )}
-            {mapa && (
-              <>
-                <MindMap mapa={mapa} focusedId={focusedNode?.id ?? null} presentationMode={false} onNodeClick={(node, all) => { setFocusedNode(node); setAllNodes(all) }} />
-                {focusedNode && (
-                  <NodePanel node={focusedNode} allNodes={allNodes} onNavigate={n => setFocusedNode(n)} onClose={() => setFocusedNode(null)} />
-                )}
-              </>
-            )}
-
-            {/* Audio status chip */}
-            {hasMap && !hasAudio && !generatingAudio && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white border border-purple-200 shadow-lg rounded-full px-4 py-2 text-xs text-gray-600">
-                <span>Voz: <strong>Andrés</strong> (voz clonada)</span>
-              </div>
-            )}
-            {generatingAudio && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-purple-50 border border-purple-300 shadow-lg rounded-full px-4 py-2 text-xs text-purple-700">
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-                Generando audio con Andrés…
-              </div>
-            )}
-            {hasAudio && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-green-50 border border-green-300 shadow-lg rounded-full px-4 py-2 text-xs text-green-700">
-                <span>✅ Audio listo — ponlo en AirPods y graba el mapa</span>
-                <button
-                  onClick={() => { const a = document.createElement('a'); a.href = audioSrc!; a.download = 'audio-andres.mp3'; a.click() }}
-                  className="flex items-center gap-1 bg-green-100 hover:bg-green-200 border border-green-400 rounded-full px-2.5 py-1 text-green-800 font-medium transition-colors"
-                  title="Descargar MP3"
-                >
-                  ⬇ MP3
+        {/* FORM STATE */}
+        {pageState === 'form' && (
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label">Noticia del IRS</label>
+                <button onClick={loadNoticias} disabled={loadingNews}
+                  className="btn-secondary text-xs px-2.5 py-1">
+                  {loadingNews ? '…' : '↺ Actualizar'}
                 </button>
               </div>
-            )}
+
+              {loadingNews ? (
+                <div className="input text-xs text-[var(--text-secondary)] py-3 text-center">Cargando noticias…</div>
+              ) : noticias.length === 0 ? (
+                <div className="input text-xs text-[var(--text-secondary)] py-3 text-center">
+                  Ve a IRS News y actualiza las noticias primero
+                </div>
+              ) : (
+                <select
+                  value={selectedIdx}
+                  onChange={e => setSelectedIdx(Number(e.target.value))}
+                  className="input text-sm mt-1"
+                >
+                  {noticias.map((n, i) => (
+                    <option key={n.id} value={i}>
+                      {n.title.length > 80 ? n.title.slice(0, 80) + '…' : n.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {noticias[selectedIdx]?.spanishSummary && (
+                <p className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
+                  {noticias[selectedIdx].spanishSummary}
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={handleGenerate}
+              disabled={noticias.length === 0 || loadingNews}
+              className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-sm disabled:opacity-50"
+            >
+              ⚡ Generar Video
+            </button>
           </div>
-        </div>
+        )}
+
+        {/* LOADING STATE */}
+        {pageState === 'loading' && (
+          <div className="flex flex-col items-center justify-center gap-6 py-16">
+            <svg className="w-10 h-10 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-sm text-[var(--text-secondary)] font-medium">
+              {LOADING_MSGS[loadingMsgIdx]}
+            </p>
+          </div>
+        )}
+
+        {/* DONE STATE */}
+        {pageState === 'done' && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 text-green-500 font-semibold">
+              <span className="text-xl">✅</span>
+              <span>¡Listo para grabar!</span>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label">Guion</label>
+                <button onClick={handleCopyGuion} className="btn-secondary text-xs px-2.5 py-1">
+                  {copied ? '✅ Copiado' : '📋 Copiar Guion'}
+                </button>
+              </div>
+              <textarea
+                readOnly
+                value={guion}
+                className="input resize-none text-xs leading-relaxed"
+                rows={10}
+              />
+            </div>
+
+            <div className="rounded-xl border border-[var(--bg-border)] bg-[var(--bg-sidebar)] p-4 space-y-3">
+              <p className="text-xs text-[var(--text-secondary)] font-medium">Link del Studio</p>
+              <p className="text-xs text-blue-400 break-all font-mono">{studioUrl}</p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => { navigator.clipboard.writeText(studioUrl) }}
+                  className="btn-secondary text-xs px-3 py-1.5"
+                >
+                  📋 Copiar Link
+                </button>
+                <button
+                  onClick={() => window.open(studioUrl, '_blank')}
+                  className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                >
+                  📱 Abrir en iPad
+                </button>
+              </div>
+              <p className="text-xs text-amber-500">⏱ Expira en 24 horas</p>
+            </div>
+
+            <button onClick={handleReset} className="btn-secondary w-full text-sm py-2.5">
+              + Crear otro video
+            </button>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   )
 }

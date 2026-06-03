@@ -4,23 +4,11 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 
-export interface MapaHijo {
-  id: string
-  texto: string
-  color: string
-  explicacion: string
-}
-export interface MapaRama {
-  id: string
-  emoji: string
-  texto: string
-  color: string
-  explicacion: string
-  hijos: MapaHijo[]
-}
-export interface MapaJson {
+export const maxDuration = 60
+
+interface MapaJson {
   centro: { id: string; emoji: string; texto: string; color: string; explicacion: string }
-  ramas: MapaRama[]
+  ramas: Array<{ id: string; emoji: string; texto: string; color: string; explicacion: string; hijos: Array<{ id: string; texto: string; color: string; explicacion: string }> }>
 }
 
 /* GET — returns recent IRS news from DB */
@@ -41,18 +29,10 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { title, summary, spanishSummary, newsUrl } = await req.json() as {
-    title: string; summary: string; spanishSummary?: string; newsUrl?: string
+  const { title, summary, spanishSummary } = await req.json() as {
+    title: string; summary: string; spanishSummary?: string
   }
   if (!title) return NextResponse.json({ error: 'title requerido' }, { status: 400 })
-
-  // ─── Cache check ────────────────────────────────────────────────
-  if (newsUrl) {
-    const cached = await prisma.irsNoticia.findUnique({ where: { guid: newsUrl } })
-    if (cached?.mapaJson) {
-      return NextResponse.json({ mapaJson: cached.mapaJson, guionCompleto: cached.resumen })
-    }
-  }
 
   const client = new Anthropic()
 
@@ -147,21 +127,9 @@ NOTICIA:
 Título: ${title}
 ${context ? `Contexto: ${context}` : ''}
 
-También genera un guion narrado de 60-75 segundos en español latino conversacional. El guion DEBE tener estos marcadores exactos al inicio de cada sección (los usamos para sincronizar el mapa):
-
-[INTRO] gancho impactante (1-2 oraciones)
-[R1] sección sobre qué es / a quién aplica
-[R2] sección sobre cómo funciona
-[R3] sección sobre qué debe hacer el contribuyente
-[R4] sección sobre fechas y montos
-[R5] sección sobre errores que evitar
-[CTA] llamada a la acción final
-
-Reglas del guion:
-- Cada sección [R1]-[R5]: 2-3 oraciones con datos concretos
-- Tono: amigable, como hablarle a un amigo, no como un anuncio
-- Sin muletillas, sin "básicamente", sin "en resumen"
-- Total: 60-75 segundos cuando se lee en voz alta
+También genera un guion narrado de 60-75 segundos en español latino conversacional.
+El guion tiene estas secciones: intro → qué es → cómo funciona → qué hacer → fechas/montos → errores → llamada a la acción.
+Tono: amigable, como hablarle a un amigo. Sin muletillas.
 
 Responde SOLO con JSON válido (sin markdown):
 { "mapaJson": {...}, "guionCompleto": "..." }`
@@ -182,31 +150,34 @@ Responde SOLO con JSON válido (sin markdown):
   let result: { mapaJson: MapaJson; guionCompleto: string }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
-    result = match ? JSON.parse(match[0]) : { mapaJson: null, guionCompleto: raw }
+    const parsed = match ? JSON.parse(match[0]) : null
+    if (!parsed?.mapaJson) throw new Error('Invalid response')
+    result = parsed
   } catch {
-    return NextResponse.json({ error: 'Error al parsear respuesta de IA', raw }, { status: 500 })
+    return NextResponse.json({ error: 'Error generando el mapa, intenta de nuevo.' }, { status: 500 })
   }
 
-  // ─── Save to IrsNoticia cache (non-fatal) ──────────────────────
-  if (newsUrl) {
-    prisma.irsNoticia.upsert({
-      where: { guid: newsUrl },
-      create: {
-        guid: newsUrl,
-        titulo: title.slice(0, 200),
-        descripcion: (summary || '').slice(0, 1000),
-        resumen: result.guionCompleto,
+  // Create studio session
+  let studioToken: string
+  try {
+    const studioSession = await prisma.studioSession.create({
+      data: {
+        tema: title.slice(0, 200),
+        redSocial: 'TikTok',
+        duracion: '60s',
         mapaJson: result.mapaJson as object,
-        pubDate: new Date(),
+        guion: result.guionCompleto,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
-      update: {
-        resumen: result.guionCompleto,
-        mapaJson: result.mapaJson as object,
-      },
-    }).catch(() => {})
+      select: { token: true },
+    })
+    studioToken = studioSession.token
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Error guardando sesión: ${msg}` }, { status: 500 })
   }
 
-  // Save to history (non-fatal)
+  // Save IRS history (non-fatal)
   try {
     await prisma.irsVideoContent.create({
       data: {
@@ -218,5 +189,9 @@ Responde SOLO con JSON válido (sin markdown):
     })
   } catch { /* ignore */ }
 
-  return NextResponse.json(result)
+  const base = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  return NextResponse.json({
+    url: `${base}/studio/${studioToken}`,
+    guionCompleto: result.guionCompleto,
+  })
 }

@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 
-const SYSTEM = `Eres experto en contenido educativo viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO con JSON válido. Sin markdown. Sin texto extra.`
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -15,56 +15,65 @@ export async function POST(req: NextRequest) {
   }
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
 
-  const prompt = `Crea un mapa conceptual y guion para un video sobre: "${tema}"
-Red social: ${redSocial}
-Duración: ${duracion}
+  const wordCount = duracion === '30s' ? 75 : duracion === '45s' ? 110 : 150
+  const wordCountLabel = `${wordCount} palabras (~${duracion})`
 
-El guion se construye NODO POR NODO en este orden exacto:
-centro → rama1 → hijo1a → hijo1b → rama2 → hijo2a → hijo2b → rama3 → hijo3a → hijo3b → rama4 → hijo4a → hijo4b → cta
+  const prompt = `Eres un experto en contenido viral para latinos en EE.UU. sobre impuestos, LLC, ITIN y servicios financieros. Tu contenido es educativo, en español latino conversacional, como si le explicaras a un amigo. Nunca uses términos muy técnicos sin explicarlos primero.
 
-Cada nodo tiene su propio texto corto para el mapa Y su propia frase para el audio. Deben decir lo mismo.
+Genera contenido sobre este tema: "${tema}"
+Red social destino: ${redSocial}
+Duración objetivo: ${duracion} (${wordCountLabel})
 
-Responde con este JSON exacto:
+Genera los siguientes elementos en UN SOLO JSON válido (sin markdown):
+
 {
-  "centro": {
-    "id": "centro",
-    "emoji": "⚠️",
-    "texto": "Texto corto para el mapa",
-    "color": "#c0392b",
-    "guion": "Frase completa que dice la voz sobre este nodo. 1-2 oraciones."
+  "mapaJson": {
+    "centro": {
+      "id": "c",
+      "emoji": "🎯",
+      "texto": "TÍTULO CORTO (máx 4 palabras)",
+      "color": "#1e3a5f",
+      "explicacion": "2-3 oraciones que presentan el tema de forma clara y sencilla."
+    },
+    "ramas": [
+      {
+        "id": "r1", "emoji": "📌", "texto": "Categoría 1 (3-4 palabras)", "color": "#dc2626",
+        "explicacion": "2 oraciones explicando esta categoría con un ejemplo concreto.",
+        "hijos": [
+          { "id": "r1h1", "texto": "punto clave (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas." },
+          { "id": "r1h2", "texto": "punto clave (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas." }
+        ]
+      },
+      {
+        "id": "r2", "emoji": "💡", "texto": "Categoría 2 (3-4 palabras)", "color": "#2563eb",
+        "explicacion": "2 oraciones explicando esta categoría.",
+        "hijos": [
+          { "id": "r2h1", "texto": "punto clave", "color": "#93c5fd", "explicacion": "1-2 oraciones." },
+          { "id": "r2h2", "texto": "punto clave", "color": "#93c5fd", "explicacion": "1-2 oraciones." }
+        ]
+      },
+      {
+        "id": "r3", "emoji": "✅", "texto": "Categoría 3 (3-4 palabras)", "color": "#16a34a",
+        "explicacion": "2 oraciones con pasos concretos o beneficios.",
+        "hijos": [
+          { "id": "r3h1", "texto": "punto clave", "color": "#86efac", "explicacion": "1-2 oraciones." },
+          { "id": "r3h2", "texto": "punto clave", "color": "#86efac", "explicacion": "1-2 oraciones." }
+        ]
+      },
+      {
+        "id": "r4", "emoji": "⚡", "texto": "Categoría 4 (3-4 palabras)", "color": "#d97706",
+        "explicacion": "2 oraciones sobre datos clave, fechas o montos importantes.",
+        "hijos": [
+          { "id": "r4h1", "texto": "punto clave", "color": "#fcd34d", "explicacion": "1-2 oraciones." },
+          { "id": "r4h2", "texto": "punto clave", "color": "#fcd34d", "explicacion": "1-2 oraciones." }
+        ]
+      }
+    ]
   },
-  "ramas": [
-    {
-      "id": "r1",
-      "emoji": "💸",
-      "texto": "Texto corto para el mapa",
-      "color": "#e67e22",
-      "guion": "Frase completa que dice la voz sobre esta rama. 1-2 oraciones.",
-      "hijos": [
-        {
-          "id": "h1a",
-          "texto": "Texto corto para el mapa",
-          "color": "#f39c12",
-          "guion": "Frase corta sobre este punto. 1 oración."
-        },
-        {
-          "id": "h1b",
-          "texto": "Texto corto para el mapa",
-          "color": "#f39c12",
-          "guion": "Frase corta sobre este punto. 1 oración."
-        }
-      ]
-    }
-  ],
-  "cta": "Frase final. Escríbeme y te ayudo 👇"
-}
-
-REGLAS CRÍTICAS:
-- texto del nodo: máximo 3 palabras por línea, máximo 2 líneas
-- guion del nodo: debe explicar exactamente lo que dice el texto. Si el texto dice "Multa $500" el guion dice "Si no declaras a tiempo, el IRS te puede multar con 500 dólares"
-- El texto y el guion del mismo nodo deben ser COHERENTES entre sí
-- 4 ramas siempre, 2 hijos por rama siempre
-- Colores hex vibrantes, diferentes por rama`
+  "guion": "El guion completo aquí. Tono conversacional como hablarle a un amigo. Total: ${wordCountLabel}. Termina con: ¿Tienes preguntas? Escríbeme y te ayudo 👇",
+  "titulo": "Título optimizado para ${redSocial} (max 60 chars, con emoji al inicio)",
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+}`
 
   const client = new Anthropic()
   let raw: string
@@ -72,29 +81,45 @@ REGLAS CRÍTICAS:
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
-      system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
     })
     raw = message.content[0].type === 'text' ? message.content[0].text : ''
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: `Error al llamar a la IA: ${msg}` }, { status: 500 })
+    return NextResponse.json({ error: `Error generando el mapa, intenta de nuevo. (${msg})` }, { status: 500 })
   }
 
-  let parsed: { centro: any; ramas: any[]; cta: string; titulo?: string; hashtags?: string[] }
+  let result: { mapaJson: object; guion: string; titulo: string; hashtags: string[] }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
-    parsed = match ? JSON.parse(match[0]) : null
-    if (!parsed?.centro || !parsed?.ramas) throw new Error('JSON inválido')
+    const parsed = match ? JSON.parse(match[0]) : null
+    if (!parsed?.mapaJson) throw new Error('Invalid response')
+    result = parsed
   } catch {
-    return NextResponse.json({ error: 'Error al parsear respuesta de la IA', raw }, { status: 500 })
+    return NextResponse.json({ error: 'Error generando el mapa, intenta de nuevo.' }, { status: 500 })
   }
 
-  const mapaJson = { centro: parsed.centro, ramas: parsed.ramas, cta: parsed.cta ?? '' }
-  const guion = buildGuion(mapaJson, parsed.cta ?? '')
-  const titulo = parsed.titulo ?? tema
-  const hashtags = parsed.hashtags ?? []
+  // Create studio session
+  let studioToken: string
+  try {
+    const studioSession = await prisma.studioSession.create({
+      data: {
+        tema: tema.slice(0, 200),
+        redSocial,
+        duracion,
+        mapaJson: result.mapaJson,
+        guion: result.guion,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+      select: { token: true },
+    })
+    studioToken = studioSession.token
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Error guardando sesión: ${msg}` }, { status: 500 })
+  }
 
+  // Save content history (non-fatal)
   try {
     await prisma.contentCreatorHistory.create({
       data: {
@@ -102,28 +127,19 @@ REGLAS CRÍTICAS:
         tema: tema.slice(0, 200),
         redSocial,
         duracion,
-        mapaJson: mapaJson as object,
-        guion,
-        titulo,
-        hashtags,
+        mapaJson: result.mapaJson,
+        guion: result.guion,
+        titulo: result.titulo,
+        hashtags: result.hashtags,
       },
     })
   } catch { /* ignore */ }
 
-  return NextResponse.json({ mapaJson, guion, titulo, hashtags })
-}
-
-function buildGuion(mapaJson: any, cta: string): string {
-  const parts: string[] = []
-  if (mapaJson.centro?.guion) parts.push(mapaJson.centro.guion.trim())
-  for (const rama of mapaJson.ramas ?? []) {
-    if (rama.guion) parts.push(rama.guion.trim())
-    for (const hijo of rama.hijos ?? []) {
-      if (hijo.guion) parts.push(hijo.guion.trim())
-    }
-  }
-  if (cta) parts.push(cta.trim())
-  return parts.join(' ')
+  const base = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  return NextResponse.json({
+    url: `${base}/studio/${studioToken}`,
+    guionCompleto: result.guion,
+  })
 }
 
 export async function GET() {
@@ -135,17 +151,7 @@ export async function GET() {
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       take: 20,
-      select: {
-        id: true,
-        tema: true,
-        redSocial: true,
-        duracion: true,
-        mapaJson: true,
-        guion: true,
-        titulo: true,
-        hashtags: true,
-        createdAt: true,
-      },
+      select: { id: true, tema: true, redSocial: true, duracion: true, titulo: true, createdAt: true },
     })
     return NextResponse.json(history)
   } catch {
