@@ -53,6 +53,7 @@ export default function ContentCreatorPage() {
 
   /* ── Studio Link state ── */
   const [generatingStudio, setGeneratingStudio] = useState(false)
+  const [studioPhase, setStudioPhase] = useState<'idle' | 'mapa' | 'audio'>('idle')
   const [studioUrl, setStudioUrl] = useState<string | null>(null)
   const [studioCopied, setStudioCopied] = useState(false)
 
@@ -158,22 +159,27 @@ export default function ContentCreatorPage() {
   }
 
   async function generateStudioLink() {
-    if (!mapa || !guion) return
+    if (!tema.trim()) return
     setGeneratingStudio(true)
+    setStudioPhase('mapa')
     setStudioUrl(null)
+    const phaseTimer = setTimeout(() => setStudioPhase('audio'), 5000)
     try {
       const res = await fetch('/api/studio/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapaJson: mapa, guion, tema, redSocial, duracion }),
+        body: JSON.stringify({ tema, redSocial, duracion }),
       })
       const body = await res.json() as { url?: string; error?: string }
       if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`)
       setStudioUrl(body.url!)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error generando Studio Link')
+    } finally {
+      clearTimeout(phaseTimer)
+      setStudioPhase('idle')
+      setGeneratingStudio(false)
     }
-    setGeneratingStudio(false)
   }
 
   function copyStudioUrl() {
@@ -242,14 +248,20 @@ export default function ContentCreatorPage() {
                   : `🎙 ${hasAudio ? 'Regenerar audio' : 'Generar audio con Andrés'}`}
               </button>
             )}
-            {hasMap && (
+            {!!tema.trim() && (
               <button
                 onClick={generateStudioLink}
                 disabled={generatingStudio}
                 className="btn-secondary text-xs flex items-center gap-1.5 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 disabled:opacity-50"
               >
                 {generatingStudio
-                  ? <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generando…</>
+                  ? <>
+                      <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      {studioPhase === 'mapa' ? '✨ Generando mapa…' : '🎙 Generando audio…'}
+                    </>
                   : '📱 Studio Link'}
               </button>
             )}

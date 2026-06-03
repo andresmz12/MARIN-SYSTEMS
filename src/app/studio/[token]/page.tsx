@@ -13,7 +13,6 @@ interface MapaJson {
   }>
 }
 
-// Proportions (0–1) stored in DB; converted to seconds after audio loads
 interface PropTs { id: string; inicio: number; fin: number }
 
 interface SessionData {
@@ -38,9 +37,8 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [progreso,     setProgreso]     = useState(0)
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef   = useRef<number>(0)
-  // real-seconds timestamps set once audio duration is known
   const tsRef    = useRef<PropTs[]>([])
 
   useEffect(() => {
@@ -68,43 +66,30 @@ export default function StudioPage({ params }: { params: { token: string } }) {
     }
   }
 
+  function handleLoadedMetadata() {
+    const audio = audioRef.current
+    if (!audio || !data) return
+    const dur = audio.duration
+    tsRef.current = data.timestamps.map(ts => ({
+      id:     ts.id,
+      inicio: ts.inicio * dur,
+      fin:    ts.fin    * dur,
+    }))
+  }
+
+  function handlePlay()  { rafRef.current = requestAnimationFrame(loop); setPlaying(true)  }
+  function handlePause() { cancelAnimationFrame(rafRef.current); setPlaying(false) }
+  function handleEnded() {
+    cancelAnimationFrame(rafRef.current)
+    setActiveNodeId(null)
+    setProgreso(0)
+    setPlaying(false)
+  }
+
   function toggleAudio() {
-    if (!data) return
-
-    if (!audioRef.current) {
-      const el = new Audio(`/api/studio/${token}/audio`)
-
-      el.onloadedmetadata = () => {
-        const dur = el.duration
-        // Convert proportions → real seconds
-        tsRef.current = data.timestamps.map(ts => ({
-          id:    ts.id,
-          inicio: ts.inicio * dur,
-          fin:   ts.fin   * dur,
-        }))
-      }
-
-      el.onplay = () => {
-        rafRef.current = requestAnimationFrame(loop)
-        setPlaying(true)
-      }
-
-      el.onpause = () => {
-        cancelAnimationFrame(rafRef.current)
-        setPlaying(false)
-      }
-
-      el.onended = () => {
-        cancelAnimationFrame(rafRef.current)
-        setActiveNodeId(null)
-        setProgreso(0)
-        setPlaying(false)
-      }
-
-      audioRef.current = el
-    }
-
-    audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause()
+    const audio = audioRef.current
+    if (!audio) return
+    audio.paused ? audio.play() : audio.pause()
   }
 
   if (state === 'loading') {
@@ -134,6 +119,18 @@ export default function StudioPage({ params }: { params: { token: string } }) {
 
   return (
     <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden' }}>
+
+      {/* Hidden audio element — preloads immediately */}
+      <audio
+        ref={audioRef}
+        src={`/api/studio/${token}/audio`}
+        preload="auto"
+        onLoadedMetadata={handleLoadedMetadata}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onEnded={handleEnded}
+        style={{ display: 'none' }}
+      />
 
       {/* Map fills entire viewport */}
       <div style={{ width: '100%', height: '100%' }}>
