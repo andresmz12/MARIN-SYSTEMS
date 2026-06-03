@@ -5,8 +5,6 @@ import dynamic from 'next/dynamic'
 
 const StudioMap = dynamic(() => import('@/components/studio/StudioMap'), { ssr: false })
 
-interface Timestamp { nodoId: string; inicio: number; fin: number }
-
 interface MapaJson {
   centro: { id: string; emoji: string; texto: string; color: string }
   ramas: Array<{
@@ -21,33 +19,30 @@ interface SessionData {
   duracion: string
   mapaJson: MapaJson
   guion: string
-  timestamps: Timestamp[]
 }
+
+interface NodeTs { id: string; inicio: number; fin: number }
 
 type State = 'loading' | 'ready' | 'error'
-
-function nodeColor(id: string | null, mapa: MapaJson): string {
-  if (!id) return '#6366f1'
-  if (id === mapa.centro.id) return mapa.centro.color
-  for (const r of mapa.ramas) {
-    if (r.id === id) return r.color
-    for (const h of r.hijos) if (h.id === id) return h.color
-  }
-  return '#6366f1'
-}
 
 export default function StudioPage({ params }: { params: { token: string } }) {
   const { token } = params
   const [state,    setState]    = useState<State>('loading')
   const [data,     setData]     = useState<SessionData | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
-  const [playing,     setPlaying]     = useState(false)
-  const [showGuion,   setShowGuion]   = useState(false)
+
+  const [playing,      setPlaying]      = useState(false)
+  const [showGuion,    setShowGuion]    = useState(false)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
-  const [audioProgress, setAudioProgress] = useState(0)
+  const [progreso,     setProgreso]     = useState(0)
+  const [timestamps,   setTimestamps]   = useState<NodeTs[]>([])
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const rafRef   = useRef<number | null>(null)
+  const rafRef   = useRef<number>(0)
+  // keep latest timestamps accessible inside the RAF loop without stale closure
+  const tsRef    = useRef<NodeTs[]>([])
+
+  useEffect(() => { tsRef.current = timestamps }, [timestamps])
 
   useEffect(() => {
     fetch(`/api/studio/${token}`)
@@ -62,41 +57,69 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       .catch((e) => { setErrorMsg(e.message); setState('error') })
   }, [token])
 
-  function startSync(timestamps: Timestamp[]) {
-    function loop() {
-      const audio = audioRef.current
-      if (!audio) return
-      const t   = audio.currentTime
-      const dur = audio.duration || 1
-      setAudioProgress(t / dur)
-      const active = timestamps.find(ts => t >= ts.inicio && t < ts.fin) ?? null
-      setActiveNodeId(active?.nodoId ?? null)
-      rafRef.current = requestAnimationFrame(loop)
-    }
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    rafRef.current = requestAnimationFrame(loop)
+  function buildTimestamps(duracion: number, mapa: MapaJson): NodeTs[] {
+    const orden: string[] = [mapa.centro.id]
+    mapa.ramas.forEach(rama => {
+      orden.push(rama.id)
+      rama.hijos.forEach(hijo => orden.push(hijo.id))
+    })
+    const porNodo = duracion / orden.length
+    return orden.map((id, i) => ({
+      id,
+      inicio: i * porNodo,
+      fin: (i + 1) * porNodo,
+    }))
   }
 
-  function stopSync() {
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
-    setActiveNodeId(null)
-    setAudioProgress(0)
+  function loop() {
+    const audio = audioRef.current
+    if (!audio) return
+    const t = audio.currentTime
+    const activo = tsRef.current.find(n => t >= n.inicio && t < n.fin) ?? null
+    setActiveNodeId(activo?.id ?? null)
+    setProgreso(t / (audio.duration || 1))
+    if (!audio.paused && !audio.ended) {
+      rafRef.current = requestAnimationFrame(loop)
+    }
   }
 
   function toggleAudio() {
+    if (!data) return
+
     if (!audioRef.current) {
       const el = new Audio(`/api/studio/${token}/audio`)
-      el.onended = () => { setPlaying(false); stopSync() }
+
+      el.onloadedmetadata = () => {
+        const ts = buildTimestamps(el.duration, data.mapaJson)
+        setTimestamps(ts)
+        tsRef.current = ts
+      }
+
+      el.onplay = () => {
+        rafRef.current = requestAnimationFrame(loop)
+        setPlaying(true)
+      }
+
+      el.onpause = () => {
+        cancelAnimationFrame(rafRef.current)
+        setPlaying(false)
+      }
+
+      el.onended = () => {
+        cancelAnimationFrame(rafRef.current)
+        setActiveNodeId(null)
+        setProgreso(0)
+        setPlaying(false)
+      }
+
       audioRef.current = el
     }
-    if (playing) {
-      audioRef.current.pause()
-      setPlaying(false)
-      stopSync()
+
+    const audio = audioRef.current
+    if (audio.paused) {
+      audio.play()
     } else {
-      audioRef.current.play()
-      setPlaying(true)
-      startSync(data?.timestamps ?? [])
+      audio.pause()
     }
   }
 
@@ -123,25 +146,26 @@ export default function StudioPage({ params }: { params: { token: string } }) {
     )
   }
 
-  const activeColor = data ? nodeColor(activeNodeId, data.mapaJson) : '#6366f1'
+  const centerColor = data!.mapaJson.centro.color
 
   return (
     <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden' }}>
+
       {/* Map fills entire viewport */}
       <div style={{ width: '100%', height: '100%' }}>
         <StudioMap mapaJson={data!.mapaJson} activeNodeId={activeNodeId} />
       </div>
 
-      {/* Audio play/pause */}
+      {/* Play/pause button */}
       <button onClick={toggleAudio}
         style={{
-          position: 'absolute', bottom: 32, right: 24,
+          position: 'fixed', bottom: 32, right: 24,
           width: 64, height: 64, borderRadius: '50%',
-          background: playing ? '#ef4444' : '#6366f1',
+          background: playing ? '#ef4444' : centerColor,
           border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 28, boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-          transition: 'background 0.2s', zIndex: 20,
+          fontSize: 28, boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+          transition: 'background 0.2s', zIndex: 50,
         }}
         title={playing ? 'Pausar' : 'Reproducir'}>
         {playing ? '⏸' : '▶️'}
@@ -150,25 +174,25 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       {/* Script toggle */}
       <button onClick={() => setShowGuion(v => !v)}
         style={{
-          position: 'absolute', bottom: 32, right: 104,
+          position: 'fixed', bottom: 32, right: 104,
           width: 64, height: 64, borderRadius: '50%',
           background: showGuion ? 'rgba(99,102,241,0.18)' : 'rgba(0,0,0,0.06)',
           border: '1px solid rgba(99,102,241,0.25)',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-          transition: 'background 0.2s', zIndex: 20,
+          transition: 'background 0.2s', zIndex: 50,
         }}
         title="Ver guion">📝</button>
 
       {showGuion && (
         <div style={{
-          position: 'absolute', bottom: 112, left: 16, right: 16,
+          position: 'fixed', bottom: 112, left: 16, right: 16,
           maxHeight: '40dvh', overflowY: 'auto',
           background: 'rgba(250,250,248,0.97)',
           border: '1px solid rgba(99,102,241,0.2)',
           boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
-          borderRadius: 16, padding: '20px 24px', zIndex: 20,
+          borderRadius: 16, padding: '20px 24px', zIndex: 50,
         }}>
           <p style={{
             color: 'rgba(20,20,35,0.88)',
@@ -181,21 +205,20 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         </div>
       )}
 
-      {/* Progress bar — 3px at very bottom, color of active node */}
-      {playing && (
+      {/* Progress bar */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        height: 4, background: '#eee', zIndex: 50,
+        pointerEvents: 'none',
+      }}>
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          height: 3, background: 'rgba(0,0,0,0.08)', zIndex: 25,
-          pointerEvents: 'none',
-        }}>
-          <div style={{
-            height: '100%',
-            width: `${audioProgress * 100}%`,
-            background: activeColor,
-            transition: 'width 0.1s linear, background 0.4s ease',
-          }} />
-        </div>
-      )}
+          height: '100%',
+          width: `${progreso * 100}%`,
+          background: centerColor,
+          transition: 'width 0.1s linear',
+        }} />
+      </div>
+
     </div>
   )
 }
