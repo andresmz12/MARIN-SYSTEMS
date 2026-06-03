@@ -256,8 +256,8 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         }}>
           <p style={{
             color: 'rgba(20,20,35,0.88)',
-            fontFamily: "'Caveat', cursive",
-            fontSize: 18, lineHeight: 1.7,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 15, lineHeight: 1.75,
             margin: 0, whiteSpace: 'pre-wrap',
           }}>
             {data!.guion}

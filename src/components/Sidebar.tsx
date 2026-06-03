@@ -108,6 +108,17 @@ const mainNavItems = [
       </svg>
     ),
   },
+  {
+    href: '/command-center',
+    label: 'Command Center',
+    icon: (
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <circle cx="12" cy="12" r="9" strokeWidth={1.5} />
+        <circle cx="12" cy="12" r="4.5" strokeWidth={1.5} />
+        <circle cx="12" cy="12" r="1" strokeWidth={2} />
+      </svg>
+    ),
+  },
 ]
 
 interface SidebarProps {
@@ -218,14 +229,6 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          <Link href="/command-center" className={linkClass(isActive('/command-center'))}>
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <circle cx="12" cy="12" r="9" strokeWidth={1.5} />
-              <circle cx="12" cy="12" r="4.5" strokeWidth={1.5} />
-              <circle cx="12" cy="12" r="1" strokeWidth={2} />
-            </svg>
-            {!collapsed && <span>Command Center</span>}
-          </Link>
           {navLink('/dashboard', 'Dashboard', mainNavItems[0].icon)}
           {navLink('/empresas', 'Empresas', mainNavItems[1].icon)}
 
@@ -278,6 +281,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {navLink('/irs-news', 'IRS News', mainNavItems[6].icon)}
           {navLink('/irs-video', 'IRS Video', mainNavItems[7].icon)}
           {navLink('/content-creator', 'Content Creator', mainNavItems[8].icon)}
+          {navLink('/command-center', 'Command Center', mainNavItems[9].icon)}
         </nav>
 
         {/* Bottom */}

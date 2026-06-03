@@ -221,7 +221,7 @@ export async function GET() {
           pct: ceoBlocks.length > 0 ? Math.round((ceoDoneBlocks.length / ceoBlocks.length) * 100) : 0,
         }
       : null,
-  })
+  }, { headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' } })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Error al obtener estadísticas' }, { status: 500 })

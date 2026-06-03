@@ -123,8 +123,14 @@ function construirGuion(mapa: any): string {
 }
 
 // ─── Proportional timestamps (0–1); last node always ends at 1 ─
-function calcularTimestamps(mapa: any, guionCompleto: string) {
-  const totalW = guionCompleto.split(/\s+/).filter(Boolean).length
+interface Alignment {
+  characters: string[]
+  character_start_times_seconds: number[]
+  character_end_times_seconds: number[]
+}
+
+// ─── Timestamps from ElevenLabs character alignment ──────────
+function calcularTimestamps(mapa: any, guionCompleto: string, alignment?: Alignment) {
   const orden: { id: string; guion: string }[] = []
   orden.push({ id: mapa.centro.id ?? 'centro', guion: mapa.centro.guion ?? '' })
   for (const rama of mapa.ramas ?? []) {
@@ -135,23 +141,42 @@ function calcularTimestamps(mapa: any, guionCompleto: string) {
   }
   if (mapa.cta) orden.push({ id: 'cta', guion: mapa.cta })
 
+  // Use real character timestamps when available
+  if (alignment && alignment.character_start_times_seconds.length > 0) {
+    const starts = alignment.character_start_times_seconds
+    const ends   = alignment.character_end_times_seconds
+    const totalDur = Math.max(...ends, 0.001)
+    let pos = 0
+    return orden.map((nodo, i) => {
+      const text   = nodo.guion.trim()
+      const inicio = (starts[Math.min(pos, starts.length - 1)] ?? 0) / totalDur
+      pos += text.length + 1  // +1 for space separator
+      const fin = i === orden.length - 1
+        ? 1.0
+        : (starts[Math.min(pos, starts.length - 1)] ?? totalDur) / totalDur
+      return { id: nodo.id, inicio, fin }
+    })
+  }
+
+  // Fallback: word-count proportional
+  const totalW = guionCompleto.split(/\s+/).filter(Boolean).length
   let acum = 0
   return orden.map((nodo, i) => {
     const w    = nodo.guion.split(/\s+/).filter(Boolean).length
     const prop = w / Math.max(totalW, 1)
-    const fin  = i === orden.length - 1 ? 1.0 : acum + prop  // last node always reaches 1.0
+    const fin  = i === orden.length - 1 ? 1.0 : acum + prop
     const ts   = { id: nodo.id, inicio: acum, fin }
     acum += prop
     return ts
   })
 }
 
-// ─── ElevenLabs with retry ───────────────────────────────────
-async function generarAudio(apiKey: string, text: string): Promise<Buffer> {
+// ─── ElevenLabs with timestamps + retry ──────────────────────
+async function generarAudio(apiKey: string, text: string): Promise<{ buffer: Buffer; alignment?: Alignment }> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+        `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/with-timestamps`,
         {
           method: 'POST',
           headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
@@ -168,7 +193,11 @@ async function generarAudio(apiKey: string, text: string): Promise<Buffer> {
       if (res.status === 400) throw new Error('El texto es demasiado largo o tiene caracteres inválidos')
       if (res.status === 503) throw new Error('ElevenLabs está en mantenimiento, intenta en unos minutos')
       if (!res.ok) throw new Error(`ElevenLabs error ${res.status}`)
-      return Buffer.from(await res.arrayBuffer())
+      const json = await res.json() as { audio_base64: string; alignment: Alignment }
+      return {
+        buffer:    Buffer.from(json.audio_base64, 'base64'),
+        alignment: json.alignment,
+      }
     } catch (err) {
       console.error(`[studio/create] ElevenLabs intento ${attempt}:`, err)
       if (attempt === 3) throw err
@@ -231,10 +260,12 @@ export async function POST(req: NextRequest) {
     timestamps    = calcularTimestamps(mapaJson, guionCompleto)
   }
 
-  // Step 2: ElevenLabs
+  // Step 2: ElevenLabs — get audio + real character-level timestamps
   let audioBuffer: Buffer
   try {
-    audioBuffer = await generarAudio(apiKey, guionCompleto)
+    const result = await generarAudio(apiKey, guionCompleto)
+    audioBuffer  = result.buffer
+    timestamps   = calcularTimestamps(mapaJson, guionCompleto, result.alignment)
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Error generando audio' },
