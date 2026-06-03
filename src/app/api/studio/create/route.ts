@@ -23,22 +23,23 @@ async function generarMapa(tema: string, redSocial: string, duracion: string): P
       content: `Crea un mapa conceptual COMPLETO para un video de ${duracion} segundos sobre: "${tema}"
 Para: ${redSocial}
 
-REGLAS CRÍTICAS DEL TEXTO:
-- SIEMPRE espacios entre palabras
-- NUNCA juntar palabras: "Nueva Calculadora" NO "NuevaCalculadora"
-- Usar \\n para separar en 2 líneas máximo
-- Máximo 13 caracteres por línea incluyendo espacios
-- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Nueva\\nCalculadora", "$600 al\\naño", "A quién\\nafecta"
-- Ejemplos INCORRECTOS: "Interesesy Multas", "NuevaCalculadora", "AQuiénAfecta"
+REGLAS DEL TEXTO (crítico):
+- SIEMPRE espacios entre palabras. NUNCA juntar: "Nueva Calculadora" NO "NuevaCalculadora"
+- Usar \\n para separar en 2 líneas. Máximo 13 caracteres por línea
+- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Formulario\\n1099-K", "$600 al\\naño"
+- Ejemplos INCORRECTOS: "Interesesy Multas", "AQuiénAfecta"
 
-REGLAS DEL CONTENIDO:
-- 4 ramas SIEMPRE en los 4 cuadrantes
-- 2 hijos por rama SIEMPRE
-- Cada hijo con dato concreto: monto, fecha, porcentaje, formulario
-- Ejemplos buenos de hijos: "Multa\\n$500", "Antes del\\n31 Enero", "Formulario\\n1099-K"
+REGLAS DEL CONTENIDO (crítico):
+- NO usar textos genéricos. SÍ usar datos reales específicos
+- MALO: "Qué Es" | BUENO: "Look-Back\\nIRS 2025"
+- MALO: "A Quién Afecta" | BUENO: "Contratos\\n+2 años"
+- MALO: "Qué Hacer" | BUENO: "Formulario\\n8697"
+- Cada hijo con un dato concreto: monto ($600), fecha (31 Enero), formulario (1099-K), porcentaje (8%), acción (Llama al IRS)
+- El mapa debe verse como una guía completa del tema, no un esquema vacío
+- 4 ramas SIEMPRE, 2 hijos por rama SIEMPRE
 - guion del centro: introducción del tema (2 oraciones)
-- guion de cada rama: explicación de esa rama (2 oraciones)
-- guion de cada hijo: dato específico (1 oración)
+- guion de cada rama: explicación de esa categoría (2 oraciones)
+- guion de cada hijo: dato específico mencionado en el texto (1 oración)
 - El guion explica exactamente lo que dice el texto del nodo
 
 JSON exacto (sin nada más):
@@ -55,7 +56,7 @@ JSON exacto (sin nada más):
   ],
   "cta": "Frase call to action. Escríbeme 👇"
 }
-Incluir 4 ramas con 2 hijos cada una. Colores hex vibrantes distintos por rama.`,
+Incluir las 4 ramas completas con sus 2 hijos cada una. Colores hex vibrantes distintos por rama.`,
     }],
   })
   const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''

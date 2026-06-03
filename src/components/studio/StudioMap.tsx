@@ -243,20 +243,20 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
   const BF = Math.max(13, minDim * 0.020)
   const HF = Math.max(12, minDim * 0.017)
 
-  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 110, 160, 80, 100)
+  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 100, 120)
   const bNodes = ramas.map(br => ({
     br,
-    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 95, 130, 70, 85),
+    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 85, 105),
     hijos: br.hijos.map(h => ({
       h,
-      m: measureNode(h.texto, null, HF, 15, 14, 8, 80, 110, 55, 65),
+      m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 65, 80),
     })),
     spread: spreadStep(br.hijos.length, sectorDeg),
   }))
 
-  // Iterative collision resolution — start with 20% more BDIST, 25% more CDIST
-  let BDIST = minDim * 0.336   // was 0.28 × 1.20
-  let CADD  = minDim * 0.289   // CDIST = 0.625 × minDim, CADD = CDIST − BDIST
+  // Iterative collision resolution — compact starting distances
+  let BDIST = minDim * 0.28
+  let CADD  = minDim * 0.22
 
   for (let iter = 0; iter < 14; iter++) {
     const CDIST = BDIST + CADD
