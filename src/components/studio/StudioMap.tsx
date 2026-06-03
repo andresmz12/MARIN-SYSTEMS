@@ -15,7 +15,7 @@ interface Props {
 interface DrawPath { d: string; color: string }
 
 // ─── constants ────────────────────────────────────────────────
-const FONT    = "'Caveat','Comic Sans MS',cursive"
+const FONT    = "'Inter', system-ui, sans-serif"
 const FONT_CH = 0.54
 const DRAW_COLORS = ['#f59e0b','#ef4444','#22c55e','#3b82f6','#a855f7','#1a1a2e']
 
@@ -243,13 +243,13 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
   const BF = Math.max(13, minDim * 0.020)
   const HF = Math.max(12, minDim * 0.017)
 
-  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 100, 120)
+  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 130, 165)
   const bNodes = ramas.map(br => ({
     br,
-    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 85, 105),
+    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 110, 140),
     hijos: br.hijos.map(h => ({
       h,
-      m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 65, 80),
+      m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 85, 108),
     })),
     spread: spreadStep(br.hijos.length, sectorDeg),
   }))

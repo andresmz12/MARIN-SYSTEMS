@@ -43,32 +43,33 @@ Para: ${redSocial}
 
 REGLAS DEL TEXTO (crítico):
 - SIEMPRE espacios entre palabras. NUNCA juntar: "Nueva Calculadora" NO "NuevaCalculadora"
-- Usar \\n para separar en 2 líneas. Máximo 13 caracteres por línea
-- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Formulario\\n1099-K", "$600 al\\naño"
+- Usar \\n para separar en 2 o 3 líneas. Máximo 14 caracteres por línea
+- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Formulario\\n1099-K\\nantes del 31", "$600\\npor año\\nen efectivo"
 - Ejemplos INCORRECTOS: "Interesesy Multas", "AQuiénAfecta"
 
 REGLAS DEL CONTENIDO (crítico):
-- NO usar textos genéricos. SÍ usar datos reales específicos
-- MALO: "Qué Es" | BUENO: "Look-Back\\nIRS 2025"
-- MALO: "A Quién Afecta" | BUENO: "Contratos\\n+2 años"
-- MALO: "Qué Hacer" | BUENO: "Formulario\\n8697"
-- Cada hijo con un dato concreto: monto ($600), fecha (31 Enero), formulario (1099-K), porcentaje (8%), acción (Llama al IRS)
+- NO usar textos genéricos. SÍ usar datos reales específicos con números, fechas y montos
+- MALO: "Qué Es" | BUENO: "Look-Back\\nIRS\\n2025"
+- MALO: "A Quién Afecta" | BUENO: "Contratos\\n+2 años\\nretroactivo"
+- MALO: "Qué Hacer" | BUENO: "Formulario\\n8697\\nantes abril"
+- Cada hijo con un dato concreto: monto ($600), fecha (31 Enero), formulario (1099-K), porcentaje (8%), acción específica
+- Usar 3 líneas cuando aporta más datos; 2 líneas cuando el dato es corto
 - El mapa debe verse como una guía completa del tema, no un esquema vacío
 - 4 ramas SIEMPRE, 2 hijos por rama SIEMPRE
-- guion del centro: introducción del tema (2 oraciones)
-- guion de cada rama: explicación de esa categoría (2 oraciones)
-- guion de cada hijo: dato específico mencionado en el texto (1 oración)
-- El guion explica exactamente lo que dice el texto del nodo
+- guion del centro: introducción del tema (3 oraciones explicando por qué importa)
+- guion de cada rama: explicación completa de esa categoría (3 oraciones con contexto)
+- guion de cada hijo: dato específico del nodo con contexto práctico (2 oraciones)
+- El guion explica exactamente lo que dice el texto del nodo, con ejemplos reales
 
 JSON exacto (sin nada más):
 {
-  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "2 oraciones." },
+  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "3 oraciones." },
   "ramas": [
     {
-      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "2 oraciones.",
+      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "3 oraciones.",
       "hijos": [
-        { "id": "h1a", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "1 oración." },
-        { "id": "h1b", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "1 oración." }
+        { "id": "h1a", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." },
+        { "id": "h1b", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." }
       ]
     }
   ],
