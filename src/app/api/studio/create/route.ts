@@ -43,32 +43,33 @@ Para: ${redSocial}
 
 REGLAS DEL TEXTO (crítico):
 - SIEMPRE espacios entre palabras. NUNCA juntar: "Nueva Calculadora" NO "NuevaCalculadora"
-- Usar \\n para separar en 2 líneas. Máximo 13 caracteres por línea
-- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Formulario\\n1099-K", "$600 al\\naño"
+- Usar \\n para separar en 2 o 3 líneas. Máximo 14 caracteres por línea
+- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Formulario\\n1099-K\\nantes del 31", "$600\\npor año\\nen efectivo"
 - Ejemplos INCORRECTOS: "Interesesy Multas", "AQuiénAfecta"
 
 REGLAS DEL CONTENIDO (crítico):
-- NO usar textos genéricos. SÍ usar datos reales específicos
-- MALO: "Qué Es" | BUENO: "Look-Back\\nIRS 2025"
-- MALO: "A Quién Afecta" | BUENO: "Contratos\\n+2 años"
-- MALO: "Qué Hacer" | BUENO: "Formulario\\n8697"
-- Cada hijo con un dato concreto: monto ($600), fecha (31 Enero), formulario (1099-K), porcentaje (8%), acción (Llama al IRS)
+- NO usar textos genéricos. SÍ usar datos reales específicos con números, fechas y montos
+- MALO: "Qué Es" | BUENO: "Look-Back\\nIRS\\n2025"
+- MALO: "A Quién Afecta" | BUENO: "Contratos\\n+2 años\\nretroactivo"
+- MALO: "Qué Hacer" | BUENO: "Formulario\\n8697\\nantes abril"
+- Cada hijo con un dato concreto: monto ($600), fecha (31 Enero), formulario (1099-K), porcentaje (8%), acción específica
+- Usar 3 líneas cuando aporta más datos; 2 líneas cuando el dato es corto
 - El mapa debe verse como una guía completa del tema, no un esquema vacío
 - 4 ramas SIEMPRE, 2 hijos por rama SIEMPRE
-- guion del centro: introducción del tema (2 oraciones)
-- guion de cada rama: explicación de esa categoría (2 oraciones)
-- guion de cada hijo: dato específico mencionado en el texto (1 oración)
-- El guion explica exactamente lo que dice el texto del nodo
+- guion del centro: introducción del tema (3 oraciones explicando por qué importa)
+- guion de cada rama: explicación completa de esa categoría (3 oraciones con contexto)
+- guion de cada hijo: dato específico del nodo con contexto práctico (2 oraciones)
+- El guion explica exactamente lo que dice el texto del nodo, con ejemplos reales
 
 JSON exacto (sin nada más):
 {
-  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "2 oraciones." },
+  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "3 oraciones." },
   "ramas": [
     {
-      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "2 oraciones.",
+      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "3 oraciones.",
       "hijos": [
-        { "id": "h1a", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "1 oración." },
-        { "id": "h1b", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "1 oración." }
+        { "id": "h1a", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." },
+        { "id": "h1b", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." }
       ]
     }
   ],
@@ -83,6 +84,28 @@ Incluir las 4 ramas completas con sus 2 hijos cada una. Colores hex vibrantes di
   const parsed = JSON.parse(match[0])
   if (!parsed.centro || !Array.isArray(parsed.ramas)) throw new Error('JSON de Claude incompleto')
   return parsed
+}
+
+// ─── Guion quality check ─────────────────────────────────────
+const GENERIC_PHRASES = [
+  'qué es', 'que es', 'aspectos', 'considera', 'factores', 'elementos',
+  'puntos clave', 'información', 'concepto', 'introducción', 'overview',
+  'a quién', 'a quien', 'beneficios generales', 'ventajas generales',
+  'cómo funciona', 'como funciona', 'qué hacer', 'que hacer',
+  'notas importantes', 'recuerda que',
+]
+
+function hasGenericContent(mapa: any): boolean {
+  const allTexts: string[] = []
+  if (mapa?.centro?.texto) allTexts.push(mapa.centro.texto)
+  for (const rama of mapa?.ramas ?? []) {
+    if (rama?.texto) allTexts.push(rama.texto)
+    for (const hijo of rama?.hijos ?? []) {
+      if (hijo?.texto) allTexts.push(hijo.texto)
+    }
+  }
+  const combined = allTexts.join(' ').toLowerCase()
+  return GENERIC_PHRASES.some(p => combined.includes(p))
 }
 
 // ─── Build guion ─────────────────────────────────────────────
@@ -180,10 +203,14 @@ export async function POST(req: NextRequest) {
   // Cleanup expired sessions in the background (non-blocking)
   cleanupExpired()
 
-  // Step 1: Claude
+  // Step 1: Claude (up to 3 attempts if generic content detected)
   let mapaJson: any
   try {
-    mapaJson = await generarMapa(tema, redSocial ?? 'TikTok', duracion ?? '60s')
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      mapaJson = await generarMapa(tema, redSocial ?? 'TikTok', duracion ?? '60s')
+      if (!hasGenericContent(mapaJson)) break
+      if (attempt === 3) break  // use last attempt even if still generic
+    }
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Error generando mapa' },

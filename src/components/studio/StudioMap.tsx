@@ -15,7 +15,7 @@ interface Props {
 interface DrawPath { d: string; color: string }
 
 // ─── constants ────────────────────────────────────────────────
-const FONT    = "'Caveat','Comic Sans MS',cursive"
+const FONT    = "'Inter', system-ui, sans-serif"
 const FONT_CH = 0.54
 const DRAW_COLORS = ['#f59e0b','#ef4444','#22c55e','#3b82f6','#a855f7','#1a1a2e']
 
@@ -243,22 +243,22 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
   const BF = Math.max(13, minDim * 0.020)
   const HF = Math.max(12, minDim * 0.017)
 
-  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 100, 120)
+  const cNode = measureNode(centro.texto, centro.emoji, CF, 15, 14, 10, 150, 190, 130, 165)
   const bNodes = ramas.map(br => ({
     br,
-    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 85, 105),
+    m: measureNode(br.texto, br.emoji, BF, 12, 12, 8, 130, 160, 110, 140),
     hijos: br.hijos.map(h => ({
       h,
-      m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 65, 80),
+      m: measureNode(h.texto, null, HF, 15, 14, 8, 110, 140, 85, 108),
     })),
     spread: spreadStep(br.hijos.length, sectorDeg),
   }))
 
-  // Iterative collision resolution — compact starting distances
+  // Iterative collision resolution — expand until no overlaps remain
   let BDIST = minDim * 0.28
   let CADD  = minDim * 0.22
 
-  for (let iter = 0; iter < 14; iter++) {
+  for (let iter = 0; iter < 50; iter++) {
     const CDIST = BDIST + CADD
     const boxes: Box[] = [{ x: 0, y: 0, w: cNode.w, h: cNode.h }]
     for (let i = 0; i < bNodes.length; i++) {
@@ -283,8 +283,15 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
 
   const CDIST = BDIST + CADD
 
-  // Compute fit zoom and apply once
-  const contentR = CDIST + 66
+  // Compute fit zoom based on actual max node radius
+  const maxNodeR = Math.max(
+    Math.max(cNode.w, cNode.h) / 2,
+    ...bNodes.flatMap(bn => [
+      Math.max(bn.m.w, bn.m.h) / 2,
+      ...bn.hijos.map(hj => Math.max(hj.m.w, hj.m.h) / 2),
+    ]),
+  )
+  const contentR = CDIST + maxNodeR + 16
   const targetR  = Math.min(size.w, size.h) / 2 - 24
   const fitZoom  = Math.min(1, targetR / contentR)
 
