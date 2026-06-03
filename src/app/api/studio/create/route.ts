@@ -3,13 +3,15 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
+import { writeFile } from 'fs/promises'
+import { randomUUID } from 'crypto'
 
 export const maxDuration = 120
 
 const VOICE_ID   = '9AHim1BsYT5o3WGDtPE0'
-const CLAUDE_SYS = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO con JSON válido. Sin markdown. Sin texto extra.`
+const CLAUDE_SYS = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 
-// ─── Claude: generate mapaJson ────────────────────────────────
+// ─── Claude ──────────────────────────────────────────────────
 async function generarMapa(tema: string, redSocial: string, duracion: string): Promise<any> {
   const client = new Anthropic()
   const msg = await client.messages.create({
@@ -18,48 +20,56 @@ async function generarMapa(tema: string, redSocial: string, duracion: string): P
     system: CLAUDE_SYS,
     messages: [{
       role: 'user',
-      content: `Crea un mapa conceptual para un video de ${duracion} sobre: "${tema}"
-Red social: ${redSocial}
+      content: `Crea un mapa conceptual COMPLETO para un video de ${duracion} segundos sobre: "${tema}"
+Para: ${redSocial}
 
-El guion se construye NODO POR NODO en este orden:
-centro → rama1 → hijo1a → hijo1b → rama2 → hijo2a → hijo2b → rama3 → hijo3a → hijo3b → rama4 → hijo4a → hijo4b → cta
+REGLAS CRÍTICAS DEL TEXTO:
+- SIEMPRE espacios entre palabras
+- NUNCA juntar palabras: "Nueva Calculadora" NO "NuevaCalculadora"
+- Usar \\n para separar en 2 líneas máximo
+- Máximo 13 caracteres por línea incluyendo espacios
+- Ejemplos CORRECTOS: "Intereses\\ny Multas", "Nueva\\nCalculadora", "$600 al\\naño", "A quién\\nafecta"
+- Ejemplos INCORRECTOS: "Interesesy Multas", "NuevaCalculadora", "AQuiénAfecta"
 
-REGLAS:
-- texto del nodo: máximo 3 palabras por línea, máximo 2 líneas
-- guion del nodo: frase completa que explica exactamente lo que dice el texto
-- Si texto dice "Multa $500" el guion dice "Si no declaras, el IRS te multa con 500 dólares"
-- 4 ramas siempre, 2 hijos por rama siempre
-- Colores hex vibrantes, distintos por rama
+REGLAS DEL CONTENIDO:
+- 4 ramas SIEMPRE en los 4 cuadrantes
+- 2 hijos por rama SIEMPRE
+- Cada hijo con dato concreto: monto, fecha, porcentaje, formulario
+- Ejemplos buenos de hijos: "Multa\\n$500", "Antes del\\n31 Enero", "Formulario\\n1099-K"
+- guion del centro: introducción del tema (2 oraciones)
+- guion de cada rama: explicación de esa rama (2 oraciones)
+- guion de cada hijo: dato específico (1 oración)
+- El guion explica exactamente lo que dice el texto del nodo
 
-Responde con este JSON (sin nada más):
+JSON exacto (sin nada más):
 {
-  "centro": { "id": "centro", "emoji": "🎯", "texto": "Texto corto", "color": "#hex", "guion": "1-2 oraciones." },
+  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "2 oraciones." },
   "ramas": [
     {
-      "id": "r1", "emoji": "📌", "texto": "Texto corto", "color": "#hex",
-      "guion": "1-2 oraciones.",
+      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "2 oraciones.",
       "hijos": [
-        { "id": "h1a", "texto": "Texto corto", "color": "#hex", "guion": "1 oración." },
-        { "id": "h1b", "texto": "Texto corto", "color": "#hex", "guion": "1 oración." }
+        { "id": "h1a", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "1 oración." },
+        { "id": "h1b", "texto": "Línea1\\nLínea2", "color": "#hex", "guion": "1 oración." }
       ]
     }
   ],
-  "cta": "Frase final call to action. Escríbeme y te ayudo 👇"
-}`,
+  "cta": "Frase call to action. Escríbeme 👇"
+}
+Incluir 4 ramas con 2 hijos cada una. Colores hex vibrantes distintos por rama.`,
     }],
   })
   const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('Claude no devolvió JSON válido')
   const parsed = JSON.parse(match[0])
-  if (!parsed.centro || !parsed.ramas) throw new Error('JSON de Claude incompleto')
+  if (!parsed.centro || !Array.isArray(parsed.ramas)) throw new Error('JSON de Claude incompleto')
   return parsed
 }
 
-// ─── Build ordered guion ──────────────────────────────────────
+// ─── Build guion ─────────────────────────────────────────────
 function construirGuion(mapa: any): string {
   const parts: string[] = []
-  if (mapa.centro?.guion) parts.push(mapa.centro.guion.trim())
+  if (mapa.centro?.guion)  parts.push(mapa.centro.guion.trim())
   for (const rama of mapa.ramas ?? []) {
     if (rama.guion) parts.push(rama.guion.trim())
     for (const hijo of rama.hijos ?? []) {
@@ -94,7 +104,7 @@ function calcularTimestamps(mapa: any, guionCompleto: string) {
 }
 
 // ─── ElevenLabs with retry ───────────────────────────────────
-async function generarAudio(apiKey: string, text: string): Promise<string> {
+async function generarAudio(apiKey: string, text: string): Promise<Buffer> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(
@@ -113,7 +123,7 @@ async function generarAudio(apiKey: string, text: string): Promise<string> {
       if (res.status === 401) throw new Error('API key inválida')
       if (res.status === 429) throw new Error('Sin créditos disponibles')
       if (!res.ok) throw new Error(`ElevenLabs HTTP ${res.status}`)
-      return Buffer.from(await res.arrayBuffer()).toString('base64')
+      return Buffer.from(await res.arrayBuffer())
     } catch (err) {
       console.error(`ElevenLabs intento ${attempt} falló:`, err)
       if (attempt === 3) throw err
@@ -147,14 +157,13 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Step 2: Build guion + timestamps
   const guionCompleto = construirGuion(mapaJson)
   const timestamps    = calcularTimestamps(mapaJson, guionCompleto)
 
-  // Step 3: ElevenLabs
-  let audioData: string
+  // Step 2: ElevenLabs
+  let audioBuffer: Buffer
   try {
-    audioData = await generarAudio(apiKey, guionCompleto)
+    audioBuffer = await generarAudio(apiKey, guionCompleto)
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Error generando audio' },
@@ -162,20 +171,26 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Step 4: Save
-  const studioSession = await prisma.studioSession.create({
+  // Step 3: Save audio to /tmp, generate token first
+  const token     = randomUUID().replace(/-/g, '')
+  const audioPath = `/tmp/audio-${token}.mp3`
+  await writeFile(audioPath, audioBuffer)
+
+  // Step 4: Save to DB
+  await prisma.studioSession.create({
     data: {
+      token,
       tema,
       redSocial: redSocial ?? 'TikTok',
       duracion:  duracion  ?? '60s',
       mapaJson,
       guion: guionCompleto,
-      audioData,
+      audioPath,
       timestamps,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
   })
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? ''
-  return NextResponse.json({ url: `${baseUrl}/studio/${studioSession.token}` })
+  return NextResponse.json({ url: `${baseUrl}/studio/${token}` })
 }

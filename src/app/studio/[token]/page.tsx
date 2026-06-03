@@ -118,7 +118,8 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const centerColor = data!.mapaJson.centro.color
 
   return (
-    <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: '100dvw', height: '100dvh', background: '#fafaf8', position: 'relative', overflow: 'hidden', colorScheme: 'light' }}>
+      <style>{`html,body{background:#fafaf8 !important;color-scheme:light !important;}`}</style>
 
       {/* Hidden audio element — preloads immediately */}
       <audio

@@ -474,7 +474,8 @@ model StudioSession {
   duracion  String
   mapaJson  Json
   guion     String
-  audioData  String
+  audioData  String?
+  audioPath  String?
   timestamps Json?
   expiresAt  DateTime
   createdAt DateTime @default(now())

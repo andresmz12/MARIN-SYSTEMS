@@ -23,15 +23,19 @@ const DRAW_COLORS = ['#f59e0b','#ef4444','#22c55e','#3b82f6','#a855f7','#1a1a2e'
 function polar(a: number, r: number) { return { x: r * Math.cos(a), y: r * Math.sin(a) } }
 
 function wrap(text: string, maxCh: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let cur = ''
-  for (const w of words) {
-    const t = cur ? `${cur} ${w}` : w
-    if (t.length > maxCh && cur) { lines.push(cur); cur = w } else cur = t
+  // Honour explicit \n line breaks from the prompt
+  const segments = text.split('\n').filter(s => s.length > 0)
+  const result: string[] = []
+  for (const seg of segments) {
+    const words = seg.split(' ').filter(w => w.length > 0)
+    let cur = ''
+    for (const w of words) {
+      const t = cur ? `${cur} ${w}` : w
+      if (t.length > maxCh && cur) { result.push(cur); cur = w } else cur = t
+    }
+    if (cur) result.push(cur)
   }
-  if (cur) lines.push(cur)
-  return lines
+  return result.length > 0 ? result : [text]
 }
 
 function measureNode(
@@ -64,7 +68,7 @@ function overlaps(a: Box, b: Box, margin = 10): boolean {
 
 function spreadStep(childCount: number, branchSectorDeg: number): number {
   if (childCount <= 1) return 0
-  const maxHalf = Math.min(52, branchSectorDeg * 0.82 / 2)
+  const maxHalf = Math.min(62, branchSectorDeg * 0.82 / 2)
   return (maxHalf * Math.PI / 180) / ((childCount - 1) / 2)
 }
 
@@ -250,9 +254,9 @@ export default function StudioMap({ mapaJson, activeNodeId }: Props) {
     spread: spreadStep(br.hijos.length, sectorDeg),
   }))
 
-  // Iterative collision resolution
-  let BDIST = minDim * 0.28
-  let CADD  = minDim * 0.22
+  // Iterative collision resolution — start with 20% more BDIST, 25% more CDIST
+  let BDIST = minDim * 0.336   // was 0.28 × 1.20
+  let CADD  = minDim * 0.289   // CDIST = 0.625 × minDim, CADD = CDIST − BDIST
 
   for (let iter = 0; iter < 14; iter++) {
     const CDIST = BDIST + CADD
