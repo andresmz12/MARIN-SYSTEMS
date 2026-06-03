@@ -135,7 +135,7 @@ Genera los siguientes elementos en UN SOLO JSON válido (sin markdown):
     })
   } catch { /* ignore */ }
 
-  const base = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
   return NextResponse.json({
     url: `${base}/studio/${studioToken}`,
     guionCompleto: result.guion,
