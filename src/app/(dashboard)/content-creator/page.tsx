@@ -499,8 +499,15 @@ export default function ContentCreatorPage() {
                   </div>
                 )}
                 {hasAudio && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-green-50 border border-green-300 shadow-lg rounded-full px-4 py-2 text-xs text-green-700">
-                    ✅ Audio listo — ponlo en AirPods y graba el mapa
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-green-50 border border-green-300 shadow-lg rounded-full px-4 py-2 text-xs text-green-700">
+                    <span>✅ Audio listo — ponlo en AirPods y graba el mapa</span>
+                    <button
+                      onClick={() => { const a = document.createElement('a'); a.href = audioSrc!; a.download = 'audio-andres.mp3'; a.click() }}
+                      className="flex items-center gap-1 bg-green-100 hover:bg-green-200 border border-green-400 rounded-full px-2.5 py-1 text-green-800 font-medium transition-colors"
+                      title="Descargar MP3"
+                    >
+                      ⬇ MP3
+                    </button>
                   </div>
                 )}
               </div>
