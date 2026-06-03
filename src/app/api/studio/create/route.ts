@@ -222,7 +222,12 @@ export async function POST(req: NextRequest) {
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
 
   const userId  = session.user.id
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? ''
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (() => {
+      const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+      const host  = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
+      return host ? `${proto}://${host}` : ''
+    })()
 
   // ─── Content creator dedup (before rate limit — no new session created) ─
   if (!irsNewsUrl) {
