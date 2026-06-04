@@ -7,7 +7,30 @@ import { datePrefix } from '@/lib/ai-date'
 
 export const maxDuration = 60
 
-const CLAUDE_SYS_BASE = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC e ITIN. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
+const CLAUDE_SYS_BASE = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC e ITIN. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.
+
+REGLAS ESTRICTAS DE LONGITUD DEL GUION:
+- TikTok 30s: máximo 70 palabras total
+- TikTok 45s: máximo 100 palabras total
+- TikTok 60s: máximo 130 palabras total
+- Instagram Reels: mismo que TikTok
+- YouTube Shorts: máximo 130 palabras
+- Facebook: máximo 130 palabras
+
+El guion de CADA NODO debe ser MUY CORTO:
+- Centro: máximo 15 palabras
+- Rama: máximo 12 palabras
+- Hijo: máximo 8 palabras
+
+Estilo: frases cortas, directas, sin explicaciones largas. Como hablar en Twitter, no en un artículo.
+
+EJEMPLOS CORRECTOS:
+- Centro: "Si no declaras taxes, el IRS te cobra multa y intereses."
+- Rama: "La multa por no presentar es 5% mensual."
+- Hijo: "Máximo 25% del impuesto."
+
+EJEMPLOS INCORRECTOS (muy largos):
+- "El IRS cobra dos multas separadas: una por no presentar y otra por no pagar. Pueden combinarse y comerse tu reembolso..." (demasiado largo)`
 
 function buildGuion(mapa: any): string {
   const parts: string[] = []
