@@ -26,6 +26,7 @@ export default function IrsVideoPage() {
   const [studioUrl, setStudioUrl] = useState('')
   const [guion, setGuion] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   useEffect(() => { loadNoticias() }, [])
 
@@ -81,11 +82,19 @@ export default function IrsVideoPage() {
     })
   }
 
+  function handleCopyLink() {
+    navigator.clipboard.writeText(studioUrl).then(() => {
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2000)
+    })
+  }
+
   function handleReset() {
     setPageState('form')
     setStudioUrl('')
     setGuion('')
     setCopied(false)
+    setCopiedLink(false)
   }
 
   return (
@@ -162,47 +171,66 @@ export default function IrsVideoPage() {
         {/* DONE STATE */}
         {pageState === 'done' && (
           <div className="space-y-6">
-            <div className="flex items-center gap-2 text-green-500 font-semibold">
-              <span className="text-xl">✅</span>
-              <span>¡Listo para grabar!</span>
+            <div className="flex items-center gap-2 text-green-500 font-bold text-base">
+              <span>✅</span>
+              <span>¡Video listo para grabar!</span>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="label">Guion</label>
-                <button onClick={handleCopyGuion} className="btn-secondary text-xs px-2.5 py-1">
-                  {copied ? '✅ Copiado' : '📋 Copiar Guion'}
-                </button>
-              </div>
+            {/* PASO 1 — Guion */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 1 — Copia el guion</p>
               <textarea
                 readOnly
                 value={guion}
-                className="input resize-none text-xs leading-relaxed"
-                rows={10}
+                className="input resize-none text-sm leading-relaxed"
+                style={{ minHeight: 120 }}
+                rows={8}
               />
+              <button
+                onClick={handleCopyGuion}
+                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+              >
+                {copied ? '✅ ¡Copiado!' : '📋 Copiar Guion para ElevenLabs'}
+              </button>
             </div>
 
-            <div className="rounded-xl border border-[var(--bg-border)] bg-[var(--bg-sidebar)] p-4 space-y-3">
-              <p className="text-xs text-[var(--text-secondary)] font-medium">Link del Studio</p>
-              <p className="text-xs text-blue-400 break-all font-mono">{studioUrl}</p>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => { navigator.clipboard.writeText(studioUrl) }}
-                  className="btn-secondary text-xs px-3 py-1.5"
-                >
-                  📋 Copiar Link
-                </button>
+            {/* PASO 2 — ElevenLabs */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 2 — Genera el audio</p>
+              <button
+                onClick={() => window.open('https://elevenlabs.io/app/speech-synthesis', '_blank')}
+                className="btn-secondary w-full py-3 text-sm flex items-center justify-center gap-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+              >
+                🎙 Abrir ElevenLabs
+              </button>
+            </div>
+
+            {/* PASO 3 — Studio */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 3 — Abre el mapa en iPad</p>
+              <p className="text-xs text-blue-400 break-all font-mono bg-[var(--bg-sidebar)] rounded-lg px-3 py-2 border border-[var(--bg-border)]">
+                {studioUrl}
+              </p>
+              <div className="flex gap-2">
                 <button
                   onClick={() => window.open(studioUrl, '_blank')}
-                  className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                  className="btn-primary flex-1 py-3 text-sm flex items-center justify-center gap-2"
                 >
-                  📱 Abrir en iPad
+                  📱 Abrir Studio en iPad
+                </button>
+                <button
+                  onClick={handleCopyLink}
+                  className="btn-secondary px-4 py-3 text-sm whitespace-nowrap"
+                >
+                  {copiedLink ? '✅ Copiado!' : '📋 Copiar Link'}
                 </button>
               </div>
               <p className="text-xs text-amber-500">⏱ Expira en 24 horas</p>
             </div>
 
-            <button onClick={handleReset} className="btn-secondary w-full text-sm py-2.5">
+            <hr className="border-[var(--bg-border)]" />
+
+            <button onClick={handleReset} className="btn-secondary w-full text-sm py-3">
               + Crear otro video
             </button>
           </div>
