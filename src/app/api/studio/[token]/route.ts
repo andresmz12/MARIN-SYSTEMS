@@ -11,5 +11,5 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   if (session.expiresAt < new Date()) return NextResponse.json({ error: 'expired' }, { status: 410 })
 
-  return NextResponse.json({ mapaJson: session.mapaJson, guion: session.guion })
+  return NextResponse.json({ mapaJson: session.mapaJson, guion: session.guion, audioPath: session.audioPath ?? null })
 }
