@@ -26,8 +26,6 @@ function s2w(sx: number, sy: number, pan: { x: number; y: number }, zoom: number
   return { x: (sx - w / 2 - pan.x) / zoom, y: (sy - h / 2 - pan.y) / zoom }
 }
 
-interface Stroke { color: string; d: string }
-
 function computeFitZoom(w: number, h: number): number {
   const R    = Math.min(w, h)
   const maxE = R * 0.46 + 50
@@ -35,11 +33,16 @@ function computeFitZoom(w: number, h: number): number {
   return Math.min(0.95, Math.max(0.4, avail / maxE))
 }
 
+interface Stroke { color: string; d: string }
+
 const BTN: React.CSSProperties = {
   width: 32, height: 32, border: 'none', borderRadius: 8, cursor: 'pointer',
   fontSize: 15, background: 'transparent', color: '#333', display: 'flex',
   alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 }
+
+type NodeOffset = { x: number; y: number }
+type DragNodeState = { id: string; startWx: number; startWy: number; origX: number; origY: number }
 
 export default function StudioMap({ mapaJson }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -55,11 +58,16 @@ export default function StudioMap({ mapaJson }: Props) {
   const [strokes,   setStrokes]   = useState<Stroke[]>([])
   const [curPath,   setCurPath]   = useState('')
 
-  const fitted     = useRef(false)
-  const drawing    = useRef(false)
-  const curPts     = useRef<string[]>([])
-  const dragOrigin = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
-  const pinchRef   = useRef<{ dist: number; z: number } | null>(null)
+  const [nodeOffsets,    setNodeOffsets]    = useState<Record<string, NodeOffset>>({})
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
+
+  const fitted      = useRef(false)
+  const drawing     = useRef(false)
+  const curPts      = useRef<string[]>([])
+  const dragOrigin  = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
+  const dragNode    = useRef<DragNodeState | null>(null)
+  const pinchRef    = useRef<{ dist: number; z: number } | null>(null)
+  const lastTapRef  = useRef<number>(0)
 
   // load Caveat font
   useEffect(() => {
@@ -115,7 +123,7 @@ export default function StudioMap({ mapaJson }: Props) {
     return () => el.removeEventListener('wheel', handler)
   }, [])
 
-  // native touch pinch (needs passive: false for preventDefault)
+  // native touch pinch
   useEffect(() => {
     const el = svgRef.current; if (!el) return
     const onTS = (e: TouchEvent) => {
@@ -123,9 +131,8 @@ export default function StudioMap({ mapaJson }: Props) {
         const dx = e.touches[0].clientX - e.touches[1].clientX
         const dy = e.touches[0].clientY - e.touches[1].clientY
         pinchRef.current = { dist: Math.hypot(dx, dy), z: zoomRef.current }
-        // cancel any ongoing draw/drag
         drawing.current = false; curPts.current = []
-        setCurPath(''); dragOrigin.current = null
+        setCurPath(''); dragOrigin.current = null; dragNode.current = null
       }
     }
     const onTM = (e: TouchEvent) => {
@@ -148,17 +155,80 @@ export default function StudioMap({ mapaJson }: Props) {
     }
   }, [])
 
+  // ─── Layout helpers ────────────────────────────────────────────
+  const { w, h } = size
+  const R      = Math.min(w, h)
+  const BD     = R * 0.26
+  const CD     = R * 0.20
+  const CHW    = 81, GAP = 14
+  const rawStep = Math.asin(Math.min(1, (CHW + GAP) / (2 * CD))) * (180 / Math.PI)
+  const SPREAD  = Math.max(rawStep, 28)
+  const { centro, ramas } = mapaJson
+  const nRamas  = ramas.length
+  const angs    = ramas.map((_, i) => -90 + (360 / nRamas) * i)
+
+  // Compute branch position (includes nodeOffset)
+  function branchPos(i: number): { bx: number; by: number } {
+    const a = rad(angs[i])
+    const off = nodeOffsets[ramas[i].id] ?? { x: 0, y: 0 }
+    return { bx: Math.cos(a) * BD + off.x, by: Math.sin(a) * BD + off.y }
+  }
+
+  // Compute child position (includes nodeOffset of both rama and hijo)
+  function hijoPos(i: number, j: number): { hx: number; hy: number } {
+    const { bx, by } = branchPos(i)
+    const a  = rad(angs[i])
+    const sp = ramas[i].hijos.length === 1 ? 0 : (j - (ramas[i].hijos.length - 1) / 2)
+    const ca = a + rad(sp * SPREAD)
+    const off = nodeOffsets[ramas[i].hijos[j].id] ?? { x: 0, y: 0 }
+    return { hx: bx + Math.cos(ca) * CD + off.x, hy: by + Math.sin(ca) * CD + off.y }
+  }
+
+  // ─── Hit test (world coords) ────────────────────────────────────
+  function hitNode(wx: number, wy: number): string | null {
+    for (let i = 0; i < ramas.length; i++) {
+      const { bx, by } = branchPos(i)
+      // hijos first (rendered on top)
+      for (let j = 0; j < ramas[i].hijos.length; j++) {
+        const { hx, hy } = hijoPos(i, j)
+        if (Math.abs(wx - hx) < 81 / 2 + 4 && Math.abs(wy - hy) < 46 / 2 + 4)
+          return ramas[i].hijos[j].id
+      }
+      if (Math.abs(wx - bx) < 99 / 2 + 4 && Math.abs(wy - by) < 63 / 2 + 4)
+        return ramas[i].id
+    }
+    return null
+  }
+
+  // ─── Pointer events ────────────────────────────────────────────
   function onPtrDown(e: React.PointerEvent<SVGSVGElement>) {
     if (pinchRef.current) return
     const rect = e.currentTarget.getBoundingClientRect()
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top
     e.currentTarget.setPointerCapture(e.pointerId)
+
     if (drawMode) {
       const pt = s2w(sx, sy, panRef.current, zoomRef.current, size.w, size.h)
       drawing.current = true
       curPts.current = [`M${pt.x.toFixed(2)},${pt.y.toFixed(2)}`]
       setCurPath(curPts.current[0])
+      return
+    }
+
+    // Convert to world coords
+    const wx = (sx - size.w / 2 - panRef.current.x) / zoomRef.current
+    const wy = (sy - size.h / 2 - panRef.current.y) / zoomRef.current
+
+    const nodeId = hitNode(wx, wy)
+    if (nodeId) {
+      const orig = nodeOffsets[nodeId] ?? { x: 0, y: 0 }
+      dragNode.current = { id: nodeId, startWx: wx, startWy: wy, origX: orig.x, origY: orig.y }
+      setDraggingNodeId(nodeId)
     } else {
+      // Double-tap on background = reset positions
+      const now = Date.now()
+      if (now - lastTapRef.current < 300) setNodeOffsets({})
+      lastTapRef.current = now
       dragOrigin.current = { px: e.clientX, py: e.clientY, panX: panRef.current.x, panY: panRef.current.y }
     }
   }
@@ -169,7 +239,24 @@ export default function StudioMap({ mapaJson }: Props) {
       const pt = s2w(e.clientX - rect.left, e.clientY - rect.top, panRef.current, zoomRef.current, size.w, size.h)
       curPts.current.push(`L${pt.x.toFixed(2)},${pt.y.toFixed(2)}`)
       setCurPath(curPts.current.join(' '))
-    } else if (!drawMode && dragOrigin.current) {
+      return
+    }
+
+    if (dragNode.current) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const wx = (e.clientX - rect.left  - size.w / 2 - panRef.current.x) / zoomRef.current
+      const wy = (e.clientY - rect.top   - size.h / 2 - panRef.current.y) / zoomRef.current
+      const dx = wx - dragNode.current.startWx
+      const dy = wy - dragNode.current.startWy
+      const id = dragNode.current.id
+      setNodeOffsets(prev => ({
+        ...prev,
+        [id]: { x: dragNode.current!.origX + dx, y: dragNode.current!.origY + dy },
+      }))
+      return
+    }
+
+    if (dragOrigin.current) {
       const newPan = {
         x: dragOrigin.current.panX + e.clientX - dragOrigin.current.px,
         y: dragOrigin.current.panY + e.clientY - dragOrigin.current.py,
@@ -184,6 +271,7 @@ export default function StudioMap({ mapaJson }: Props) {
     }
     drawing.current = false; curPts.current = []
     setCurPath(''); dragOrigin.current = null
+    dragNode.current = null; setDraggingNodeId(null)
   }
 
   function doZoom(factor: number) {
@@ -195,19 +283,10 @@ export default function StudioMap({ mapaJson }: Props) {
     const fz = computeFitZoom(size.w, size.h)
     panRef.current = { x: 0, y: 0 }; setPan({ x: 0, y: 0 })
     zoomRef.current = fz; setZoom(fz)
+    setNodeOffsets({})
   }
 
-  const { w, h } = size
-  const R = Math.min(w, h)
-  const BD     = R * 0.26
-  const CD     = R * 0.20
-  const CHW = 81, GAP = 14
-  const rawStep = Math.asin(Math.min(1, (CHW + GAP) / (2 * CD))) * (180 / Math.PI)
-  const SPREAD = Math.max(rawStep, 28)
-  const { centro, ramas } = mapaJson
-  const nRamas = ramas.length
-  const angs = ramas.map((_, i) => -90 + (360 / nRamas) * i)
-  const tfm  = `translate(${w / 2 + pan.x},${h / 2 + pan.y}) scale(${zoom})`
+  const tfm = `translate(${w / 2 + pan.x},${h / 2 + pan.y}) scale(${zoom})`
 
   return (
     <div ref={wrapRef} style={{ width: '100%', height: '100%', position: 'relative', background: '#fafaf8', overflow: 'hidden' }}>
@@ -224,7 +303,8 @@ export default function StudioMap({ mapaJson }: Props) {
 
       {/* Interactive SVG */}
       <svg ref={svgRef} width={w} height={h}
-        style={{ display: 'block', position: 'relative', cursor: drawMode ? 'crosshair' : 'grab', touchAction: 'none' }}
+        style={{ display: 'block', position: 'relative', touchAction: 'none',
+          cursor: drawMode ? 'crosshair' : draggingNodeId ? 'grabbing' : 'grab' }}
         onPointerDown={onPtrDown} onPointerMove={onPtrMove} onPointerUp={onPtrUp} onPointerCancel={onPtrUp}>
         <defs>
           <filter id="nsh" x="-20%" y="-20%" width="140%" height="140%">
@@ -235,32 +315,29 @@ export default function StudioMap({ mapaJson }: Props) {
         <g transform={tfm}>
           {/* center→branch lines */}
           {ramas.map((r, i) => {
-            const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
+            const { bx, by } = branchPos(i)
             return <path key={`cl${i}`} d={qbez(0, 0, bx, by)} stroke={r.color} strokeWidth={2.2} fill="none" opacity={0.4} />
           })}
 
           {/* branch→child lines */}
-          {ramas.map((r, i) => {
-            const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
-            return r.hijos.map((h, j) => {
-              const sp = r.hijos.length === 1 ? 0 : (j - (r.hijos.length - 1) / 2)
-              const ca = a + rad(sp * SPREAD)
-              const hx = bx + Math.cos(ca) * CD, hy = by + Math.sin(ca) * CD
+          {ramas.map((r, i) =>
+            r.hijos.map((h, j) => {
+              const { bx, by } = branchPos(i)
+              const { hx, hy } = hijoPos(i, j)
               return <path key={`bl${i}${j}`} d={qbez(bx, by, hx, hy)} stroke={h.color} strokeWidth={1.5} fill="none" opacity={0.4} />
             })
-          })}
+          )}
 
           {/* child nodes */}
-          {ramas.map((r, i) => {
-            const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
-            return r.hijos.map((h, j) => {
-              const sp = r.hijos.length === 1 ? 0 : (j - (r.hijos.length - 1) / 2)
-              const ca = a + rad(sp * SPREAD)
-              const hx = bx + Math.cos(ca) * CD, hy = by + Math.sin(ca) * CD
+          {ramas.map((r, i) =>
+            r.hijos.map((h, j) => {
+              const { hx, hy } = hijoPos(i, j)
               const nw = 81, nh = 46
+              const isDragging = draggingNodeId === h.id
               return (
-                <g key={h.id} filter="url(#nsh)">
-                  <rect x={hx - nw/2} y={hy - nh/2} width={nw} height={nh} rx={9} fill="white" stroke={h.color} strokeWidth={1.6} />
+                <g key={h.id} filter="url(#nsh)" style={{ opacity: isDragging ? 0.75 : 1, cursor: 'grab' }}>
+                  <rect x={hx - nw/2} y={hy - nh/2} width={nw} height={nh} rx={9} fill="white" stroke={h.color}
+                    strokeWidth={isDragging ? 2.4 : 1.6} />
                   <foreignObject x={hx - nw/2 + 2} y={hy - nh/2 + 2} width={nw - 4} height={nh - 4}>
                     {/* @ts-expect-error xmlns */}
                     <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -272,15 +349,17 @@ export default function StudioMap({ mapaJson }: Props) {
                 </g>
               )
             })
-          })}
+          )}
 
           {/* branch nodes */}
           {ramas.map((r, i) => {
-            const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
+            const { bx, by } = branchPos(i)
             const nw = 99, nh = 63
+            const isDragging = draggingNodeId === r.id
             return (
-              <g key={r.id} filter="url(#nsh)">
-                <rect x={bx - nw/2} y={by - nh/2} width={nw} height={nh} rx={13} fill="white" stroke={r.color} strokeWidth={2.2} />
+              <g key={r.id} filter="url(#nsh)" style={{ opacity: isDragging ? 0.75 : 1, cursor: 'grab' }}>
+                <rect x={bx - nw/2} y={by - nh/2} width={nw} height={nh} rx={13} fill="white" stroke={r.color}
+                  strokeWidth={isDragging ? 3 : 2.2} />
                 <foreignObject x={bx - nw/2 + 3} y={by - nh/2 + 3} width={nw - 6} height={nh - 6}>
                   {/* @ts-expect-error xmlns */}
                   <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 1 }}>
@@ -333,7 +412,7 @@ export default function StudioMap({ mapaJson }: Props) {
         zIndex: 100, userSelect: 'none', flexWrap: 'nowrap',
       }}>
         <button onClick={() => doZoom(1 / 1.25)} style={BTN} title="Alejar">−</button>
-        <button onClick={center}                  style={BTN} title="Centrar">⊙</button>
+        <button onClick={center}                  style={BTN} title="Centrar y resetear">⊙</button>
         <button onClick={() => doZoom(1.25)}      style={BTN} title="Acercar">+</button>
 
         <div style={{ width: 1, height: 22, background: 'rgba(0,0,0,0.12)', margin: '0 2px' }} />
