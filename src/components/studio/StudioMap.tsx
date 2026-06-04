@@ -175,8 +175,11 @@ export default function StudioMap({ mapaJson }: Props) {
 
   const { w, h } = size
   const R = Math.min(w, h)
-  const BD = R * 0.23
-  const CD = R * 0.12
+  const BD = R * 0.32
+  const CD = R * 0.22
+  const CHW = 81, GAP = 14
+  const rawStep = Math.asin(Math.min(1, (CHW + GAP) / (2 * CD))) * (180 / Math.PI)
+  const SPREAD = Math.max(rawStep, 18)
   const { centro, ramas } = mapaJson
   const nRamas = ramas.length
   const angs = ramas.map((_, i) => -90 + (360 / nRamas) * i)
@@ -217,7 +220,7 @@ export default function StudioMap({ mapaJson }: Props) {
             const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
             return r.hijos.map((h, j) => {
               const sp = r.hijos.length === 1 ? 0 : (j - (r.hijos.length - 1) / 2)
-              const ca = a + rad(sp * 22)
+              const ca = a + rad(sp * SPREAD)
               const hx = bx + Math.cos(ca) * CD, hy = by + Math.sin(ca) * CD
               return <path key={`bl${i}${j}`} d={qbez(bx, by, hx, hy)} stroke={h.color} strokeWidth={1.5} fill="none" opacity={0.4} />
             })
@@ -228,7 +231,7 @@ export default function StudioMap({ mapaJson }: Props) {
             const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
             return r.hijos.map((h, j) => {
               const sp = r.hijos.length === 1 ? 0 : (j - (r.hijos.length - 1) / 2)
-              const ca = a + rad(sp * 22)
+              const ca = a + rad(sp * SPREAD)
               const hx = bx + Math.cos(ca) * CD, hy = by + Math.sin(ca) * CD
               const nw = 81, nh = 46
               return (
