@@ -53,6 +53,15 @@ export default function StudioMap({ mapaJson }: Props) {
   const dragOrigin = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
   const pinchRef   = useRef<{ dist: number; z: number } | null>(null)
 
+  // load Caveat font
+  useEffect(() => {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap'
+    document.head.appendChild(link)
+    return () => { document.head.removeChild(link) }
+  }, [])
+
   // keep refs in sync
   useEffect(() => { panRef.current  = pan  }, [pan])
   useEffect(() => { zoomRef.current = zoom }, [zoom])
@@ -175,8 +184,8 @@ export default function StudioMap({ mapaJson }: Props) {
 
   const { w, h } = size
   const R = Math.min(w, h)
-  const BD     = R * 0.24
-  const CD     = R * 0.23
+  const BD     = R * 0.22
+  const CD     = R * 0.16
   const CHW = 81, GAP = 14
   const rawStep = Math.asin(Math.min(1, (CHW + GAP) / (2 * CD))) * (180 / Math.PI)
   const SPREAD = Math.max(rawStep, 28)
@@ -240,7 +249,7 @@ export default function StudioMap({ mapaJson }: Props) {
                   <foreignObject x={hx - nw/2 + 2} y={hy - nh/2 + 2} width={nw - 4} height={nh - 4}>
                     {/* @ts-expect-error xmlns */}
                     <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 10, fontWeight: 500, color: h.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                      <span style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 11, fontWeight: 500, color: h.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                         {h.texto}
                       </span>
                     </div>
@@ -261,7 +270,7 @@ export default function StudioMap({ mapaJson }: Props) {
                   {/* @ts-expect-error xmlns */}
                   <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 1 }}>
                     {r.emoji && <span style={{ fontSize: 13, lineHeight: 1 }}>{r.emoji}</span>}
-                    <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 11, fontWeight: 600, color: r.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                    <span style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 13, fontWeight: 700, color: r.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                       {r.texto}
                     </span>
                   </div>
@@ -280,7 +289,7 @@ export default function StudioMap({ mapaJson }: Props) {
                   {/* @ts-expect-error xmlns */}
                   <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 2 }}>
                     {centro.emoji && <span style={{ fontSize: 17, lineHeight: 1 }}>{centro.emoji}</span>}
-                    <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 12, fontWeight: 700, color: centro.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                    <span style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 14, fontWeight: 700, color: centro.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                       {centro.texto}
                     </span>
                   </div>
