@@ -6,11 +6,12 @@ import Anthropic from '@anthropic-ai/sdk'
 import { writeFile, unlink, readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { randomUUID, createHash } from 'crypto'
+import { datePrefix } from '@/lib/ai-date'
 
 export const maxDuration = 120
 
-const VOICE_ID   = '9AHim1BsYT5o3WGDtPE0'
-const CLAUDE_SYS = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
+const VOICE_ID        = '9AHim1BsYT5o3WGDtPE0'
+const CLAUDE_SYS_BASE = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 const DAILY_LIMIT = 20
 
 // ─── Cleanup expired sessions (fire-and-forget) ───────────────
@@ -35,7 +36,7 @@ async function generarMapa(tema: string, redSocial: string, duracion: string): P
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4000,
-    system: CLAUDE_SYS,
+    system: datePrefix() + CLAUDE_SYS_BASE,
     messages: [{
       role: 'user',
       content: `Crea un mapa conceptual COMPLETO para un video de ${duracion} segundos sobre: "${tema}"

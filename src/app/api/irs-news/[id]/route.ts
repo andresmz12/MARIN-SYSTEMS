@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
+import { datePrefix } from '@/lib/ai-date'
 
 const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -83,11 +84,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
+      system: datePrefix() + `Eres un maestro que explica noticias del IRS a personas que nunca han estudiado impuestos. Explica de forma TAN sencilla que hasta un niño de 5 años pudiera entenderla — sin tecnicismos, sin palabras raras, con ejemplos de la vida cotidiana. Responde SOLO con el resumen en español, sin introducción ni formato especial.`,
       messages: [{
         role: 'user',
-        content: `Eres un maestro que explica noticias del IRS a personas que nunca han estudiado impuestos. Tu trabajo es tomar una noticia del IRS y explicarla de forma TAN sencilla que hasta un niño de 5 años pudiera entenderla — sin tecnicismos, sin palabras raras, con ejemplos de la vida cotidiana.
-
-Escribe un resumen en español de 4-5 oraciones que:
+        content: `Escribe un resumen en español de 4-5 oraciones que:
 1. Diga QUÉ está pasando en palabras simples (como si le contaras a un amigo)
 2. Explique A QUIÉN afecta con un ejemplo concreto ("si eres mesero...", "si tienes un negocio...")
 3. Diga QUÉ tiene que hacer la persona (o si no necesita hacer nada)
@@ -96,9 +96,7 @@ Escribe un resumen en español de 4-5 oraciones que:
 Usa palabras de todos los días. Si hay que usar un término técnico, explícalo entre paréntesis.
 
 Título de la noticia: ${article.title}
-Contenido: ${articleText}
-
-Responde SOLO con el resumen en español, sin introducción ni formato especial.`,
+Contenido: ${articleText}`,
       }],
     })
     spanishSummary = message.content[0].type === 'text' ? message.content[0].text.trim() : ''

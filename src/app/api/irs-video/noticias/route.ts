@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
+import { datePrefix } from '@/lib/ai-date'
 
 export const maxDuration = 60
 
-const CLAUDE_SYS = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC e ITIN. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
+const CLAUDE_SYS_BASE = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC e ITIN. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 
 function buildGuion(mapa: any): string {
   const parts: string[] = []
@@ -125,7 +126,7 @@ JSON exacto (sin nada más):
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
-      system: CLAUDE_SYS,
+      system: datePrefix() + CLAUDE_SYS_BASE,
       messages: [{ role: 'user', content: prompt }],
     })
     raw = message.content[0].type === 'text' ? message.content[0].text : ''

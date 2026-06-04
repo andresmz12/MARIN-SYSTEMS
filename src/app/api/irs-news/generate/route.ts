@@ -3,10 +3,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
+import { datePrefix } from '@/lib/ai-date'
 
 type Platform = 'tiktok' | 'youtube' | 'facebook'
 
 const client = new Anthropic()
+const IRS_NEWS_SYS = `Eres experto en contenido para latinos en EE.UU. sobre impuestos e IRS. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 
 function buildPrompt(platform: Platform, title: string, summary: string): string {
   const base = `Noticia del IRS (Servicio de Impuestos Internos de EE.UU.):\nTítulo: ${title}\nResumen: ${summary}\n\n`
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
+    system: datePrefix() + IRS_NEWS_SYS,
     messages: [{ role: 'user', content: prompt }],
   })
 
