@@ -184,8 +184,8 @@ export default function StudioMap({ mapaJson }: Props) {
 
   const { w, h } = size
   const R = Math.min(w, h)
-  const BD     = R * 0.22
-  const CD     = R * 0.16
+  const BD     = R * 0.26
+  const CD     = R * 0.20
   const CHW = 81, GAP = 14
   const rawStep = Math.asin(Math.min(1, (CHW + GAP) / (2 * CD))) * (180 / Math.PI)
   const SPREAD = Math.max(rawStep, 28)
