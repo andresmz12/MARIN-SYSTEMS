@@ -17,11 +17,13 @@ interface MapaJson {
 type PageState = 'loading' | 'expired' | 'ready'
 
 export default function StudioPage({ params }: { params: { token: string } }) {
+  const { token } = params
   const [state, setState] = useState<PageState>('loading')
   const [mapa, setMapa] = useState<MapaJson | null>(null)
+  const [hasAudio, setHasAudio] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/studio/${params.token}`)
+    fetch(`/api/studio/${token}`)
       .then(res => {
         if (res.status === 410 || res.status === 404) { setState('expired'); return null }
         if (!res.ok) { setState('expired'); return null }
@@ -30,10 +32,23 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       .then(data => {
         if (!data) return
         setMapa(data.mapaJson as MapaJson)
+        setHasAudio(!!data.audioPath)
         setState('ready')
       })
       .catch(() => setState('expired'))
-  }, [params.token])
+  }, [token])
+
+  async function handleDescargar() {
+    const res = await fetch(`/api/studio/${token}/audio`)
+    if (!res.ok) return
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `video-audio-${token}.mp3`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   if (state === 'loading') {
     return (
@@ -71,6 +86,23 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%' }}>
         {mapa && <StudioMap mapa={mapa} />}
       </div>
+
+      {hasAudio && (
+        <button
+          onClick={handleDescargar}
+          style={{
+            position: 'fixed', bottom: 108, right: 24,
+            width: 56, height: 56, borderRadius: '50%',
+            border: 'none', background: '#fff',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+            fontSize: 22, cursor: 'pointer', zIndex: 50,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Descargar MP3"
+        >
+          ⬇️
+        </button>
+      )}
     </div>
   )
 }
