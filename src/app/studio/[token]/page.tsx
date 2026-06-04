@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 
+// Force full-screen on iPad Safari (injected at runtime since this is a client page)
+const STUDIO_STYLE = `
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; }
+`
+
 const StudioMap = dynamic(() => import('@/components/studio/StudioMap'), { ssr: false })
 
 interface MapaJson {
@@ -19,6 +24,30 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const { token } = params
   const [state, setState] = useState<PageState>('loading')
   const [mapa, setMapa] = useState<MapaJson | null>(null)
+
+  // Inject fullscreen styles + meta for iPad Safari
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = STUDIO_STYLE
+    document.head.appendChild(style)
+
+    const metas: HTMLMetaElement[] = []
+    const addMeta = (name: string, content: string) => {
+      if (!document.querySelector(`meta[name="${name}"]`)) {
+        const m = document.createElement('meta')
+        m.name = name; m.content = content
+        document.head.appendChild(m); metas.push(m)
+      }
+    }
+    addMeta('apple-mobile-web-app-capable', 'yes')
+    addMeta('apple-mobile-web-app-status-bar-style', 'black-translucent')
+    addMeta('mobile-web-app-capable', 'yes')
+
+    return () => {
+      document.head.removeChild(style)
+      metas.forEach(m => document.head.removeChild(m))
+    }
+  }, [])
 
   useEffect(() => {
     fetch(`/api/studio/${token}`)

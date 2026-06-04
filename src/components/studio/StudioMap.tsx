@@ -69,14 +69,7 @@ export default function StudioMap({ mapaJson }: Props) {
   const pinchRef    = useRef<{ dist: number; z: number } | null>(null)
   const lastTapRef  = useRef<number>(0)
 
-  // load Caveat font
-  useEffect(() => {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap'
-    document.head.appendChild(link)
-    return () => { document.head.removeChild(link) }
-  }, [])
+  // (no custom font load needed — uses system Inter/sans-serif)
 
   // keep refs in sync
   useEffect(() => { panRef.current  = pan  }, [pan])
@@ -268,7 +261,8 @@ export default function StudioMap({ mapaJson }: Props) {
 
   function onPtrUp() {
     if (drawing.current && curPts.current.length > 1) {
-      setStrokes(s => [...s, { color: drawColor, d: curPts.current.join(' ') }])
+      const d = curPts.current.join(' ')   // capture before clearing ref
+      setStrokes(s => [...s, { color: drawColor, d }])
     }
     drawing.current = false; curPts.current = []
     setCurPath(''); dragOrigin.current = null
@@ -306,7 +300,7 @@ export default function StudioMap({ mapaJson }: Props) {
       <svg ref={svgRef} width={w} height={h}
         style={{ display: 'block', position: 'relative', touchAction: 'none',
           cursor: drawMode ? 'crosshair' : draggingNodeId ? 'grabbing' : 'grab' }}
-        onPointerDown={onPtrDown} onPointerMove={onPtrMove} onPointerUp={onPtrUp} onPointerCancel={onPtrUp}>
+        onPointerDown={onPtrDown} onPointerMove={onPtrMove} onPointerUp={onPtrUp} onPointerCancel={onPtrUp} onPointerLeave={onPtrUp}>
         <defs>
           <filter id="nsh" x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="rgba(0,0,0,0.11)" />
@@ -337,12 +331,12 @@ export default function StudioMap({ mapaJson }: Props) {
               const isDragging = draggingNodeId === h.id
               return (
                 <g key={h.id} filter="url(#nsh)" style={{ opacity: isDragging ? 0.75 : 1, cursor: 'grab' }}>
-                  <rect x={hx - nw/2} y={hy - nh/2} width={nw} height={nh} rx={9} fill="white" stroke={h.color}
-                    strokeWidth={isDragging ? 2.4 : 1.6} />
+                  <rect x={hx - nw/2} y={hy - nh/2} width={nw} height={nh} rx={9} fill={h.color} fillOpacity={0.12} stroke={h.color}
+                    strokeWidth={isDragging ? 2.4 : 2} />
                   <foreignObject x={hx - nw/2 + 2} y={hy - nh/2 + 2} width={nw - 4} height={nh - 4}>
                     {/* @ts-expect-error xmlns */}
                     <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      <span style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 11, fontWeight: 500, color: h.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                      <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600, color: h.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                         {h.texto}
                       </span>
                     </div>
@@ -359,13 +353,13 @@ export default function StudioMap({ mapaJson }: Props) {
             const isDragging = draggingNodeId === r.id
             return (
               <g key={r.id} filter="url(#nsh)" style={{ opacity: isDragging ? 0.75 : 1, cursor: 'grab' }}>
-                <rect x={bx - nw/2} y={by - nh/2} width={nw} height={nh} rx={13} fill="white" stroke={r.color}
-                  strokeWidth={isDragging ? 3 : 2.2} />
+                <rect x={bx - nw/2} y={by - nh/2} width={nw} height={nh} rx={13} fill={r.color} stroke={r.color}
+                  strokeWidth={0} />
                 <foreignObject x={bx - nw/2 + 3} y={by - nh/2 + 3} width={nw - 6} height={nh - 6}>
                   {/* @ts-expect-error xmlns */}
                   <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 1 }}>
                     {r.emoji && <span style={{ fontSize: 13, lineHeight: 1 }}>{r.emoji}</span>}
-                    <span style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 13, fontWeight: 700, color: r.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                    <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 700, color: 'white', textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                       {r.texto}
                     </span>
                   </div>
@@ -384,7 +378,7 @@ export default function StudioMap({ mapaJson }: Props) {
                   {/* @ts-expect-error xmlns */}
                   <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 2 }}>
                     {centro.emoji && <span style={{ fontSize: 17, lineHeight: 1 }}>{centro.emoji}</span>}
-                    <span style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 14, fontWeight: 700, color: centro.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                    <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, fontWeight: 700, color: centro.color, textAlign: 'center', lineHeight: 1.25, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                       {centro.texto}
                     </span>
                   </div>
