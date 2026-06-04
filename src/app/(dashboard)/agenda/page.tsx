@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 interface Event {
   id: string
@@ -12,6 +14,7 @@ interface Event {
   notes: string | null
   isForexNews: boolean
   forexPair: string | null
+  completed: boolean
 }
 
 const EVENT_TYPES = ['personal', 'trading', 'aprendizaje', 'otro']
@@ -28,12 +31,11 @@ const TYPE_ICONS: Record<string, string> = {
   otro: '📌',
 }
 
-function getWeekDates(): { date: Date; str: string }[] {
+function getWeekDates(offset = 0): { date: Date; str: string }[] {
   const today = new Date()
   const day = today.getDay()
   const monday = new Date(today)
-  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
-
+  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1) + offset * 7)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -54,27 +56,70 @@ const emptyForm = {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 export default function AgendaPage() {
+  const { showToast } = useToast()
   const [events, setEvents] = useState<Event[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
-  const [view, setView] = useState<'semana' | 'lista'>('semana')
+  const [view, setView] = useState<'semana' | 'lista'>('lista')
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [hideCompleted, setHideCompleted] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  const weekDates = getWeekDates()
+  const [calendarToken, setCalendarToken] = useState<string | null>(null)
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const [calendarCopied, setCalendarCopied] = useState(false)
+  const [showCalendarSection, setShowCalendarSection] = useState(false)
+
+  const weekDates = getWeekDates(weekOffset)
   const today = new Date().toISOString().split('T')[0]
+
+  const loadEvents = useCallback(async () => {
+    const past = new Date()
+    past.setDate(past.getDate() - 30)
+    const from = past.toISOString().split('T')[0]
+    const future = new Date()
+    future.setDate(future.getDate() + 60)
+    const to = future.toISOString().split('T')[0]
+    const res = await fetch(`/api/events?from=${from}&to=${to}`, { cache: 'no-store' })
+    if (res.ok) setEvents(await res.json())
+  }, [weekOffset])
 
   useEffect(() => {
     loadEvents()
-  }, [])
+  }, [weekOffset])
 
-  async function loadEvents() {
-    const from = weekDates[0].str
-    const future = new Date()
-    future.setDate(future.getDate() + 30)
-    const to = future.toISOString().split('T')[0]
-    const res = await fetch(`/api/events?from=${from}&to=${to}`)
-    if (res.ok) setEvents(await res.json())
+  async function getCalendarToken() {
+    setCalendarLoading(true)
+    const res = await fetch('/api/calendar/token')
+    if (res.ok) {
+      const data = await res.json()
+      setCalendarToken(data.token)
+    }
+    setCalendarLoading(false)
+  }
+
+  async function regenerateToken() {
+    setCalendarLoading(true)
+    const res = await fetch('/api/calendar/token', { method: 'DELETE' })
+    if (res.ok) {
+      const data = await res.json()
+      setCalendarToken(data.token)
+    }
+    setCalendarLoading(false)
+  }
+
+  function getCalendarUrl(token: string) {
+    const base = typeof window !== 'undefined' ? window.location.origin : ''
+    return `${base}/api/calendar?token=${token}`
+  }
+
+  async function copyCalendarUrl() {
+    if (!calendarToken) return
+    await navigator.clipboard.writeText(getCalendarUrl(calendarToken))
+    setCalendarCopied(true)
+    setTimeout(() => setCalendarCopied(false), 2000)
   }
 
   function openCreate(dateStr?: string) {
@@ -100,30 +145,47 @@ export default function AgendaPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const payload = { ...form, isForexNews: form.isForexNews }
-
-    if (editEvent) {
-      await fetch(`/api/events/${editEvent.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } else {
-      await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+    try {
+      const res = editEvent
+        ? await fetch(`/api/events/${editEvent.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form),
+          })
+        : await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form),
+          })
+      if (!res.ok) throw new Error()
+      showToast(editEvent ? 'Evento actualizado' : 'Evento creado', 'success')
+      setModalOpen(false)
+      loadEvents()
+    } catch {
+      showToast('Error al guardar el evento', 'error')
     }
-
     setLoading(false)
-    setModalOpen(false)
-    loadEvents()
   }
 
-  async function deleteEvent(id: string) {
-    if (!confirm('¿Eliminar este evento?')) return
-    await fetch(`/api/events/${id}`, { method: 'DELETE' })
+  async function confirmDeleteEvent() {
+    if (!confirmDelete) return
+    try {
+      await fetch(`/api/events/${confirmDelete}`, { method: 'DELETE' })
+      showToast('Evento eliminado', 'success')
+      setModalOpen(false)
+      loadEvents()
+    } catch {
+      showToast('Error al eliminar', 'error')
+    }
+    setConfirmDelete(null)
+  }
+
+  async function toggleComplete(event: Event) {
+    await fetch(`/api/events/${event.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: !event.completed }),
+    })
     loadEvents()
   }
 
@@ -131,21 +193,26 @@ export default function AgendaPage() {
     events.filter((e) => e.date.startsWith(dateStr))
 
   const upcomingEvents = events
-    .filter((e) => e.date.split('T')[0] >= today)
-    .slice(0, 20)
+    .filter((e) => {
+      const dateStr = e.date.split('T')[0]
+      return dateStr >= today || !e.completed
+    })
+    .filter((e) => !hideCompleted || !e.completed)
+    .slice(0, 50)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 lg:space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Agenda</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Planifica tu semana de trading y vida</p>
+          <h1 className="text-xl lg:text-2xl font-bold text-white">Agenda</h1>
+          <p className="text-gray-500 text-xs lg:text-sm mt-0.5">Planifica tu semana</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-0.5">
             <button
               onClick={() => setView('semana')}
-              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                 view === 'semana' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
@@ -153,67 +220,192 @@ export default function AgendaPage() {
             </button>
             <button
               onClick={() => setView('lista')}
-              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                 view === 'lista' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               Lista
             </button>
           </div>
-          <button onClick={() => openCreate()} className="btn-primary flex items-center gap-2">
+          <button
+            onClick={() => setHideCompleted(h => !h)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${
+              hideCompleted
+                ? 'bg-blue-600/20 text-blue-400 border-blue-600/30'
+                : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300 hover:border-[#3a3a3a]'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="hidden sm:inline">{hideCompleted ? 'Mostrando pendientes' : 'Ocultar hechos'}</span>
+          </button>
+          <button
+            onClick={() => openCreate()}
+            className="btn-primary flex items-center gap-1.5 text-sm px-3 py-2"
+          >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nuevo evento
+            <span className="hidden sm:inline">Nuevo evento</span>
+            <span className="sm:hidden">Nuevo</span>
           </button>
         </div>
       </div>
 
-      {view === 'semana' ? (
-        <div className="card p-0 overflow-hidden">
-          <div className="grid grid-cols-7 divide-x divide-[#2a2a2a]">
-            {weekDates.map(({ date, str }) => {
-              const dayEvents = getEventsForDay(str)
-              const isToday = str === today
-              return (
-                <div key={str} className="min-h-32">
-                  {/* Day header */}
-                  <div className={`p-2 border-b border-[#2a2a2a] text-center ${isToday ? 'bg-blue-600/10' : ''}`}>
-                    <p className="text-[10px] text-gray-500">{DAYS_ES[date.getDay()]}</p>
-                    <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-blue-400' : 'text-gray-300'}`}>
-                      {date.getDate()}
-                    </p>
-                  </div>
+      {/* Google Calendar sync section */}
+      <div className="card p-3 lg:p-4">
+        <button
+          onClick={() => {
+            setShowCalendarSection(!showCalendarSection)
+            if (!showCalendarSection && !calendarToken) getCalendarToken()
+          }}
+          className="w-full flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-[#1557e0]/20 border border-[#1557e0]/40 flex items-center justify-center flex-shrink-0">
+              <svg className="w-3.5 h-3.5 text-[#4285f4]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+              </svg>
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-medium text-white">Google Calendar</p>
+              <p className="text-[11px] text-gray-500">Recibe recordatorios en tu celular</p>
+            </div>
+          </div>
+          <svg
+            className={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${showCalendarSection ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
 
-                  {/* Events */}
-                  <div className="p-1 space-y-1">
-                    {dayEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        onClick={() => openEdit(event)}
-                        className={`cursor-pointer rounded px-1.5 py-1 text-[10px] leading-tight border ${
-                          event.isForexNews
-                            ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                            : TYPE_COLORS[event.type]
-                        } hover:opacity-80 transition-opacity`}
-                      >
-                        <p className="font-medium truncate">{event.title}</p>
-                        {event.time && <p className="text-current/60">{event.time}</p>}
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => openCreate(str)}
-                      className="w-full text-[10px] text-gray-700 hover:text-gray-500 py-0.5 text-center transition-colors"
-                    >
-                      +
-                    </button>
+        {showCalendarSection && (
+          <div className="mt-4 space-y-3 border-t border-[#2a2a2a] pt-4">
+            {calendarLoading ? (
+              <p className="text-sm text-gray-500 text-center py-2">Cargando...</p>
+            ) : calendarToken ? (
+              <>
+                <p className="text-xs text-gray-400">
+                  Copia esta URL y agrégala a Google Calendar como &quot;Otras agendas → Desde URL&quot;.
+                  Tus eventos aparecerán automáticamente con recordatorios 30 min antes.
+                </p>
+                <div className="flex gap-2">
+                  <div className="flex-1 bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[11px] text-gray-400 overflow-hidden">
+                    <p className="truncate">{getCalendarUrl(calendarToken)}</p>
                   </div>
+                  <button
+                    onClick={copyCalendarUrl}
+                    className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      calendarCopied
+                        ? 'bg-green-600/20 text-green-400 border-green-600/30'
+                        : 'bg-[#1a1a1a] text-gray-300 border-[#2a2a2a] hover:border-blue-600/40 hover:text-blue-400'
+                    }`}
+                  >
+                    {calendarCopied ? '✓ Copiado' : 'Copiar'}
+                  </button>
                 </div>
-              )
-            })}
+                <ol className="space-y-1.5 text-xs text-gray-500">
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">1.</span>Abre Google Calendar en tu celular</li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">2.</span>Ve a Ajustes → Agregar calendario → Desde URL</li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">3.</span>Pega la URL copiada y presiona &quot;Agregar calendario&quot;</li>
+                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">4.</span>Los eventos con hora incluyen recordatorio automático de 30 min</li>
+                </ol>
+                <button onClick={regenerateToken} className="text-[11px] text-gray-600 hover:text-red-400 transition-colors">
+                  Regenerar URL (invalida la anterior)
+                </button>
+              </>
+            ) : (
+              <button onClick={getCalendarToken} className="btn-primary text-sm w-full">
+                Generar enlace de calendario
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Week view */}
+      {view === 'semana' ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setWeekOffset(w => w - 1)}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <p className="text-xs text-gray-400">
+              {weekDates[0].date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}
+              {' – '}
+              {weekDates[6].date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+            <button
+              onClick={() => setWeekOffset(w => w + 1)}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-7 divide-x divide-[#2a2a2a] min-w-[560px]">
+                {weekDates.map(({ date, str }) => {
+                  const dayEvents = getEventsForDay(str)
+                  const isToday = str === today
+                  return (
+                    <div key={str} className="min-h-28">
+                      <div className={`p-2 border-b border-[#2a2a2a] text-center ${isToday ? 'bg-blue-600/10' : ''}`}>
+                        <p className="text-[10px] text-gray-500">{DAYS_ES[date.getDay()]}</p>
+                        <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-blue-400' : 'text-gray-300'}`}>
+                          {date.getDate()}
+                        </p>
+                      </div>
+                      <div className="p-1 space-y-1">
+                        {dayEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className={`rounded px-1.5 py-1 text-[10px] leading-tight border flex items-start gap-1 ${
+                              event.completed
+                                ? 'bg-[#1a1a1a] border-[#2a2a2a] opacity-50'
+                                : event.isForexNews
+                                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                : TYPE_COLORS[event.type]
+                            }`}
+                          >
+                            <button
+                              onClick={() => toggleComplete(event)}
+                              className={`mt-0.5 w-2.5 h-2.5 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
+                                event.completed ? 'bg-green-500 border-green-500' : 'border-current opacity-50 hover:opacity-100'
+                              }`}
+                            />
+                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(event)}>
+                              <p className={`font-medium truncate ${event.completed ? 'line-through text-gray-500' : ''}`}>{event.title}</p>
+                              {event.time && <p className="text-current/60">{event.time}</p>}
+                            </div>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => openCreate(str)}
+                          className="w-full text-[10px] text-gray-700 hover:text-gray-500 py-0.5 text-center transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
+        /* List view */
         <div className="space-y-2">
           {upcomingEvents.length === 0 ? (
             <div className="card text-center py-8">
@@ -221,36 +413,57 @@ export default function AgendaPage() {
             </div>
           ) : (
             upcomingEvents.map((event) => (
-              <div key={event.id} className="card flex items-start gap-4">
-                <div className="text-xl flex-shrink-0 mt-0.5">
-                  {event.isForexNews ? '⚠️' : TYPE_ICONS[event.type]}
-                </div>
+              <div key={event.id} className={`card flex items-start gap-3 p-3 lg:p-4 transition-opacity ${event.completed ? 'opacity-60' : ''}`}>
+                <button
+                  onClick={() => toggleComplete(event)}
+                  className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    event.completed
+                      ? 'bg-green-500 border-green-500'
+                      : 'border-gray-600 hover:border-green-500'
+                  }`}
+                >
+                  {event.completed && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-white text-sm">{event.title}</p>
+                    <p className={`font-medium text-sm ${event.completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                      {event.title}
+                    </p>
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${TYPE_COLORS[event.type]}`}>
                       {event.type}
                     </span>
                     {event.isForexNews && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                        Forex News {event.forexPair}
+                        Forex {event.forexPair}
+                      </span>
+                    )}
+                    {event.completed && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
+                        Hecho
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    {new Date(event.date).toLocaleDateString('es-CO', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {new Date(event.date).toLocaleDateString('es-CO', {
+                      weekday: 'short', month: 'short', day: 'numeric',
+                    })}
                     {event.time && ` · ${event.time}`}
                   </p>
                   {event.notes && <p className="text-xs text-gray-600 mt-1">{event.notes}</p>}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button onClick={() => openEdit(event)} className="text-gray-600 hover:text-gray-400 transition-colors">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => openEdit(event)} className="text-gray-600 hover:text-gray-400 transition-colors p-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
-                  <button onClick={() => deleteEvent(event.id)} className="text-gray-600 hover:text-red-400 transition-colors">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <button onClick={() => setConfirmDelete(event.id)} className="text-gray-600 hover:text-red-400 transition-colors p-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
@@ -261,7 +474,6 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editEvent ? 'Editar evento' : 'Nuevo evento'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -275,7 +487,6 @@ export default function AgendaPage() {
               required
             />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
@@ -297,14 +508,12 @@ export default function AgendaPage() {
               />
             </div>
           </div>
-
           <div>
             <label className="label">Tipo</label>
             <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {EVENT_TYPES.map((t) => <option key={t} value={t} className="capitalize">{t}</option>)}
+              {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -314,7 +523,6 @@ export default function AgendaPage() {
             />
             <span className="text-sm text-gray-300">Noticia Forex de alto impacto</span>
           </label>
-
           {form.isForexNews && (
             <div>
               <label className="label">Par afectado</label>
@@ -327,7 +535,6 @@ export default function AgendaPage() {
               />
             </div>
           )}
-
           <div>
             <label className="label">Notas (opcional)</label>
             <textarea
@@ -337,7 +544,6 @@ export default function AgendaPage() {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
-
           <div className="flex gap-3 pt-1">
             <button type="submit" disabled={loading} className="btn-primary flex-1">
               {loading ? 'Guardando...' : editEvent ? 'Actualizar' : 'Crear evento'}
@@ -345,7 +551,7 @@ export default function AgendaPage() {
             {editEvent && (
               <button
                 type="button"
-                onClick={async () => { await deleteEvent(editEvent.id); setModalOpen(false) }}
+                onClick={() => setConfirmDelete(editEvent.id)}
                 className="btn-danger"
               >
                 Eliminar
@@ -357,6 +563,16 @@ export default function AgendaPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Eliminar evento"
+        message="¿Seguro que quieres eliminar este evento? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={confirmDeleteEvent}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

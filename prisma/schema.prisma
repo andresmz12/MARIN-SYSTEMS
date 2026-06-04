@@ -12,6 +12,7 @@ model User {
   email            String              @unique
   passwordHash     String
   name             String
+  calendarToken    String?             @unique
   createdAt        DateTime            @default(now())
   trades           Trade[]
   habits           Habit[]
@@ -20,6 +21,19 @@ model User {
   journalEntries   JournalEntry[]
   dailyStates      DailyState[]
   checklists       PreTradeChecklist[]
+  goals            Goal[]
+  companies        Company[]
+  playbookEntries  PlaybookEntry[]
+  quickNote        QuickNote?
+  ceoCompanies     CEOCompany[]
+  marketingIdeas   MarketingIdea[]
+  dayStatuses      DayStatus[]
+  dailyPlans       DailyPlan[]
+  workBlocks       WorkBlock[]
+  brandProfiles    BrandProfile[]
+  generatedPosts        GeneratedPost[]
+  companyRevenues       CompanyRevenue[]
+  contentCreatorHistory ContentCreatorHistory[]
 }
 
 model Trade {
@@ -35,6 +49,9 @@ model Trade {
   notes        String?
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, date])
 }
 
 model Habit {
@@ -48,6 +65,8 @@ model Habit {
   createdAt   DateTime          @default(now())
   user        User              @relation(fields: [userId], references: [id])
   completions HabitCompletion[]
+
+  @@index([userId])
 }
 
 model HabitCompletion {
@@ -72,6 +91,7 @@ model Event {
   notes       String?
   isForexNews Boolean  @default(false)
   forexPair   String?
+  completed   Boolean  @default(false)
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id])
 }
@@ -116,14 +136,324 @@ model PreTradeChecklist {
   @@unique([userId, date])
 }
 
-model IrsNews {
-  id          String   @id @default(cuid())
+model Goal {
+  id          String    @id @default(cuid())
+  userId      String
   title       String
-  summary     String
-  url         String   @unique
-  publishedAt DateTime
-  used        Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  description String?
+  deadline    DateTime?
+  completed   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+  subGoals    SubGoal[]
+}
+
+model SubGoal {
+  id          String           @id @default(cuid())
+  goalId      String
+  title       String
+  completed   Boolean          @default(false)
+  daily       Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  goal        Goal             @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  completions GoalCompletion[]
+}
+
+model GoalCompletion {
+  id        String   @id @default(cuid())
+  subGoalId String
+  date      String
+  createdAt DateTime @default(now())
+  subGoal   SubGoal  @relation(fields: [subGoalId], references: [id], onDelete: Cascade)
+
+  @@unique([subGoalId, date])
+}
+
+model Company {
+  id           String              @id @default(cuid())
+  userId       String
+  user         User                @relation(fields: [userId], references: [id])
+  name         String
+  description  String?
+  emoji        String              @default("🏢")
+  color        String              @default("#2563eb")
+  status       String              @default("activa")
+  industry     String?
+  website      String?
+  longDesc     String?
+  foundedAt    DateTime?
+  tools        String[]
+  privateNotes String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  tasks        CompanyTask[]
+  notes        CompanyNote[]
+  teamMembers  CompanyTeamMember[]
+  links        CompanyLink[]
+}
+
+model CompanyTask {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  title       String
+  description String?
+  priority    String    @default("media")
+  status      String    @default("pendiente")
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CompanyNote {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CompanyTeamMember {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  role      String
+}
+
+model CompanyLink {
+  id          String  @id @default(cuid())
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  url         String
+  type        String  @default("Web")
+  description String?
+}
+
+model PlaybookEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  conditions String   @default("")
+  entry      String   @default("")
+  exit       String   @default("")
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model QuickNote {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  content   String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
+// ──────────────────────── CEO Command Center ────────────────────────
+
+model CEOCompany {
+  id              String          @id @default(cuid())
+  userId          String
+  name            String
+  color           String          @default("#6366f1")
+  emoji           String          @default("🏢")
+  country         String[]
+  strategicWeight Int             @default(3)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketingIdeas  MarketingIdea[]
+  workBlocks      WorkBlock[]
+  brandProfile    BrandProfile?
+  generatedPosts  GeneratedPost[]
+  revenues        CompanyRevenue[]
+
+  @@index([userId])
+}
+
+model MarketingIdea {
+  id              String     @id @default(cuid())
+  userId          String
+  companyId       String
+  title           String
+  description     String?
+  type            String
+  status          String     @default("idea")
+  priority        Int        @default(3)
+  convertedToTask Boolean    @default(false)
+  scheduledDate   DateTime?
+  doneAt          DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company         CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+model DayStatus {
+  id             String     @id @default(cuid())
+  userId         String
+  date           DateTime   @db.Date
+  status         String     @default("normal")
+  availableHours Float      @default(8)
+  note           String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPlan      DailyPlan?
+
+  @@unique([userId, date])
+}
+
+model DailyPlan {
+  id          String      @id @default(cuid())
+  userId      String
+  date        DateTime    @db.Date
+  dayStatusId String      @unique
+  status      String      @default("pending")
+  completedAt DateTime?
+  generatedAt DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayStatus   DayStatus   @relation(fields: [dayStatusId], references: [id], onDelete: Cascade)
+  workBlocks  WorkBlock[]
+
+  @@unique([userId, date])
+}
+
+model WorkBlock {
+  id             String     @id @default(cuid())
+  userId         String
+  dailyPlanId    String
+  companyId      String
+  title          String
+  description    String?
+  startTime      String
+  endTime        String
+  durationHours  Float
+  blockType      String     @default("work")
+  status         String     @default("pending")
+  isFixed        Boolean    @default(false)
+  rolledFromDate DateTime?
+  rolledToDate   DateTime?
+  linkedIdeaId   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPlan      DailyPlan  @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  company        CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([dailyPlanId])
+  @@index([companyId])
+}
+
+model BrandProfile {
+  id             String          @id @default(cuid())
+  userId         String
+  companyId      String          @unique
+  tone           String
+  targetAudience String
+  contentPillars Json
+  competitors    Json?
+  bestDays       Json?
+  bestHours      Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        CEOCompany      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contentPosts   GeneratedPost[]
+
+  @@index([userId])
+}
+
+model GeneratedPost {
+  id             String       @id @default(cuid())
+  userId         String
+  companyId      String
+  brandProfileId String
+  workBlockId    String?
+  platform       String
+  contentType    String
+  topic          String
+  copy           String
+  hashtags       String[]
+  cta            String
+  contentNotes   String?
+  status         String       @default("draft")
+  scheduledDate  DateTime?
+  publishedAt    DateTime?
+  weekNumber     Int
+  dayOfWeek      Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        CEOCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([companyId, weekNumber])
+}
+
+model CompanyRevenue {
+  id        String     @id @default(cuid())
+  userId    String
+  companyId String
+  month     String
+  target    Float      @default(0)
+  actual    Float      @default(0)
+  currency  String     @default("USD")
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, month])
+  @@index([userId])
+  @@index([companyId])
+}
+
+model ContentCreatorHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  tema      String
+  redSocial String
+  duracion  String
+  mapaJson  Json
+  guion     String
+  titulo    String
+  hashtags  String[]
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model IrsNews {
+  id             String   @id @default(cuid())
+  title          String
+  summary        String
+  spanishSummary String?
+  url            String   @unique
+  publishedAt    DateTime
+  used           Boolean  @default(false)
+  createdAt      DateTime @default(now())
 }
 
 model IrsVideoContent {
@@ -139,12 +469,31 @@ model IrsVideoContent {
 model StudioSession {
   id        String   @id @default(cuid())
   token     String   @unique @default(cuid())
+  userId    String?
   tema      String
   redSocial String
   duracion  String
   mapaJson  Json
   guion     String
-  audioData String
-  expiresAt DateTime
+  audioData  String?
+  audioPath  String?
+  timestamps Json?
+  temaHash   String?
+  expiresAt  DateTime
   createdAt DateTime @default(now())
+
+  @@index([userId, temaHash])
+}
+
+model IrsNoticia {
+  id          String   @id @default(cuid())
+  guid        String   @unique
+  titulo      String
+  descripcion String
+  resumen     String
+  mapaJson    Json?
+  audioPath   String?
+  timestamps  Json?
+  pubDate     DateTime
+  createdAt   DateTime @default(now())
 }

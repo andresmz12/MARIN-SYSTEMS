@@ -1,164 +1,226 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useToast } from '@/components/ui/Toast'
 
+const SOCIAL_OPTIONS = ['TikTok', 'Instagram', 'Facebook', 'YouTube'] as const
+const DURATION_OPTIONS = ['30s', '45s', '60s'] as const
+const LOADING_MSGS = ['Generando mapa...', 'Creando contenido con IA...', 'Preparando tu Studio...']
+
+type SocialOption = typeof SOCIAL_OPTIONS[number]
+type DurationOption = typeof DURATION_OPTIONS[number]
 type PageState = 'form' | 'loading' | 'done'
 
-const REDES = ['TikTok', 'Instagram', 'YouTube', 'Facebook', 'LinkedIn']
-const DURACIONES = ['30s', '60s', '90s', '120s']
-
 export default function ContentCreatorPage() {
-  const [tema, setTema] = useState('')
-  const [redSocial, setRedSocial] = useState('TikTok')
-  const [duracion, setDuracion] = useState('60s')
+  const { toast } = useToast()
   const [pageState, setPageState] = useState<PageState>('form')
+  const [tema, setTema] = useState('')
+  const [redSocial, setRedSocial] = useState<SocialOption>('TikTok')
+  const [duracion, setDuracion] = useState<DurationOption>('60s')
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0)
   const [studioUrl, setStudioUrl] = useState('')
+  const [guion, setGuion] = useState('')
   const [copied, setCopied] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [copiedLink, setCopiedLink] = useState(false)
 
-  async function generate() {
+  useEffect(() => {
+    if (pageState !== 'loading') return
+    const id = setInterval(() => setLoadingMsgIdx(i => (i + 1) % LOADING_MSGS.length), 3000)
+    return () => clearInterval(id)
+  }, [pageState])
+
+  async function handleGenerate() {
     if (!tema.trim()) return
     setPageState('loading')
-    setErrorMsg('')
+    setLoadingMsgIdx(0)
     try {
       const res = await fetch('/api/content-creator/generar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tema: tema.trim(), redSocial, duracion }),
       })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
-      setStudioUrl(body.url)
+      const data = await res.json() as { url?: string; guionCompleto?: string; error?: string }
+      if (!res.ok || !data.url) {
+        toast.error(data.error ?? `Error al generar contenido (${res.status})`)
+        setPageState('form')
+        return
+      }
+      setStudioUrl(data.url)
+      setGuion(data.guionCompleto ?? '')
       setPageState('done')
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Error desconocido')
+    } catch {
+      toast.error('Error de conexión. Verifica tu internet e intenta de nuevo.')
       setPageState('form')
     }
   }
 
-  function copy() {
-    navigator.clipboard.writeText(studioUrl).then(() => {
+  function handleCopyGuion() {
+    navigator.clipboard.writeText(guion).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  /* ── Loading ── */
-  if (pageState === 'loading') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-6" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        <svg className="w-12 h-12 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
-        <div className="text-center">
-          <p className="text-[var(--text-primary)] font-semibold text-lg">Generando mapa + audio…</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Esto puede tomar hasta 30 segundos</p>
-        </div>
-      </div>
-    )
+  function handleCopyLink() {
+    navigator.clipboard.writeText(studioUrl).then(() => {
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2000)
+    })
   }
 
-  /* ── Done ── */
-  if (pageState === 'done') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-8 px-4" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        <div className="text-center">
-          <div className="text-5xl mb-4">🎯</div>
-          <h2 className="text-xl font-bold text-[var(--text-primary)]">¡Tu estudio está listo!</h2>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Abre este enlace en tu iPad para ver el mapa y escuchar el audio</p>
-        </div>
-
-        <div className="card w-full max-w-lg p-4 flex items-center gap-3">
-          <input
-            readOnly
-            value={studioUrl}
-            className="input flex-1 text-xs font-mono"
-          />
-          <button onClick={copy} className="btn-primary text-sm whitespace-nowrap flex items-center gap-1.5">
-            {copied ? '✅ Copiado' : '📋 Copiar'}
-          </button>
-        </div>
-
-        <a
-          href={studioUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary text-sm flex items-center gap-2"
-        >
-          <span>🔗</span> Abrir en nueva pestaña
-        </a>
-
-        <button
-          onClick={() => { setPageState('form'); setStudioUrl('') }}
-          className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors"
-        >
-          ← Crear otro
-        </button>
-      </div>
-    )
+  function handleReset() {
+    setPageState('form')
+    setTema('')
+    setStudioUrl('')
+    setGuion('')
+    setCopied(false)
+    setCopiedLink(false)
   }
 
-  /* ── Form ── */
   return (
-    <div className="max-w-lg mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">🎯</span>
-        <div>
-          <h1 className="text-lg font-bold text-[var(--text-primary)]">Content Creator</h1>
-          <p className="text-xs text-[var(--text-muted)]">Genera un mapa educativo + audio para cualquier tema</p>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-start px-4 py-10 min-h-full">
+      <div className="w-full max-w-xl">
 
-      {errorMsg && (
-        <div className="card border border-red-500/30 bg-red-500/10 p-3">
-          <p className="text-red-400 text-sm">⚠️ {errorMsg}</p>
-        </div>
-      )}
-
-      <div className="card p-5 space-y-4">
-        <div>
-          <label className="label">Tema del video</label>
-          <textarea
-            value={tema}
-            onChange={(e) => setTema(e.target.value)}
-            placeholder="Ej: Cómo declarar impuestos por primera vez en EE.UU."
-            rows={3}
-            className="input resize-none"
-          />
+        <div className="flex items-center gap-2 mb-8">
+          <span className="text-2xl">🎬</span>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">Content Creator</h1>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">Red social</label>
-            <select
-              value={redSocial}
-              onChange={(e) => setRedSocial(e.target.value)}
-              className="input"
+        {/* FORM STATE */}
+        {pageState === 'form' && (
+          <div className="space-y-6">
+            <div>
+              <label className="label">¿Sobre qué es el video?</label>
+              <textarea
+                value={tema}
+                onChange={e => setTema(e.target.value)}
+                placeholder="Ej: Cómo abrir una LLC siendo indocumentado"
+                className="input resize-none text-sm mt-1"
+                rows={3}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate() }}
+              />
+            </div>
+
+            <div>
+              <label className="label">Red social</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {SOCIAL_OPTIONS.map(s => (
+                  <button key={s} onClick={() => setRedSocial(s)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      redSocial === s
+                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                        : 'border-[var(--bg-border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                    }`}
+                  >{s}</button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Duración objetivo</label>
+              <div className="flex gap-2 mt-1">
+                {DURATION_OPTIONS.map(d => (
+                  <button key={d} onClick={() => setDuracion(d)}
+                    className={`flex-1 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      duracion === d
+                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                        : 'border-[var(--bg-border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                    }`}
+                  >{d}</button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleGenerate}
+              disabled={!tema.trim()}
+              className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-sm disabled:opacity-50"
             >
-              {REDES.map((r) => <option key={r}>{r}</option>)}
-            </select>
+              ✨ Generar Video
+            </button>
           </div>
-          <div>
-            <label className="label">Duración</label>
-            <select
-              value={duracion}
-              onChange={(e) => setDuracion(e.target.value)}
-              className="input"
-            >
-              {DURACIONES.map((d) => <option key={d}>{d}</option>)}
-            </select>
-          </div>
-        </div>
+        )}
 
-        <button
-          onClick={generate}
-          disabled={!tema.trim()}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-3"
-        >
-          <span>⚡</span>
-          Generar mapa + audio
-        </button>
+        {/* LOADING STATE */}
+        {pageState === 'loading' && (
+          <div className="flex flex-col items-center justify-center gap-6 py-16">
+            <svg className="w-10 h-10 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-sm text-[var(--text-secondary)] font-medium">
+              {LOADING_MSGS[loadingMsgIdx]}
+            </p>
+          </div>
+        )}
+
+        {/* DONE STATE */}
+        {pageState === 'done' && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 text-green-500 font-bold text-base">
+              <span>✅</span>
+              <span>¡Video listo para grabar!</span>
+            </div>
+
+            {/* PASO 1 — Guion */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 1 — Copia el guion</p>
+              <textarea
+                readOnly
+                value={guion}
+                className="input resize-none text-sm leading-relaxed"
+                style={{ minHeight: 120 }}
+                rows={8}
+              />
+              <button
+                onClick={handleCopyGuion}
+                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+              >
+                {copied ? '✅ ¡Copiado!' : '📋 Copiar Guion para ElevenLabs'}
+              </button>
+            </div>
+
+            {/* PASO 2 — ElevenLabs */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 2 — Genera el audio</p>
+              <button
+                onClick={() => window.open('https://elevenlabs.io/app/speech-synthesis', '_blank')}
+                className="btn-secondary w-full py-3 text-sm flex items-center justify-center gap-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+              >
+                🎙 Abrir ElevenLabs
+              </button>
+            </div>
+
+            {/* PASO 3 — Studio */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 3 — Abre el mapa en iPad</p>
+              <p className="text-xs text-blue-400 break-all font-mono bg-[var(--bg-sidebar)] rounded-lg px-3 py-2 border border-[var(--bg-border)]">
+                {studioUrl}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.open(studioUrl, '_blank')}
+                  className="btn-primary flex-1 py-3 text-sm flex items-center justify-center gap-2"
+                >
+                  📱 Abrir Studio en iPad
+                </button>
+                <button
+                  onClick={handleCopyLink}
+                  className="btn-secondary px-4 py-3 text-sm whitespace-nowrap"
+                >
+                  {copiedLink ? '✅ Copiado!' : '📋 Copiar Link'}
+                </button>
+              </div>
+              <p className="text-xs text-amber-500">⏱ Expira en 24 horas</p>
+            </div>
+
+            <hr className="border-[var(--bg-border)]" />
+
+            <button onClick={handleReset} className="btn-secondary w-full text-sm py-3">
+              + Crear otro video
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

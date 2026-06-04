@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
-import { formatInTimeZone } from 'date-fns-tz'
+import { useToast } from '@/components/ui/Toast'
 
 interface Habit {
   id: string
@@ -51,6 +51,7 @@ function generateLast84Days(): string[] {
 }
 
 export default function HabitosPage() {
+  const { showToast } = useToast()
   const [habits, setHabits] = useState<Habit[]>([])
   const [completions, setCompletions] = useState<Completion[]>([])
   const [history, setHistory] = useState<HabitHistory[]>([])
@@ -58,6 +59,8 @@ export default function HabitosPage() {
   const [editHabit, setEditHabit] = useState<Habit | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const today = new Date().toISOString().split('T')[0]
   const days84 = generateLast84Days()
@@ -67,23 +70,47 @@ export default function HabitosPage() {
   }, [])
 
   async function loadData() {
-    const [habitsRes, completionsRes, historyRes] = await Promise.all([
-      fetch('/api/habits'),
-      fetch(`/api/habits/complete?date=${today}`),
-      fetch('/api/habits/history'),
-    ])
-    if (habitsRes.ok) setHabits(await habitsRes.json())
-    if (completionsRes.ok) setCompletions(await completionsRes.json())
-    if (historyRes.ok) setHistory(await historyRes.json())
+    setLoadError(false)
+    setPageLoading(true)
+    try {
+      const [habitsRes, completionsRes, historyRes] = await Promise.all([
+        fetch('/api/habits'),
+        fetch(`/api/habits/complete?date=${today}`),
+        fetch('/api/habits/history'),
+      ])
+      if (habitsRes.ok) setHabits(await habitsRes.json())
+      if (completionsRes.ok) setCompletions(await completionsRes.json())
+      if (historyRes.ok) setHistory(await historyRes.json())
+    } catch {
+      setLoadError(true)
+    } finally {
+      setPageLoading(false)
+    }
   }
 
   async function toggleHabit(habitId: string) {
-    await fetch('/api/habits/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ habitId, date: today }),
-    })
-    loadData()
+    // Optimistic update
+    const isDone = completions.some((c) => c.habitId === habitId)
+    if (isDone) {
+      setCompletions((prev) => prev.filter((c) => c.habitId !== habitId))
+    } else {
+      setCompletions((prev) => [...prev, { id: `temp-${habitId}`, habitId, date: today }])
+    }
+    try {
+      await fetch('/api/habits/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ habitId, date: today }),
+      })
+    } catch {
+      // Revert on error
+      if (isDone) {
+        setCompletions((prev) => [...prev, { id: `temp-${habitId}`, habitId, date: today }])
+      } else {
+        setCompletions((prev) => prev.filter((c) => c.habitId !== habitId))
+      }
+      showToast('Error al guardar hábito', 'error')
+    }
   }
 
   function openCreate() {
@@ -107,27 +134,39 @@ export default function HabitosPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    if (editHabit) {
-      await fetch(`/api/habits/${editHabit.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-    } else {
-      await fetch('/api/habits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
+    try {
+      if (editHabit) {
+        await fetch(`/api/habits/${editHabit.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
+        showToast('Hábito actualizado', 'success')
+      } else {
+        await fetch('/api/habits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
+        showToast('Hábito creado', 'success')
+      }
+    } catch {
+      showToast('Error al guardar hábito', 'error')
+    } finally {
+      setLoading(false)
+      setModalOpen(false)
+      loadData()
     }
-    setLoading(false)
-    setModalOpen(false)
-    loadData()
   }
 
   async function deleteHabit(id: string) {
     if (!confirm('¿Eliminar este hábito y todo su historial?')) return
-    await fetch(`/api/habits/${id}`, { method: 'DELETE' })
+    try {
+      await fetch(`/api/habits/${id}`, { method: 'DELETE' })
+      showToast('Hábito eliminado', 'info')
+    } catch {
+      showToast('Error al eliminar', 'error')
+    }
     loadData()
   }
 
@@ -162,6 +201,27 @@ export default function HabitosPage() {
   const filtered = selectedCategory === 'all' ? habits : habits.filter((h) => h.category === selectedCategory)
   const completedCount = completions.length
   const totalHabits = habits.filter((h) => h.frequency === 'diario').length
+
+  if (pageLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-40 bg-[#1a1a1a] animate-pulse rounded" />
+        <div className="card h-12 bg-[#1a1a1a] animate-pulse" />
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="card h-16 bg-[#1a1a1a] animate-pulse" />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-gray-400">No se pudo cargar los hábitos</p>
+        <button onClick={loadData} className="btn-secondary">Reintentar</button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

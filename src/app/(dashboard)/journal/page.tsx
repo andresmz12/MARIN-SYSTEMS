@@ -28,6 +28,7 @@ export default function JournalPage() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -258,6 +259,61 @@ export default function JournalPage() {
         </div>
       </div>
 
+      {/* Mood calendar grid */}
+      {(() => {
+        const [calYear, calMonthNum] = selectedMonth.split('-').map(Number)
+        const daysInMonth = new Date(calYear, calMonthNum, 0).getDate()
+        const firstDow = new Date(calYear, calMonthNum - 1, 1).getDay()
+        const moodByDay: Record<number, number> = {}
+        for (const entry of monthEntries) {
+          const d = new Date(entry.date + 'T12:00:00')
+          moodByDay[d.getDate()] = entry.mood
+        }
+        const todayDay = new Date().toISOString().split('T')[0].startsWith(selectedMonth) ? new Date().getDate() : -1
+        return (
+          <div className="card">
+            <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Calendario de ánimo — {selectedMonth}</p>
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {['D', 'L', 'M', 'X', 'J', 'V', 'S'].map((d) => (
+                <div key={d} className="text-center text-[10px] text-gray-600 font-medium py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: firstDow }, (_, i) => <div key={`e-${i}`} />)}
+              {Array.from({ length: daysInMonth }, (_, i) => {
+                const day = i + 1
+                const mood = moodByDay[day]
+                const isToday = day === todayDay
+                return (
+                  <div
+                    key={day}
+                    className={`aspect-square rounded-lg flex items-center justify-center text-[11px] font-medium transition-colors ${
+                      isToday ? 'ring-1 ring-blue-500' : ''
+                    }`}
+                    style={{
+                      backgroundColor: mood ? `${MOOD_COLORS[mood]}22` : '#1a1a1a',
+                      color: mood ? MOOD_COLORS[mood] : '#4b5563',
+                      border: mood ? `1px solid ${MOOD_COLORS[mood]}44` : '1px solid #2a2a2a',
+                    }}
+                    title={mood ? `${MOOD_LABELS[mood]} (${mood}/5)` : undefined}
+                  >
+                    {day}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex items-center gap-3 mt-3 flex-wrap">
+              {[1,2,3,4,5].map((m) => (
+                <div key={m} className="flex items-center gap-1">
+                  <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: MOOD_COLORS[m] }} />
+                  <span className="text-[10px] text-gray-600">{MOOD_LABELS[m]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Mood chart */}
       {moodChartData.length > 1 && (
         <div className="card">
@@ -289,10 +345,46 @@ export default function JournalPage() {
       {/* Month history */}
       {monthEntries.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Historial del mes</h2>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Historial del mes</h2>
+          </div>
+
+          {/* Popular tags filter */}
+          {(() => {
+            const allTags = Array.from(
+              new Set(monthEntries.flatMap((e) => e.tags))
+            ).sort()
+            return allTags.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedTag && (
+                  <button
+                    onClick={() => setSelectedTag(null)}
+                    className="text-xs px-3 py-1 rounded-full border border-[#3a3a3a] text-gray-400 hover:text-gray-200 hover:border-[#4a4a4a] transition-colors"
+                  >
+                    Ver todos
+                  </button>
+                )}
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                      selectedTag === tag
+                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/50'
+                        : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300 hover:border-[#3a3a3a]'
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            ) : null
+          })()}
+
           {[...monthEntries]
             .sort((a, b) => b.date.localeCompare(a.date))
             .filter((e) => e.date.split('T')[0] !== today)
+            .filter((e) => selectedTag === null || e.tags.includes(selectedTag))
             .map((entry) => (
               <div key={entry.id} className="card">
                 <div className="flex items-center justify-between mb-2">

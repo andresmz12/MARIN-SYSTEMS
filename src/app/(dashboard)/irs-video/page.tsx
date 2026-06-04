@@ -1,219 +1,241 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useToast } from '@/components/ui/Toast'
 
-interface RssItem { title: string; summary: string; url: string; pubDate: string }
+interface NewsItem {
+  id: string
+  title: string
+  summary: string
+  spanishSummary?: string | null
+  url: string
+  publishedAt: string
+}
+
+const LOADING_MSGS = ['Generando mapa educativo...', 'Elaborando el guion...', 'Preparando tu Studio...']
 
 type PageState = 'form' | 'loading' | 'done'
 
 export default function IrsVideoPage() {
-  const [noticias, setNoticias] = useState<RssItem[]>([])
+  const { toast } = useToast()
+  const [pageState, setPageState] = useState<PageState>('form')
+  const [noticias, setNoticias] = useState<NewsItem[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [loadingNews, setLoadingNews] = useState(false)
-  const [pageState, setPageState] = useState<PageState>('form')
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0)
   const [studioUrl, setStudioUrl] = useState('')
+  const [guion, setGuion] = useState('')
   const [copied, setCopied] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [copiedLink, setCopiedLink] = useState(false)
 
   useEffect(() => { loadNoticias() }, [])
+
+  useEffect(() => {
+    if (pageState !== 'loading') return
+    const id = setInterval(() => setLoadingMsgIdx(i => (i + 1) % LOADING_MSGS.length), 3000)
+    return () => clearInterval(id)
+  }, [pageState])
 
   async function loadNoticias() {
     setLoadingNews(true)
     try {
       const res = await fetch('/api/irs-video/noticias')
       if (res.ok) {
-        const data = await res.json()
+        const data: NewsItem[] = await res.json()
         setNoticias(data)
         setSelectedIdx(0)
       }
-    } finally {
-      setLoadingNews(false)
-    }
+    } catch { /* ignore */ }
+    setLoadingNews(false)
   }
 
-  async function generate() {
+  async function handleGenerate() {
     const item = noticias[selectedIdx]
     if (!item) return
     setPageState('loading')
-    setErrorMsg('')
+    setLoadingMsgIdx(0)
     try {
       const res = await fetch('/api/irs-video/noticias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: item.title, summary: item.summary }),
+        body: JSON.stringify({ title: item.title, summary: item.summary, spanishSummary: item.spanishSummary }),
       })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
-      setStudioUrl(body.url)
+      const data = await res.json() as { url?: string; guionCompleto?: string; error?: string }
+      if (!res.ok || !data.url) {
+        toast.error(data.error ?? `Error al generar mapa (${res.status})`)
+        setPageState('form')
+        return
+      }
+      setStudioUrl(data.url)
+      setGuion(data.guionCompleto ?? '')
       setPageState('done')
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Error desconocido')
+    } catch {
+      toast.error('Error de conexión. Verifica tu internet e intenta de nuevo.')
       setPageState('form')
     }
   }
 
-  function copy() {
-    navigator.clipboard.writeText(studioUrl).then(() => {
+  function handleCopyGuion() {
+    navigator.clipboard.writeText(guion).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  const selected = noticias[selectedIdx]
-
-  /* ── Loading state ── */
-  if (pageState === 'loading') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-6" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        <svg className="w-12 h-12 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
-        <div className="text-center">
-          <p className="text-[var(--text-primary)] font-semibold text-lg">Generando mapa + audio…</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Esto puede tomar hasta 30 segundos</p>
-        </div>
-      </div>
-    )
+  function handleCopyLink() {
+    navigator.clipboard.writeText(studioUrl).then(() => {
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2000)
+    })
   }
 
-  /* ── Done state ── */
-  if (pageState === 'done') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-8 px-4" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        <div className="text-center">
-          <div className="text-5xl mb-4">🎬</div>
-          <h2 className="text-xl font-bold text-[var(--text-primary)]">¡Tu estudio está listo!</h2>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Abre este enlace en tu iPad para ver el mapa y escuchar el audio</p>
-        </div>
-
-        <div className="card w-full max-w-lg p-4 flex items-center gap-3">
-          <input
-            readOnly
-            value={studioUrl}
-            className="input flex-1 text-xs font-mono"
-          />
-          <button onClick={copy} className="btn-primary text-sm whitespace-nowrap flex items-center gap-1.5">
-            {copied ? '✅ Copiado' : '📋 Copiar'}
-          </button>
-        </div>
-
-        <a
-          href={studioUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary text-sm flex items-center gap-2"
-        >
-          <span>🔗</span> Abrir en nueva pestaña
-        </a>
-
-        <button
-          onClick={() => { setPageState('form'); setStudioUrl('') }}
-          className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors"
-        >
-          ← Generar otro
-        </button>
-      </div>
-    )
+  function handleReset() {
+    setPageState('form')
+    setStudioUrl('')
+    setGuion('')
+    setCopied(false)
+    setCopiedLink(false)
   }
 
-  /* ── Form state ── */
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">🎬</span>
-        <div>
-          <h1 className="text-lg font-bold text-[var(--text-primary)]">IRS Video Creator</h1>
-          <p className="text-xs text-[var(--text-muted)]">Genera un mapa educativo + audio para TikTok desde noticias del IRS</p>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-start px-4 py-10 min-h-full">
+      <div className="w-full max-w-xl">
 
-      {errorMsg && (
-        <div className="card border border-red-500/30 bg-red-500/10 p-3">
-          <p className="text-red-400 text-sm">⚠️ {errorMsg}</p>
-        </div>
-      )}
-
-      {/* News selector */}
-      <div className="card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="label">Noticia del IRS</p>
-          <button
-            onClick={loadNoticias}
-            disabled={loadingNews}
-            className="btn-secondary text-xs flex items-center gap-1.5"
-          >
-            {loadingNews ? (
-              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            ) : '↻'} Recargar
-          </button>
+        <div className="flex items-center gap-2 mb-8">
+          <span className="text-2xl">🏛</span>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">IRS Video Creator</h1>
         </div>
 
-        {loadingNews ? (
-          <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm py-2">
-            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        {/* FORM STATE */}
+        {pageState === 'form' && (
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label">Noticia del IRS</label>
+                <button onClick={loadNoticias} disabled={loadingNews}
+                  className="btn-secondary text-xs px-2.5 py-1">
+                  {loadingNews ? '…' : '↺ Actualizar'}
+                </button>
+              </div>
+
+              {loadingNews ? (
+                <div className="input text-xs text-[var(--text-secondary)] py-3 text-center">Cargando noticias…</div>
+              ) : noticias.length === 0 ? (
+                <div className="input text-xs text-[var(--text-secondary)] py-3 text-center">
+                  Ve a IRS News y actualiza las noticias primero
+                </div>
+              ) : (
+                <select
+                  value={selectedIdx}
+                  onChange={e => setSelectedIdx(Number(e.target.value))}
+                  className="input text-sm mt-1"
+                >
+                  {noticias.map((n, i) => (
+                    <option key={n.id} value={i}>
+                      {n.title.length > 80 ? n.title.slice(0, 80) + '…' : n.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {noticias[selectedIdx]?.spanishSummary && (
+                <p className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
+                  {noticias[selectedIdx].spanishSummary}
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={handleGenerate}
+              disabled={noticias.length === 0 || loadingNews}
+              className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-sm disabled:opacity-50"
+            >
+              ⚡ Generar Video
+            </button>
+          </div>
+        )}
+
+        {/* LOADING STATE */}
+        {pageState === 'loading' && (
+          <div className="flex flex-col items-center justify-center gap-6 py-16">
+            <svg className="w-10 h-10 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            Cargando noticias…
+            <p className="text-sm text-[var(--text-secondary)] font-medium">
+              {LOADING_MSGS[loadingMsgIdx]}
+            </p>
           </div>
-        ) : noticias.length === 0 ? (
-          <p className="text-[var(--text-muted)] text-sm">No se pudieron cargar noticias. Intenta recargar.</p>
-        ) : (
-          <div className="space-y-2">
-            {noticias.map((n, i) => (
-              <label
-                key={i}
-                className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                  selectedIdx === i
-                    ? 'bg-indigo-500/15 border border-indigo-500/30'
-                    : 'hover:bg-[var(--bg-hover)] border border-transparent'
-                }`}
+        )}
+
+        {/* DONE STATE */}
+        {pageState === 'done' && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 text-green-500 font-bold text-base">
+              <span>✅</span>
+              <span>¡Video listo para grabar!</span>
+            </div>
+
+            {/* PASO 1 — Guion */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 1 — Copia el guion</p>
+              <textarea
+                readOnly
+                value={guion}
+                className="input resize-none text-sm leading-relaxed"
+                style={{ minHeight: 120 }}
+                rows={8}
+              />
+              <button
+                onClick={handleCopyGuion}
+                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
               >
-                <input
-                  type="radio"
-                  name="noticia"
-                  value={i}
-                  checked={selectedIdx === i}
-                  onChange={() => setSelectedIdx(i)}
-                  className="mt-1 accent-indigo-500"
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[var(--text-primary)] leading-snug">{n.title}</p>
-                  {n.summary && (
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{n.summary}</p>
-                  )}
-                  <p className="text-xs text-[var(--text-muted)] mt-1 opacity-60">
-                    {new Date(n.pubDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </p>
-                </div>
-              </label>
-            ))}
+                {copied ? '✅ ¡Copiado!' : '📋 Copiar Guion para ElevenLabs'}
+              </button>
+            </div>
+
+            {/* PASO 2 — ElevenLabs */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 2 — Genera el audio</p>
+              <button
+                onClick={() => window.open('https://elevenlabs.io/app/speech-synthesis', '_blank')}
+                className="btn-secondary w-full py-3 text-sm flex items-center justify-center gap-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+              >
+                🎙 Abrir ElevenLabs
+              </button>
+            </div>
+
+            {/* PASO 3 — Studio */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 3 — Abre el mapa en iPad</p>
+              <p className="text-xs text-blue-400 break-all font-mono bg-[var(--bg-sidebar)] rounded-lg px-3 py-2 border border-[var(--bg-border)]">
+                {studioUrl}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.open(studioUrl, '_blank')}
+                  className="btn-primary flex-1 py-3 text-sm flex items-center justify-center gap-2"
+                >
+                  📱 Abrir Studio en iPad
+                </button>
+                <button
+                  onClick={handleCopyLink}
+                  className="btn-secondary px-4 py-3 text-sm whitespace-nowrap"
+                >
+                  {copiedLink ? '✅ Copiado!' : '📋 Copiar Link'}
+                </button>
+              </div>
+              <p className="text-xs text-amber-500">⏱ Expira en 24 horas</p>
+            </div>
+
+            <hr className="border-[var(--bg-border)]" />
+
+            <button onClick={handleReset} className="btn-secondary w-full text-sm py-3">
+              + Crear otro video
+            </button>
           </div>
         )}
       </div>
-
-      {selected && (
-        <div className="card p-4 space-y-2 border border-indigo-500/20">
-          <p className="label">Seleccionada</p>
-          <p className="text-sm text-[var(--text-primary)] font-medium">{selected.title}</p>
-          {selected.summary && (
-            <p className="text-xs text-[var(--text-muted)] line-clamp-3">{selected.summary}</p>
-          )}
-        </div>
-      )}
-
-      <button
-        onClick={generate}
-        disabled={!selected}
-        className="btn-primary w-full flex items-center justify-center gap-2 py-3"
-      >
-        <span>⚡</span>
-        Generar mapa + audio
-      </button>
     </div>
   )
 }

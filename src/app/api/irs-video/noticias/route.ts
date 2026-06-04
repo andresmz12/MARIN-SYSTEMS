@@ -2,75 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { XMLParser } from 'fast-xml-parser'
 import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 60
 
-const IRS_RSS = 'https://www.irs.gov/rss/newsroom.xml'
-const ELEVENLABS_VOICE_ID = 'YPh7OporwNAJ28F5IQrm'
-
-export interface RssItem {
-  title: string
-  summary: string
-  url: string
-  pubDate: string
+interface MapaJson {
+  centro: { id: string; emoji: string; texto: string; color: string; explicacion: string }
+  ramas: Array<{ id: string; emoji: string; texto: string; color: string; explicacion: string; hijos: Array<{ id: string; texto: string; color: string; explicacion: string }> }>
 }
 
-function extractText(val: unknown): string {
-  if (typeof val === 'string') return val.trim()
-  if (typeof val === 'number') return String(val)
-  if (val && typeof val === 'object') {
-    const o = val as Record<string, unknown>
-    if ('#text' in o) return String(o['#text']).trim()
-  }
-  return ''
-}
-
-/* ── GET: return 5 most recent IRS news items ── */
+/* GET — returns recent IRS news from DB */
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const res = await fetch(IRS_RSS, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MarinSystems/1.0)',
-        Accept: 'application/rss+xml, application/xml, text/xml, */*',
-      },
-      next: { revalidate: 0 },
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const xml = await res.text()
-
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: '@_',
-      textNodeName: '#text',
-      isArray: (name) => name === 'item',
-    })
-    const parsed = parser.parse(xml)
-    const channel = (parsed?.rss as Record<string, unknown>)?.channel as Record<string, unknown>
-    const raw = (channel?.item ?? []) as Array<Record<string, unknown>>
-    const list = (Array.isArray(raw) ? raw : [raw]).slice(0, 5)
-
-    const items: RssItem[] = list.map((item) => ({
-      title: extractText(item.title),
-      summary: extractText(item.description).replace(/<[^>]*>/g, '').trim(),
-      url: extractText(item.link) || extractText(item.guid),
-      pubDate: extractText(item.pubDate) || new Date().toUTCString(),
-    }))
-
-    return NextResponse.json(items)
-  } catch (err) {
-    return NextResponse.json(
-      { error: `No se pudo obtener el feed: ${err instanceof Error ? err.message : err}` },
-      { status: 502 }
-    )
+    const news = await prisma.irsNews.findMany({ orderBy: { publishedAt: 'desc' }, take: 30 })
+    return NextResponse.json(news)
+  } catch {
+    return NextResponse.json({ error: 'Error al obtener noticias' }, { status: 500 })
   }
 }
 
-/* ── POST: generate mapa + audio → StudioSession ── */
+/* POST — generate educational mind map + narration script */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -81,89 +35,163 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ error: 'title requerido' }, { status: 400 })
 
   const client = new Anthropic()
-  const context = spanishSummary || summary
 
-  const prompt = `Eres un experto en impuestos para la comunidad hispana en EE.UU.
+  const context = spanishSummary || summary || ''
 
-Esta es una noticia del IRS:
-Título: ${title}
-Resumen: ${context}
+  const prompt = `Eres un educador financiero que crea contenido para la comunidad hispana en EE.UU. Tu objetivo es explicar temas del IRS de forma clara, útil y memorable — como si fuera una clase sencilla para alguien que nunca ha entendido de impuestos.
 
-Genera un mapa educativo con 5 ramas temáticas: Qué es / Cómo funciona / Qué debes hacer / Fechas y montos / Errores comunes.
+A partir de esta noticia del IRS, genera un mapa mental educativo con explicaciones detalladas.
 
-Responde SOLO con JSON válido (sin markdown, sin texto extra):
+ESTRUCTURA JSON (5 ramas, 3 hijos por rama, con "explicacion" en cada elemento):
+
 {
-  "centro": { "id": "c", "emoji": "🏛", "texto": "TÍTULO CORTO (máx 3 palabras)", "color": "#1e3a5f" },
+  "centro": {
+    "id": "c",
+    "emoji": "🏛",
+    "texto": "TÍTULO CORTO (máx 4 palabras)",
+    "color": "#1e3a5f",
+    "explicacion": "2-3 oraciones que presentan el tema. ¿Qué es? ¿A quién afecta? ¿Por qué importa ahora? Usa lenguaje de conversación, no técnico."
+  },
   "ramas": [
-    { "id": "r1", "emoji": "📖", "texto": "Qué es (3 palabras)", "color": "#dc2626",
-      "hijos": [{ "id": "r1h1", "texto": "detalle (4 palabras)", "color": "#fca5a5" }, { "id": "r1h2", "texto": "detalle (4 palabras)", "color": "#fca5a5" }] },
-    { "id": "r2", "emoji": "⚙️", "texto": "Cómo funciona (2 palabras)", "color": "#2563eb",
-      "hijos": [{ "id": "r2h1", "texto": "detalle (4 palabras)", "color": "#93c5fd" }, { "id": "r2h2", "texto": "detalle (4 palabras)", "color": "#93c5fd" }] },
-    { "id": "r3", "emoji": "✅", "texto": "Qué hacer (3 palabras)", "color": "#16a34a",
-      "hijos": [{ "id": "r3h1", "texto": "detalle (4 palabras)", "color": "#86efac" }, { "id": "r3h2", "texto": "detalle (4 palabras)", "color": "#86efac" }] },
-    { "id": "r4", "emoji": "📅", "texto": "Fechas y montos (2 palabras)", "color": "#d97706",
-      "hijos": [{ "id": "r4h1", "texto": "detalle (4 palabras)", "color": "#fcd34d" }, { "id": "r4h2", "texto": "detalle (4 palabras)", "color": "#fcd34d" }] },
-    { "id": "r5", "emoji": "⚠️", "texto": "Errores comunes (2 palabras)", "color": "#7c3aed",
-      "hijos": [{ "id": "r5h1", "texto": "detalle (4 palabras)", "color": "#c4b5fd" }, { "id": "r5h2", "texto": "detalle (4 palabras)", "color": "#c4b5fd" }] }
-  ],
-  "guion": "Guion de 60 segundos en español latino conversacional. Gancho inicial. Cubre las 5 ramas en orden. Llamada a la acción final. Sin corchetes, sin etiquetas, texto limpio listo para leer en voz alta."
-}`
+    {
+      "id": "r1",
+      "emoji": "📌",
+      "texto": "Qué es (3-4 palabras)",
+      "color": "#dc2626",
+      "explicacion": "2-3 oraciones que explican esta categoría con un ejemplo concreto. Responde: ¿qué significa esto para alguien normal?",
+      "hijos": [
+        { "id": "r1h1", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto. Incluye cifras, fechas o ejemplos reales cuando sea posible." },
+        { "id": "r1h2", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto." },
+        { "id": "r1h3", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto." }
+      ]
+    },
+    {
+      "id": "r2",
+      "emoji": "💡",
+      "texto": "Cómo funciona (3-4 palabras)",
+      "color": "#2563eb",
+      "explicacion": "2-3 oraciones explicando el mecanismo. Usa una analogía cotidiana si ayuda.",
+      "hijos": [
+        { "id": "r2h1", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." },
+        { "id": "r2h2", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." },
+        { "id": "r2h3", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." }
+      ]
+    },
+    {
+      "id": "r3",
+      "emoji": "✅",
+      "texto": "Qué debes hacer (3-4 palabras)",
+      "color": "#16a34a",
+      "explicacion": "2-3 oraciones con los pasos concretos que debe tomar el contribuyente. Sé específico y práctico.",
+      "hijos": [
+        { "id": "r3h1", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." },
+        { "id": "r3h2", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." },
+        { "id": "r3h3", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." }
+      ]
+    },
+    {
+      "id": "r4",
+      "emoji": "📅",
+      "texto": "Fechas y montos (3-4 palabras)",
+      "color": "#d97706",
+      "explicacion": "2-3 oraciones sobre los números y fechas clave. Di exactamente cuánto y cuándo.",
+      "hijos": [
+        { "id": "r4h1", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." },
+        { "id": "r4h2", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." },
+        { "id": "r4h3", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." }
+      ]
+    },
+    {
+      "id": "r5",
+      "emoji": "⚠️",
+      "texto": "Errores que evitar (3-4 palabras)",
+      "color": "#7c3aed",
+      "explicacion": "2-3 oraciones sobre los errores más comunes y sus consecuencias. Que la gente diga: 'uy, casi cometo ese error'.",
+      "hijos": [
+        { "id": "r5h1", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico y su consecuencia." },
+        { "id": "r5h2", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico." },
+        { "id": "r5h3", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico." }
+      ]
+    }
+  ]
+}
 
-  /* 1 — Claude */
-  let mapaJson: unknown, guion: string
+REGLAS para las explicaciones:
+- Lenguaje de conversación, como hablarle a un amigo
+- Sin jerga técnica — si usas un término técnico, explícalo inmediatamente
+- Incluye ejemplos reales: "Por ejemplo, si eres plomero independiente..."
+- Incluye cifras concretas cuando las haya: "$500 de multa", "15 de abril", "30 días"
+- Cada explicación debe responder: "¿esto a mí qué me importa?"
+
+NOTICIA:
+Título: ${title}
+${context ? `Contexto: ${context}` : ''}
+
+También genera un guion narrado de 60-75 segundos en español latino conversacional.
+El guion tiene estas secciones: intro → qué es → cómo funciona → qué hacer → fechas/montos → errores → llamada a la acción.
+Tono: amigable, como hablarle a un amigo. Sin muletillas.
+
+Responde SOLO con JSON válido (sin markdown):
+{ "mapaJson": {...}, "guionCompleto": "..." }`
+
+  let raw: string
   try {
-    const msg = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     })
-    const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) throw new Error('No JSON')
-    const parsed = JSON.parse(match[0])
-    mapaJson = { centro: parsed.centro, ramas: parsed.ramas }
-    // Strip bracket tags just in case
-    guion = (parsed.guion as string).replace(/\[[^\]]*\]/g, '').trim()
-  } catch {
-    return NextResponse.json({ error: 'Error generando el mapa, intenta de nuevo' }, { status: 500 })
+    raw = message.content[0].type === 'text' ? message.content[0].text : ''
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Error al llamar a la IA: ${msg}` }, { status: 500 })
   }
 
-  /* 2 — ElevenLabs */
-  let audioData: string
+  let result: { mapaJson: MapaJson; guionCompleto: string }
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY ?? ''
-    const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-      method: 'POST',
-      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: guion,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.4, similarity_boost: 0.85, style: 0.3, use_speaker_boost: true },
-      }),
-    })
-    if (elRes.status === 401) return NextResponse.json({ error: 'API key inválida' }, { status: 401 })
-    if (elRes.status === 429) return NextResponse.json({ error: 'Sin créditos disponibles' }, { status: 429 })
-    if (!elRes.ok) throw new Error(`HTTP ${elRes.status}`)
-    audioData = Buffer.from(await elRes.arrayBuffer()).toString('base64')
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('401')) return NextResponse.json({ error: 'API key inválida' }, { status: 401 })
-    if (err instanceof Error && err.message.includes('429')) return NextResponse.json({ error: 'Sin créditos disponibles' }, { status: 429 })
-    return NextResponse.json({ error: 'Error de conexión con ElevenLabs' }, { status: 503 })
+    const match = raw.match(/\{[\s\S]*\}/)
+    const parsed = match ? JSON.parse(match[0]) : null
+    if (!parsed?.mapaJson) throw new Error('Invalid response')
+    result = parsed
+  } catch {
+    return NextResponse.json({ error: 'Error generando el mapa, intenta de nuevo.' }, { status: 500 })
   }
 
-  /* 3 — StudioSession */
-  const studioSession = await prisma.studioSession.create({
-    data: {
-      tema: title,
-      redSocial: 'TikTok',
-      duracion: '60s',
-      mapaJson: mapaJson as object,
-      guion,
-      audioData,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    },
-  })
+  // Create studio session
+  let studioToken: string
+  try {
+    const studioSession = await prisma.studioSession.create({
+      data: {
+        tema: title.slice(0, 200),
+        redSocial: 'TikTok',
+        duracion: '60s',
+        mapaJson: result.mapaJson as object,
+        guion: result.guionCompleto,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+      select: { token: true },
+    })
+    studioToken = studioSession.token
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Error guardando sesión: ${msg}` }, { status: 500 })
+  }
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? ''
-  return NextResponse.json({ url: `${baseUrl}/studio/${studioSession.token}` })
+  // Save IRS history (non-fatal)
+  try {
+    await prisma.irsVideoContent.create({
+      data: {
+        titulo: title.slice(0, 200),
+        guionCompleto: result.guionCompleto,
+        mapaJson: result.mapaJson as object,
+        publishedAt: new Date(),
+      },
+    })
+  } catch { /* ignore */ }
+
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  return NextResponse.json({
+    url: `${base}/studio/${studioToken}`,
+    guionCompleto: result.guionCompleto,
+  })
 }
