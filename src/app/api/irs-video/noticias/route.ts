@@ -139,6 +139,7 @@ JSON exacto (sin nada más):
     const match = raw.match(/\{[\s\S]*\}/)
     const parsed = match ? JSON.parse(match[0]) : null
     if (!parsed?.centro || !Array.isArray(parsed.ramas)) throw new Error('Invalid response')
+    for (const r of parsed.ramas) { if (!Array.isArray(r.hijos)) r.hijos = [] }
     mapaJson = parsed
   } catch {
     return NextResponse.json({ error: 'Error generando el mapa, intenta de nuevo.' }, { status: 500 })

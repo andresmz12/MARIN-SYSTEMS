@@ -178,9 +178,10 @@ export default function StudioMap({ mapaJson }: Props) {
   function hijoPos(i: number, j: number): { hx: number; hy: number } {
     const { bx, by } = branchPos(i)
     const a  = rad(angs[i])
-    const sp = ramas[i].hijos.length === 1 ? 0 : (j - (ramas[i].hijos.length - 1) / 2)
+    const hijos = ramas[i].hijos ?? []
+    const sp = hijos.length === 1 ? 0 : (j - (hijos.length - 1) / 2)
     const ca = a + rad(sp * SPREAD)
-    const off = nodeOffsets[ramas[i].hijos[j].id] ?? { x: 0, y: 0 }
+    const off = nodeOffsets[hijos[j]?.id ?? ''] ?? { x: 0, y: 0 }
     return { hx: bx + Math.cos(ca) * CD + off.x, hy: by + Math.sin(ca) * CD + off.y }
   }
 
@@ -189,7 +190,7 @@ export default function StudioMap({ mapaJson }: Props) {
     for (let i = 0; i < ramas.length; i++) {
       const { bx, by } = branchPos(i)
       // hijos first (rendered on top)
-      for (let j = 0; j < ramas[i].hijos.length; j++) {
+      for (let j = 0; j < (ramas[i].hijos ?? []).length; j++) {
         const { hx, hy } = hijoPos(i, j)
         if (Math.abs(wx - hx) < 81 / 2 + 4 && Math.abs(wy - hy) < 46 / 2 + 4)
           return ramas[i].hijos[j].id
@@ -321,7 +322,7 @@ export default function StudioMap({ mapaJson }: Props) {
 
           {/* branch→child lines */}
           {ramas.map((r, i) =>
-            r.hijos.map((h, j) => {
+            (r.hijos ?? []).map((h, j) => {
               const { bx, by } = branchPos(i)
               const { hx, hy } = hijoPos(i, j)
               return <path key={`bl${i}${j}`} d={qbez(bx, by, hx, hy)} stroke={h.color} strokeWidth={1.5} fill="none" opacity={0.4} />
@@ -330,7 +331,7 @@ export default function StudioMap({ mapaJson }: Props) {
 
           {/* child nodes */}
           {ramas.map((r, i) =>
-            r.hijos.map((h, j) => {
+            (r.hijos ?? []).map((h, j) => {
               const { hx, hy } = hijoPos(i, j)
               const nw = 81, nh = 46
               const isDragging = draggingNodeId === h.id
