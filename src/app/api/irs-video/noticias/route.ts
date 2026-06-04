@@ -6,9 +6,19 @@ import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 60
 
-interface MapaJson {
-  centro: { id: string; emoji: string; texto: string; color: string; explicacion: string }
-  ramas: Array<{ id: string; emoji: string; texto: string; color: string; explicacion: string; hijos: Array<{ id: string; texto: string; color: string; explicacion: string }> }>
+const CLAUDE_SYS = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC e ITIN. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
+
+function buildGuion(mapa: any): string {
+  const parts: string[] = []
+  if (mapa.centro?.guion) parts.push(mapa.centro.guion.trim())
+  for (const rama of mapa.ramas ?? []) {
+    if (rama.guion) parts.push(rama.guion.trim())
+    for (const hijo of rama.hijos ?? []) {
+      if (hijo.guion) parts.push(hijo.guion.trim())
+    }
+  }
+  if (mapa.cta) parts.push(mapa.cta.trim())
+  return parts.join(' ')
 }
 
 /* GET — returns recent IRS news from DB */
@@ -34,111 +44,88 @@ export async function POST(req: NextRequest) {
   }
   if (!title) return NextResponse.json({ error: 'title requerido' }, { status: 400 })
 
+  const context = spanishSummary || summary || ''
   const client = new Anthropic()
 
-  const context = spanishSummary || summary || ''
+  const prompt = `Genera mapa conceptual sobre esta noticia del IRS:
+${title}${context ? `\n${context}` : ''}
 
-  const prompt = `Eres un educador financiero que crea contenido para la comunidad hispana en EE.UU. Tu objetivo es explicar temas del IRS de forma clara, útil y memorable — como si fuera una clase sencilla para alguien que nunca ha entendido de impuestos.
+ESTRUCTURA OBLIGATORIA: 1 centro, 5 ramas exactas, 3 hijos por rama exactos. Total 21 nodos.
 
-A partir de esta noticia del IRS, genera un mapa mental educativo con explicaciones detalladas.
+REGLAS ESTRICTAS DEL TEXTO (crítico):
+- Centro: máximo 3 palabras
+- Rama: máximo 3 palabras
+- Hijo: máximo 3 palabras
+- Separar en 2 líneas con \\n si hay 2 datos
+- CORRECTO: "Multa\\n5%", "Form 1099-K", "Antes\\nAbril"
+- INCORRECTO: "Multas y cargos extra", "Intereses que crecen solos"
+- El texto es una ETIQUETA corta — el detalle va en el guion
 
-ESTRUCTURA JSON (5 ramas, 3 hijos por rama, con "explicacion" en cada elemento):
-
+JSON exacto (sin nada más):
 {
   "centro": {
-    "id": "c",
+    "id": "centro",
     "emoji": "🏛",
-    "texto": "TÍTULO CORTO (máx 4 palabras)",
+    "texto": "Palabra\\nPalabra",
     "color": "#1e3a5f",
-    "explicacion": "2-3 oraciones que presentan el tema. ¿Qué es? ¿A quién afecta? ¿Por qué importa ahora? Usa lenguaje de conversación, no técnico."
+    "guion": "2 oraciones introduciendo esta noticia del IRS para la comunidad latina."
   },
   "ramas": [
     {
-      "id": "r1",
-      "emoji": "📌",
-      "texto": "Qué es (3-4 palabras)",
-      "color": "#dc2626",
-      "explicacion": "2-3 oraciones que explican esta categoría con un ejemplo concreto. Responde: ¿qué significa esto para alguien normal?",
+      "id": "r1", "emoji": "📌", "texto": "Texto\\nCorto", "color": "#dc2626",
+      "guion": "2 oraciones explicando esta categoría con ejemplo concreto para latinos.",
       "hijos": [
-        { "id": "r1h1", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto. Incluye cifras, fechas o ejemplos reales cuando sea posible." },
-        { "id": "r1h2", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto." },
-        { "id": "r1h3", "texto": "etiqueta corta (4-6 palabras)", "color": "#fca5a5", "explicacion": "1-2 oraciones específicas sobre este punto." }
+        { "id": "h1a", "texto": "Dato corto", "color": "#fca5a5", "guion": "1 oración con dato específico: monto, fecha o acción." },
+        { "id": "h1b", "texto": "Dato corto", "color": "#fca5a5", "guion": "1 oración con dato específico." },
+        { "id": "h1c", "texto": "Dato corto", "color": "#fca5a5", "guion": "1 oración con dato específico." }
       ]
     },
     {
-      "id": "r2",
-      "emoji": "💡",
-      "texto": "Cómo funciona (3-4 palabras)",
-      "color": "#2563eb",
-      "explicacion": "2-3 oraciones explicando el mecanismo. Usa una analogía cotidiana si ayuda.",
+      "id": "r2", "emoji": "💡", "texto": "Texto\\nCorto", "color": "#2563eb",
+      "guion": "2 oraciones.",
       "hijos": [
-        { "id": "r2h1", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." },
-        { "id": "r2h2", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." },
-        { "id": "r2h3", "texto": "etiqueta corta", "color": "#93c5fd", "explicacion": "1-2 oraciones específicas." }
+        { "id": "h2a", "texto": "Dato corto", "color": "#93c5fd", "guion": "1 oración." },
+        { "id": "h2b", "texto": "Dato corto", "color": "#93c5fd", "guion": "1 oración." },
+        { "id": "h2c", "texto": "Dato corto", "color": "#93c5fd", "guion": "1 oración." }
       ]
     },
     {
-      "id": "r3",
-      "emoji": "✅",
-      "texto": "Qué debes hacer (3-4 palabras)",
-      "color": "#16a34a",
-      "explicacion": "2-3 oraciones con los pasos concretos que debe tomar el contribuyente. Sé específico y práctico.",
+      "id": "r3", "emoji": "✅", "texto": "Texto\\nCorto", "color": "#16a34a",
+      "guion": "2 oraciones.",
       "hijos": [
-        { "id": "r3h1", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." },
-        { "id": "r3h2", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." },
-        { "id": "r3h3", "texto": "etiqueta corta", "color": "#86efac", "explicacion": "1-2 oraciones de acción concreta." }
+        { "id": "h3a", "texto": "Dato corto", "color": "#86efac", "guion": "1 oración." },
+        { "id": "h3b", "texto": "Dato corto", "color": "#86efac", "guion": "1 oración." },
+        { "id": "h3c", "texto": "Dato corto", "color": "#86efac", "guion": "1 oración." }
       ]
     },
     {
-      "id": "r4",
-      "emoji": "📅",
-      "texto": "Fechas y montos (3-4 palabras)",
-      "color": "#d97706",
-      "explicacion": "2-3 oraciones sobre los números y fechas clave. Di exactamente cuánto y cuándo.",
+      "id": "r4", "emoji": "📅", "texto": "Texto\\nCorto", "color": "#d97706",
+      "guion": "2 oraciones.",
       "hijos": [
-        { "id": "r4h1", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." },
-        { "id": "r4h2", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." },
-        { "id": "r4h3", "texto": "etiqueta corta", "color": "#fcd34d", "explicacion": "1-2 oraciones con dato específico." }
+        { "id": "h4a", "texto": "Dato corto", "color": "#fcd34d", "guion": "1 oración." },
+        { "id": "h4b", "texto": "Dato corto", "color": "#fcd34d", "guion": "1 oración." },
+        { "id": "h4c", "texto": "Dato corto", "color": "#fcd34d", "guion": "1 oración." }
       ]
     },
     {
-      "id": "r5",
-      "emoji": "⚠️",
-      "texto": "Errores que evitar (3-4 palabras)",
-      "color": "#7c3aed",
-      "explicacion": "2-3 oraciones sobre los errores más comunes y sus consecuencias. Que la gente diga: 'uy, casi cometo ese error'.",
+      "id": "r5", "emoji": "⚠️", "texto": "Texto\\nCorto", "color": "#7c3aed",
+      "guion": "2 oraciones.",
       "hijos": [
-        { "id": "r5h1", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico y su consecuencia." },
-        { "id": "r5h2", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico." },
-        { "id": "r5h3", "texto": "etiqueta corta", "color": "#c4b5fd", "explicacion": "1-2 oraciones sobre este error específico." }
+        { "id": "h5a", "texto": "Dato corto", "color": "#c4b5fd", "guion": "1 oración." },
+        { "id": "h5b", "texto": "Dato corto", "color": "#c4b5fd", "guion": "1 oración." },
+        { "id": "h5c", "texto": "Dato corto", "color": "#c4b5fd", "guion": "1 oración." }
       ]
     }
-  ]
-}
-
-REGLAS para las explicaciones:
-- Lenguaje de conversación, como hablarle a un amigo
-- Sin jerga técnica — si usas un término técnico, explícalo inmediatamente
-- Incluye ejemplos reales: "Por ejemplo, si eres plomero independiente..."
-- Incluye cifras concretas cuando las haya: "$500 de multa", "15 de abril", "30 días"
-- Cada explicación debe responder: "¿esto a mí qué me importa?"
-
-NOTICIA:
-Título: ${title}
-${context ? `Contexto: ${context}` : ''}
-
-También genera un guion narrado de 60-75 segundos en español latino conversacional.
-El guion tiene estas secciones: intro → qué es → cómo funciona → qué hacer → fechas/montos → errores → llamada a la acción.
-Tono: amigable, como hablarle a un amigo. Sin muletillas.
-
-Responde SOLO con JSON válido (sin markdown):
-{ "mapaJson": {...}, "guionCompleto": "..." }`
+  ],
+  "cta": "¿Tienes preguntas sobre esto? Escríbeme y te ayudo 👇"
+}`
 
   let raw: string
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
+      system: CLAUDE_SYS,
       messages: [{ role: 'user', content: prompt }],
     })
     raw = message.content[0].type === 'text' ? message.content[0].text : ''
@@ -147,15 +134,17 @@ Responde SOLO con JSON válido (sin markdown):
     return NextResponse.json({ error: `Error al llamar a la IA: ${msg}` }, { status: 500 })
   }
 
-  let result: { mapaJson: MapaJson; guionCompleto: string }
+  let mapaJson: any
   try {
     const match = raw.match(/\{[\s\S]*\}/)
     const parsed = match ? JSON.parse(match[0]) : null
-    if (!parsed?.mapaJson) throw new Error('Invalid response')
-    result = parsed
+    if (!parsed?.centro || !Array.isArray(parsed.ramas)) throw new Error('Invalid response')
+    mapaJson = parsed
   } catch {
     return NextResponse.json({ error: 'Error generando el mapa, intenta de nuevo.' }, { status: 500 })
   }
+
+  const guionCompleto = buildGuion(mapaJson)
 
   // Create studio session
   let studioToken: string
@@ -165,8 +154,8 @@ Responde SOLO con JSON válido (sin markdown):
         tema: title.slice(0, 200),
         redSocial: 'TikTok',
         duracion: '60s',
-        mapaJson: result.mapaJson as object,
-        guion: result.guionCompleto,
+        mapaJson,
+        guion: guionCompleto,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
       select: { token: true },
@@ -182,16 +171,13 @@ Responde SOLO con JSON válido (sin markdown):
     await prisma.irsVideoContent.create({
       data: {
         titulo: title.slice(0, 200),
-        guionCompleto: result.guionCompleto,
-        mapaJson: result.mapaJson as object,
+        guionCompleto,
+        mapaJson,
         publishedAt: new Date(),
       },
     })
   } catch { /* ignore */ }
 
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-  return NextResponse.json({
-    url: `${base}/studio/${studioToken}`,
-    guionCompleto: result.guionCompleto,
-  })
+  return NextResponse.json({ url: `${base}/studio/${studioToken}`, guionCompleto })
 }

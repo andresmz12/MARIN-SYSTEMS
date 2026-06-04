@@ -84,7 +84,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         pointerEvents: 'none',
       }} />
       <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%' }}>
-        {mapa && <StudioMap mapa={mapa} />}
+        {mapa && <StudioMap mapaJson={mapa} activeNodeId={null} />}
       </div>
 
       {hasAudio && (

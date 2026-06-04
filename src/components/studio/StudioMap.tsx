@@ -10,15 +10,7 @@ export interface MapaJsonStudio {
   cta?: string
 }
 
-interface Props { mapa: MapaJsonStudio }
-
-const BRANCH_ANGLES: Record<number, number[]> = {
-  1: [0],
-  2: [-90, 90],
-  3: [-120, 0, 120],
-  4: [-120, -45, 45, 120],
-  5: [-90, -18, 54, 126, 198],
-}
+interface Props { mapaJson: MapaJsonStudio; activeNodeId?: string | null }
 
 const DRAW_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#111827']
 
@@ -42,7 +34,7 @@ const BTN: React.CSSProperties = {
   alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 }
 
-export default function StudioMap({ mapa }: Props) {
+export default function StudioMap({ mapaJson }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef  = useRef<SVGSVGElement>(null)
   const [size, setSize]   = useState({ w: 800, h: 600 })
@@ -183,10 +175,11 @@ export default function StudioMap({ mapa }: Props) {
 
   const { w, h } = size
   const R = Math.min(w, h)
-  const BD = R * 0.31   // branch distance
-  const CD = R * 0.17   // child distance
-  const { centro, ramas } = mapa
-  const angs = BRANCH_ANGLES[ramas.length] ?? ramas.map((_, i) => -90 + (360 / ramas.length) * i)
+  const BD = R * 0.23
+  const CD = R * 0.12
+  const { centro, ramas } = mapaJson
+  const nRamas = ramas.length
+  const angs = ramas.map((_, i) => -90 + (360 / nRamas) * i)
   const tfm  = `translate(${w / 2 + pan.x},${h / 2 + pan.y}) scale(${zoom})`
 
   return (
@@ -224,7 +217,7 @@ export default function StudioMap({ mapa }: Props) {
             const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
             return r.hijos.map((h, j) => {
               const sp = r.hijos.length === 1 ? 0 : (j - (r.hijos.length - 1) / 2)
-              const ca = a + rad(sp * 28)
+              const ca = a + rad(sp * 22)
               const hx = bx + Math.cos(ca) * CD, hy = by + Math.sin(ca) * CD
               return <path key={`bl${i}${j}`} d={qbez(bx, by, hx, hy)} stroke={h.color} strokeWidth={1.5} fill="none" opacity={0.4} />
             })
@@ -235,9 +228,9 @@ export default function StudioMap({ mapa }: Props) {
             const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
             return r.hijos.map((h, j) => {
               const sp = r.hijos.length === 1 ? 0 : (j - (r.hijos.length - 1) / 2)
-              const ca = a + rad(sp * 28)
+              const ca = a + rad(sp * 22)
               const hx = bx + Math.cos(ca) * CD, hy = by + Math.sin(ca) * CD
-              const nw = 74, nh = 48
+              const nw = 81, nh = 46
               return (
                 <g key={h.id} filter="url(#nsh)">
                   <rect x={hx - nw/2} y={hy - nh/2} width={nw} height={nh} rx={9} fill="white" stroke={h.color} strokeWidth={1.6} />
@@ -257,7 +250,7 @@ export default function StudioMap({ mapa }: Props) {
           {/* branch nodes */}
           {ramas.map((r, i) => {
             const a = rad(angs[i]), bx = Math.cos(a) * BD, by = Math.sin(a) * BD
-            const nw = 86, nh = 62
+            const nw = 99, nh = 63
             return (
               <g key={r.id} filter="url(#nsh)">
                 <rect x={bx - nw/2} y={by - nh/2} width={nw} height={nh} rx={13} fill="white" stroke={r.color} strokeWidth={2.2} />
@@ -276,7 +269,7 @@ export default function StudioMap({ mapa }: Props) {
 
           {/* center node */}
           {(() => {
-            const nw = 104, nh = 76
+            const nw = 115, nh = 75
             return (
               <g filter="url(#nsh)">
                 <rect x={-nw/2} y={-nh/2} width={nw} height={nh} rx={18} fill="white" stroke={centro.color} strokeWidth={2.8} />
