@@ -28,6 +28,13 @@ function s2w(sx: number, sy: number, pan: { x: number; y: number }, zoom: number
 
 interface Stroke { color: string; d: string }
 
+function computeFitZoom(w: number, h: number): number {
+  const R    = Math.min(w, h)
+  const maxE = R * 0.46 + 50
+  const avail = Math.min(w / 2 - 20, h / 2 - 60)
+  return Math.min(0.95, Math.max(0.4, avail / maxE))
+}
+
 const BTN: React.CSSProperties = {
   width: 32, height: 32, border: 'none', borderRadius: 8, cursor: 'pointer',
   fontSize: 15, background: 'transparent', color: '#333', display: 'flex',
@@ -39,7 +46,7 @@ export default function StudioMap({ mapaJson }: Props) {
   const svgRef  = useRef<SVGSVGElement>(null)
   const [size, setSize]   = useState({ w: 800, h: 600 })
   const [pan,  setPan]    = useState({ x: 0, y: 0 })
-  const [zoom, setZoom]   = useState(1)
+  const [zoom, setZoom]   = useState(0.85)
   const panRef  = useRef({ x: 0, y: 0 })
   const zoomRef = useRef(1)
 
@@ -48,6 +55,7 @@ export default function StudioMap({ mapaJson }: Props) {
   const [strokes,   setStrokes]   = useState<Stroke[]>([])
   const [curPath,   setCurPath]   = useState('')
 
+  const fitted     = useRef(false)
   const drawing    = useRef(false)
   const curPts     = useRef<string[]>([])
   const dragOrigin = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
@@ -72,6 +80,12 @@ export default function StudioMap({ mapaJson }: Props) {
     const ro = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect
       setSize({ w: width, h: height })
+      if (!fitted.current) {
+        fitted.current = true
+        const fz = computeFitZoom(width, height)
+        zoomRef.current = fz; setZoom(fz)
+        panRef.current  = { x: 0, y: 0 }; setPan({ x: 0, y: 0 })
+      }
     })
     ro.observe(el)
     setSize({ w: el.clientWidth, h: el.clientHeight })
@@ -178,8 +192,9 @@ export default function StudioMap({ mapaJson }: Props) {
   }
 
   function center() {
+    const fz = computeFitZoom(size.w, size.h)
     panRef.current = { x: 0, y: 0 }; setPan({ x: 0, y: 0 })
-    zoomRef.current = 1; setZoom(1)
+    zoomRef.current = fz; setZoom(fz)
   }
 
   const { w, h } = size
