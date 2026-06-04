@@ -248,10 +248,10 @@ export default function StudioMap({ mapaJson }: Props) {
       const wy = (e.clientY - rect.top   - size.h / 2 - panRef.current.y) / zoomRef.current
       const dx = wx - dragNode.current.startWx
       const dy = wy - dragNode.current.startWy
-      const id = dragNode.current.id
+      const { id, origX, origY } = dragNode.current
       setNodeOffsets(prev => ({
         ...prev,
-        [id]: { x: dragNode.current!.origX + dx, y: dragNode.current!.origY + dy },
+        [id]: { x: origX + dx, y: origY + dy },
       }))
       return
     }
