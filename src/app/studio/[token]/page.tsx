@@ -60,18 +60,8 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#fafaf8', overflow: 'hidden' }}>
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 0,
-        backgroundImage: 'radial-gradient(circle, #ccc 1px, transparent 1px)',
-        backgroundSize: '24px 24px',
-        opacity: 0.3,
-        pointerEvents: 'none',
-      }} />
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%' }}>
-        {mapa && <StudioMap mapaJson={mapa} activeNodeId={null} />}
-      </div>
-
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {mapa && <StudioMap mapaJson={mapa} activeNodeId={null} />}
     </div>
   )
 }
