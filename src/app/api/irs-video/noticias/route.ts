@@ -176,12 +176,13 @@ JSON exacto (sin nada más):
   try {
     const studioSession = await prisma.studioSession.create({
       data: {
+        userId: session.user.id,
         tema: title.slice(0, 200),
         redSocial: 'TikTok',
         duracion: '60s',
         mapaJson,
         guion: guionCompleto,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
       select: { token: true },
     })
@@ -204,5 +205,5 @@ JSON exacto (sin nada más):
   } catch { /* ignore */ }
 
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-  return NextResponse.json({ url: `${base}/studio/${studioToken}`, guionCompleto })
+  return NextResponse.json({ url: `${base}/studio/${studioToken}`, token: studioToken, guionCompleto, mapaJson })
 }
