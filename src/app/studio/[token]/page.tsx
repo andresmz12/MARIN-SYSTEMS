@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 
-// Load StudioMap client-only (uses ResizeObserver)
 const StudioMap = dynamic(() => import('@/components/studio/StudioMap'), { ssr: false })
 
 interface MapaJson {
@@ -20,7 +19,6 @@ export default function StudioPage({ params }: { params: { token: string } }) {
   const { token } = params
   const [state, setState] = useState<PageState>('loading')
   const [mapa, setMapa] = useState<MapaJson | null>(null)
-  const [hasAudio, setHasAudio] = useState(false)
 
   useEffect(() => {
     fetch(`/api/studio/${token}`)
@@ -32,23 +30,10 @@ export default function StudioPage({ params }: { params: { token: string } }) {
       .then(data => {
         if (!data) return
         setMapa(data.mapaJson as MapaJson)
-        setHasAudio(!!data.audioPath)
         setState('ready')
       })
       .catch(() => setState('expired'))
   }, [token])
-
-  async function handleDescargar() {
-    const res = await fetch(`/api/studio/${token}/audio`)
-    if (!res.ok) return
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `video-audio-${token}.mp3`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
 
   if (state === 'loading') {
     return (
@@ -87,22 +72,6 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         {mapa && <StudioMap mapaJson={mapa} activeNodeId={null} />}
       </div>
 
-      {hasAudio && (
-        <button
-          onClick={handleDescargar}
-          style={{
-            position: 'fixed', bottom: 108, right: 24,
-            width: 56, height: 56, borderRadius: '50%',
-            border: 'none', background: '#fff',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-            fontSize: 22, cursor: 'pointer', zIndex: 50,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-          title="Descargar MP3"
-        >
-          ⬇️
-        </button>
-      )}
     </div>
   )
 }
