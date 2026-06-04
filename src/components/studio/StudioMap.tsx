@@ -38,7 +38,7 @@ const BRANCH_ANGLES: Record<number, number[]> = {
   2: [-90, 90],
   3: [-120, 0, 120],
   4: [-120, -45, 45, 120],
-  5: [-126, -54, 18, 90, 162],
+  5: [-90, -18, 54, 126, 198],
 }
 
 function toRad(deg: number) { return (deg * Math.PI) / 180 }
@@ -134,7 +134,7 @@ export default function StudioMap({ mapa }: Props) {
                   {/* @ts-expect-error xmlns for SVG foreignObject */}
                   <div xmlns="http://www.w3.org/1999/xhtml"
                     style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    <span style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: hijo.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>
+                    <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: hijo.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>
                       {hijo.texto}
                     </span>
                   </div>
@@ -159,7 +159,7 @@ export default function StudioMap({ mapa }: Props) {
                 <div xmlns="http://www.w3.org/1999/xhtml"
                   style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {rama.emoji && <span style={{ fontSize: 13, lineHeight: 1 }}>{rama.emoji}</span>}
-                  <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: rama.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>
+                  <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: rama.color, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>
                     {rama.texto}
                   </span>
                 </div>
@@ -180,7 +180,7 @@ export default function StudioMap({ mapa }: Props) {
                 <div xmlns="http://www.w3.org/1999/xhtml"
                   style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {centro.emoji && <span style={{ fontSize: 16, lineHeight: 1 }}>{centro.emoji}</span>}
-                  <span style={{ fontFamily: 'Caveat, cursive', fontSize: 13, color: centro.color, textAlign: 'center', lineHeight: 1.2, fontWeight: 700, wordBreak: 'break-word' }}>
+                  <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, color: centro.color, textAlign: 'center', lineHeight: 1.2, fontWeight: 700, wordBreak: 'break-word' }}>
                     {centro.texto}
                   </span>
                 </div>

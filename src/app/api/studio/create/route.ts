@@ -55,27 +55,28 @@ REGLAS DEL CONTENIDO (crítico):
 - Cada hijo con un dato concreto: monto ($600), fecha (31 Enero), formulario (1099-K), porcentaje (8%), acción específica
 - Usar 3 líneas cuando aporta más datos; 2 líneas cuando el dato es corto
 - El mapa debe verse como una guía completa del tema, no un esquema vacío
-- 4 ramas SIEMPRE, 2 hijos por rama SIEMPRE
-- guion del centro: introducción del tema (3 oraciones explicando por qué importa)
-- guion de cada rama: explicación completa de esa categoría (3 oraciones con contexto)
-- guion de cada hijo: dato específico del nodo con contexto práctico (2 oraciones)
+- 5 ramas SIEMPRE, 3 hijos por rama SIEMPRE
+- guion del centro: introducción del tema (2 oraciones explicando por qué importa)
+- guion de cada rama: explicación completa de esa categoría (2 oraciones con contexto)
+- guion de cada hijo: dato específico del nodo con contexto práctico (1 oración)
 - El guion explica exactamente lo que dice el texto del nodo, con ejemplos reales
 
 JSON exacto (sin nada más):
 {
-  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "3 oraciones." },
+  "centro": { "id": "centro", "emoji": "🎯", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." },
   "ramas": [
     {
-      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "3 oraciones.",
+      "id": "r1", "emoji": "📌", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones.",
       "hijos": [
-        { "id": "h1a", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." },
-        { "id": "h1b", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "2 oraciones." }
+        { "id": "h1a", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "1 oración." },
+        { "id": "h1b", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "1 oración." },
+        { "id": "h1c", "texto": "Línea1\\nLínea2\\nLínea3", "color": "#hex", "guion": "1 oración." }
       ]
     }
   ],
   "cta": "Frase call to action. Escríbeme 👇"
 }
-Incluir las 4 ramas completas con sus 2 hijos cada una. Colores hex vibrantes distintos por rama.`,
+Incluir las 5 ramas completas (r1–r5) con sus 3 hijos cada una. Colores hex vibrantes distintos por rama.`,
     }],
   })
   const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
