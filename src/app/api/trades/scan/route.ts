@@ -1,114 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import Anthropic from '@anthropic-ai/sdk'
 
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
-const MODEL = 'claude-sonnet-4-6'
-const MAX_BYTES = 5 * 1024 * 1024
+const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
-const SYSTEM_PROMPT = `Eres un asistente especializado en análisis técnico de trading. Analiza este pantallazo de TradingView y extrae la información disponible. Responde SOLO con JSON válido, sin markdown ni texto extra.
+const SYSTEM = `Eres un asistente experto en trading forex. Analiza pantallazos de TradingView (charts, análisis, historial de trades) y extrae información estructurada. Responde SOLO con JSON válido, sin markdown ni texto extra.`
 
-- "pair": símbolo del instrumento visible en el chart. Mapéalo al más cercano de: EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, NZD/USD, USD/CAD, GBP/JPY, EUR/JPY, XAU/USD. Si no coincide con ninguno, usa el símbolo tal cual.
-- "date": fecha visible en el eje X o en el título (formato YYYY-MM-DD). Omitir si no es clara.
-- "setup": describe brevemente el patrón o setup que se ve dibujado (ej. "Rebote soporte/resistencia", "London Breakout", "Estructura H4", "Fibonacci", "Price Action"). Omitir si no hay anotaciones claras.
-- "result": "win" / "loss" / "be" solo si el trade ya está cerrado y hay ganancia/pérdida visible. Omitir si el chart es un análisis pre-trade.
-- "pips": número de pips solo si es explícitamente visible en el chart. Omitir si no.
-- "notes": resumen breve (1-2 frases) de lo que muestra el análisis: niveles clave, dirección propuesta, contexto de mercado visible.
+const PROMPT = `Analiza este pantallazo de TradingView y extrae los datos del trade o análisis visible.
 
-JSON exacto (omitir campos que no puedas determinar con certeza):
-{"pair":"EUR/USD","date":"2025-06-05","setup":"Rebote soporte/resistencia","result":"win","pips":25.5,"notes":"..."}`
+Pares válidos: ${PAIRS.join(', ')}
+- "pair": el par más cercano a lo que se ve (obligatorio si es visible)
+- "result": "win" si P&L es positivo, "loss" si es negativo, "be" si es ~0 o no aplica
+- "pips": número de pips ganados (positivo) o perdidos (negativo), sin unidades
+- "date": fecha del trade visible en formato YYYY-MM-DD (omitir si no se ve claramente)
+- "notes": descripción breve del análisis, setup o patrón visible en el chart (máximo 200 caracteres)
+
+Devuelve solo los campos que puedas determinar con certeza. Si no hay trade cerrado visible, igualmente extrae el par y las notas del análisis.
+
+JSON:
+{
+  "pair": "EUR/USD",
+  "result": "win",
+  "pips": 32.5,
+  "date": "2025-06-05",
+  "notes": "Ruptura de resistencia en H1 con cierre por encima, entrada en retesteo"
+}`
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'Servicio de visión no configurado' }, { status: 503 })
-
-  let formData: FormData
+  let file: File | null = null
   try {
-    formData = await req.formData()
+    const fd = await req.formData()
+    file = fd.get('image') as File | null
   } catch {
-    return NextResponse.json({ error: 'Formato de solicitud inválido' }, { status: 400 })
+    return NextResponse.json({ error: 'Formato inválido' }, { status: 400 })
   }
 
-  const file = formData.get('image')
-  if (!file || !(file instanceof File)) {
+  if (!file || !file.type.startsWith('image/')) {
     return NextResponse.json({ error: 'Se requiere una imagen' }, { status: 400 })
   }
-
-  if (!file.type.startsWith('image/')) {
-    return NextResponse.json({ error: 'El archivo debe ser una imagen' }, { status: 400 })
+  if (file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ error: 'La imagen debe ser menor a 5 MB' }, { status: 400 })
   }
 
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: 'La imagen no puede superar 5 MB' }, { status: 400 })
+  const mediaType = (file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif')
+  const base64 = Buffer.from(await file.arrayBuffer()).toString('base64')
+
+  let raw: string
+  try {
+    const client = new Anthropic()
+    const msg = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      system: SYSTEM,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: PROMPT },
+        ],
+      }],
+    })
+    raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Error al analizar la imagen: ${msg}` }, { status: 500 })
   }
-
-  const mediaType = (file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/gif' || file.type === 'image/webp')
-    ? file.type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-    : 'image/jpeg'
-
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const base64 = buffer.toString('base64')
 
   try {
-    const res = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 512,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: mediaType, data: base64 },
-              },
-              {
-                type: 'text',
-                text: SYSTEM_PROMPT,
-              },
-            ],
-          },
-        ],
-      }),
-    })
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('[trades/scan] Anthropic error:', err)
-      return NextResponse.json({ error: 'Error al analizar la imagen' }, { status: 502 })
-    }
-
-    const data = await res.json() as { content?: { type: string; text?: string }[] }
-    const text = data.content?.find((c) => c.type === 'text')?.text ?? ''
-
-    const start = text.indexOf('{')
-    const end = text.lastIndexOf('}')
-    if (start === -1 || end === -1) {
-      return NextResponse.json({ error: 'No se pudo extraer información del chart' }, { status: 422 })
-    }
-
-    const extracted = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
-
-    const result: Record<string, unknown> = {}
-    if (typeof extracted.pair === 'string' && extracted.pair) result.pair = extracted.pair
-    if (typeof extracted.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(extracted.date)) result.date = extracted.date
-    if (typeof extracted.setup === 'string' && extracted.setup) result.setup = extracted.setup
-    if (extracted.result === 'win' || extracted.result === 'loss' || extracted.result === 'be') result.result = extracted.result
-    if (typeof extracted.pips === 'number') result.pips = extracted.pips
-    if (typeof extracted.notes === 'string' && extracted.notes) result.notes = extracted.notes
-
-    return NextResponse.json(result)
-  } catch (err) {
-    console.error('[trades/scan] Unexpected error:', err)
-    return NextResponse.json({ error: 'Error interno al analizar la imagen' }, { status: 500 })
+    const match = raw.match(/\{[\s\S]*\}/)
+    const parsed = match ? JSON.parse(match[0]) : null
+    if (!parsed) throw new Error('No JSON')
+    // Validate pair against known list
+    if (parsed.pair && !PAIRS.includes(parsed.pair)) delete parsed.pair
+    // Validate result
+    if (parsed.result && !['win', 'loss', 'be'].includes(parsed.result)) delete parsed.result
+    return NextResponse.json(parsed)
+  } catch {
+    return NextResponse.json({ error: 'No se pudieron extraer datos de la imagen' }, { status: 500 })
   }
 }
