@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
@@ -43,6 +43,9 @@ export default function TradingDiarioPage() {
   const [filterResult, setFilterResult] = useState('')
   const [filterPair, setFilterPair] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     loadTrades()
@@ -71,6 +74,7 @@ export default function TradingDiarioPage() {
   function openCreate() {
     setEditTrade(null)
     setForm({ ...emptyForm, date: new Date().toISOString().split('T')[0] })
+    setScanMsg(null)
     setModalOpen(true)
   }
 
@@ -86,7 +90,40 @@ export default function TradingDiarioPage() {
       notes: trade.notes || '',
       date: trade.date.split('T')[0],
     })
+    setScanMsg(null)
     setModalOpen(true)
+  }
+
+  async function handleScanImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setScanning(true)
+    setScanMsg(null)
+    const fd = new FormData()
+    fd.append('image', file)
+    try {
+      const res = await fetch('/api/trades/scan', { method: 'POST', body: fd })
+      const data = await res.json() as Record<string, unknown>
+      if (!res.ok) {
+        setScanMsg({ ok: false, text: typeof data.error === 'string' ? data.error : 'Error al analizar' })
+        return
+      }
+      setForm((prev) => ({
+        ...prev,
+        ...(typeof data.pair === 'string' && data.pair ? { pair: data.pair } : {}),
+        ...(data.result === 'win' || data.result === 'loss' || data.result === 'be' ? { result: data.result } : {}),
+        ...(typeof data.pips === 'number' ? { pips: String(data.pips) } : {}),
+        ...(typeof data.date === 'string' && data.date ? { date: data.date } : {}),
+        ...(typeof data.setup === 'string' && data.setup ? { setup: data.setup } : {}),
+        ...(typeof data.notes === 'string' && data.notes ? { notes: data.notes } : {}),
+      }))
+      setScanMsg({ ok: true, text: 'Datos extraídos — revisa y confirma' })
+    } catch {
+      setScanMsg({ ok: false, text: 'Error de conexión' })
+    } finally {
+      setScanning(false)
+      e.target.value = ''
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -306,6 +343,44 @@ export default function TradingDiarioPage() {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editTrade ? 'Editar Trade' : 'Registrar Trade'}>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleScanImage}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={scanning}
+              className="btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {scanning ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Analizando chart...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Auto-llenar desde análisis TradingView
+                </>
+              )}
+            </button>
+            {scanMsg && (
+              <p className={`text-xs mt-1.5 ${scanMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {scanMsg.ok ? '✓ ' : '✗ '}{scanMsg.text}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
