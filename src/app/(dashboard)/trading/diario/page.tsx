@@ -65,6 +65,26 @@ export default function TradingDiarioPage() {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [imgLoading, setImgLoading] = useState(false)
 
+  // Paste image from clipboard while modal is open
+  useEffect(() => {
+    if (!modalOpen) return
+    async function onPaste(e: ClipboardEvent) {
+      const item = Array.from(e.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'))
+      if (!item) return
+      const file = item.getAsFile()
+      if (!file) return
+      setImgLoading(true)
+      try {
+        const compressed = await compressImage(file)
+        setForm(f => ({ ...f, screenshot: compressed }))
+      } finally {
+        setImgLoading(false)
+      }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [modalOpen])
+
   useEffect(() => { loadTrades() }, [filterResult, filterPair, filterDate])
 
   async function loadTrades() {
@@ -463,7 +483,7 @@ export default function TradingDiarioPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                     d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                {imgLoading ? 'Procesando...' : '📷 Adjuntar captura de TradingView'}
+                {imgLoading ? 'Procesando...' : '📷 Adjuntar o pegar captura (Ctrl+V)'}
               </button>
             )}
           </div>
