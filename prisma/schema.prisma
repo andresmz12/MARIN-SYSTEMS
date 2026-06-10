@@ -47,6 +47,7 @@ model Trade {
   emotion      String?
   followedPlan Boolean  @default(false)
   notes        String?
+  screenshot   String?
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
 

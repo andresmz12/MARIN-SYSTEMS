@@ -23,6 +23,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       emotion: body.emotion ?? trade.emotion,
       followedPlan: body.followedPlan !== undefined ? Boolean(body.followedPlan) : trade.followedPlan,
       notes: body.notes ?? trade.notes,
+      ...(body.screenshot !== undefined && { screenshot: body.screenshot ?? null }),
     },
   })
 

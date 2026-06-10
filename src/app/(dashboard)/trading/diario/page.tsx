@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
@@ -17,6 +17,7 @@ interface Trade {
   emotion: string | null
   followedPlan: boolean
   notes: string | null
+  screenshot: string | null
 }
 
 const emptyForm = {
@@ -28,10 +29,28 @@ const emptyForm = {
   followedPlan: true,
   notes: '',
   date: new Date().toISOString().split('T')[0],
+  screenshot: null as string | null,
+}
+
+// Compress image with browser Canvas API — no dependencies needed
+function compressImage(file: File, maxW = 1200, q = 0.75): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width)
+      const c = document.createElement('canvas')
+      c.width = img.width * scale
+      c.height = img.height * scale
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      resolve(c.toDataURL('image/jpeg', q))
+    }
+    img.src = URL.createObjectURL(file)
+  })
 }
 
 export default function TradingDiarioPage() {
   const { showToast } = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [trades, setTrades] = useState<Trade[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editTrade, setEditTrade] = useState<Trade | null>(null)
@@ -43,10 +62,10 @@ export default function TradingDiarioPage() {
   const [filterResult, setFilterResult] = useState('')
   const [filterPair, setFilterPair] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [lightbox, setLightbox] = useState<string | null>(null)
+  const [imgLoading, setImgLoading] = useState(false)
 
-  useEffect(() => {
-    loadTrades()
-  }, [filterResult, filterPair, filterDate])
+  useEffect(() => { loadTrades() }, [filterResult, filterPair, filterDate])
 
   async function loadTrades() {
     setPageLoading(true)
@@ -54,8 +73,8 @@ export default function TradingDiarioPage() {
     try {
       const params = new URLSearchParams()
       if (filterResult) params.set('result', filterResult)
-      if (filterPair) params.set('pair', filterPair)
-      if (filterDate) params.set('date', filterDate)
+      if (filterPair)   params.set('pair', filterPair)
+      if (filterDate)   params.set('date', filterDate)
       const res = await fetch(`/api/trades?${params}`)
       if (!res.ok) throw new Error()
       setTrades(await res.json())
@@ -85,15 +104,33 @@ export default function TradingDiarioPage() {
       followedPlan: trade.followedPlan,
       notes: trade.notes || '',
       date: trade.date.split('T')[0],
+      screenshot: trade.screenshot ?? null,
     })
     setModalOpen(true)
+  }
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImgLoading(true)
+    try {
+      const compressed = await compressImage(file)
+      setForm(f => ({ ...f, screenshot: compressed }))
+    } finally {
+      setImgLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      const payload = { ...form, pips: form.pips ? parseFloat(form.pips) : null }
+      const payload = {
+        ...form,
+        pips: form.pips ? parseFloat(form.pips) : null,
+        screenshot: form.screenshot ?? null,
+      }
       const res = editTrade
         ? await fetch(`/api/trades/${editTrade.id}`, {
             method: 'PUT',
@@ -209,19 +246,13 @@ export default function TradingDiarioPage() {
           <div className="flex-1 min-w-32">
             <label className="label">Par</label>
             <input
-              type="text"
-              className="input"
-              placeholder="EUR/USD..."
-              value={filterPair}
-              onChange={(e) => setFilterPair(e.target.value)}
+              type="text" className="input" placeholder="EUR/USD..."
+              value={filterPair} onChange={(e) => setFilterPair(e.target.value)}
             />
           </div>
           {(filterDate || filterResult || filterPair) && (
             <div className="flex items-end">
-              <button
-                onClick={() => { setFilterDate(''); setFilterResult(''); setFilterPair('') }}
-                className="btn-secondary"
-              >
+              <button onClick={() => { setFilterDate(''); setFilterResult(''); setFilterPair('') }} className="btn-secondary">
                 Limpiar
               </button>
             </div>
@@ -276,22 +307,35 @@ export default function TradingDiarioPage() {
                     <td className="px-4 py-3 text-gray-400 text-xs">{trade.setup || '—'}</td>
                     <td className="px-4 py-3 text-gray-400 text-xs">{trade.emotion || '—'}</td>
                     <td className="px-4 py-3">
-                      {trade.followedPlan ? (
-                        <span className="text-green-400 text-xs">✓ Sí</span>
-                      ) : (
-                        <span className="text-red-400 text-xs">✗ No</span>
-                      )}
+                      {trade.followedPlan
+                        ? <span className="text-green-400 text-xs">✓ Sí</span>
+                        : <span className="text-red-400 text-xs">✗ No</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Screenshot icon */}
+                        {trade.screenshot && (
+                          <button
+                            onClick={() => setLightbox(trade.screenshot!)}
+                            className="text-blue-500 hover:text-blue-300 transition-colors"
+                            title="Ver captura de TradingView"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        )}
                         <button onClick={() => openEdit(trade)} className="text-gray-500 hover:text-gray-300 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         <button onClick={() => setConfirmDelete(trade.id)} className="text-gray-600 hover:text-red-400 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
@@ -304,18 +348,14 @@ export default function TradingDiarioPage() {
         )}
       </div>
 
+      {/* Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editTrade ? 'Editar Trade' : 'Registrar Trade'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
-              <input
-                type="date"
-                className="input"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                required
-              />
+              <input type="date" className="input" value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })} required />
             </div>
             <div>
               <label className="label">Par de divisas</label>
@@ -330,18 +370,14 @@ export default function TradingDiarioPage() {
               <label className="label">Resultado</label>
               <div className="flex gap-2">
                 {['win', 'loss', 'be'].map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setForm({ ...form, result: r })}
+                  <button key={r} type="button" onClick={() => setForm({ ...form, result: r })}
                     className={`flex-1 py-2 rounded text-xs font-bold uppercase transition-colors border ${
                       form.result === r
                         ? r === 'win' ? 'bg-green-500/20 text-green-400 border-green-500/40'
                           : r === 'loss' ? 'bg-red-500/20 text-red-400 border-red-500/40'
                           : 'bg-gray-500/20 text-gray-400 border-gray-500/40'
                         : 'bg-[#111] text-gray-600 border-[#2a2a2a]'
-                    }`}
-                  >
+                    }`}>
                     {r}
                   </button>
                 ))}
@@ -349,14 +385,8 @@ export default function TradingDiarioPage() {
             </div>
             <div>
               <label className="label">Pips</label>
-              <input
-                type="number"
-                step="0.1"
-                className="input"
-                placeholder="Ej: 25.5 o -10"
-                value={form.pips}
-                onChange={(e) => setForm({ ...form, pips: e.target.value })}
-              />
+              <input type="number" step="0.1" className="input" placeholder="Ej: 25.5 o -10"
+                value={form.pips} onChange={(e) => setForm({ ...form, pips: e.target.value })} />
             </div>
           </div>
 
@@ -379,25 +409,63 @@ export default function TradingDiarioPage() {
 
           <div>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.followedPlan}
+              <input type="checkbox" checked={form.followedPlan}
                 onChange={(e) => setForm({ ...form, followedPlan: e.target.checked })}
-                className="w-4 h-4 rounded accent-blue-600"
-              />
+                className="w-4 h-4 rounded accent-blue-600" />
               <span className="text-sm text-gray-300">Seguí mi plan de trading</span>
             </label>
           </div>
 
           <div>
             <label className="label">Notas</label>
-            <textarea
-              className="input resize-none"
-              rows={3}
-              placeholder="Observaciones del trade..."
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            <textarea className="input resize-none" rows={3} placeholder="Observaciones del trade..."
+              value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </div>
+
+          {/* Screenshot upload */}
+          <div>
+            <label className="label">Captura de TradingView</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageChange}
             />
+
+            {form.screenshot ? (
+              <div className="relative inline-block mt-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.screenshot}
+                  alt="Captura TradingView"
+                  className="rounded-lg border border-[#2a2a2a] object-cover cursor-pointer"
+                  style={{ width: 180, height: 101 }}
+                  onClick={() => setLightbox(form.screenshot!)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, screenshot: null }))}
+                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center hover:bg-red-600 transition-colors"
+                  title="Quitar imagen"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={imgLoading}
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-1 w-full py-3 rounded-lg border border-dashed border-[#3a3a3a] text-gray-500 hover:text-gray-300 hover:border-[#555] transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {imgLoading ? 'Procesando...' : '📷 Adjuntar captura de TradingView'}
+              </button>
+            )}
           </div>
 
           <div className="flex gap-3 pt-1">
@@ -420,6 +488,29 @@ export default function TradingDiarioPage() {
         onConfirm={confirmDeleteTrade}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl leading-none"
+            onClick={() => setLightbox(null)}
+          >
+            ✕
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Captura TradingView"
+            className="max-w-full max-h-full rounded-lg shadow-2xl"
+            style={{ maxHeight: '90vh', maxWidth: '95vw' }}
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }

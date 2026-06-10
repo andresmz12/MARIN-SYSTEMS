@@ -9,6 +9,7 @@ export const TradeSchema = z.object({
   emotion: z.string().max(50).nullable().optional(),
   followedPlan: z.boolean().optional().default(false),
   notes: z.string().max(2000).nullable().optional(),
+  screenshot: z.string().nullable().optional(),
   date: z.string().optional(),
 })
 

@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
         emotion: emotion ?? null,
         followedPlan: followedPlan ?? false,
         notes: notes ?? null,
+        screenshot: parsed.data.screenshot ?? null,
       },
     })
 
