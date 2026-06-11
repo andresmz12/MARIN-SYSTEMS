@@ -5,27 +5,23 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
-const SYSTEM = `Eres un asistente experto en trading forex. Analiza pantallazos de TradingView (charts, análisis, historial de trades) y extrae información estructurada. Responde SOLO con JSON válido, sin markdown ni texto extra.`
+const SYSTEM = `Eres un extractor de datos de pantallazos de TradingView. Tu única tarea es leer lo que ESTÁ ESCRITO O VISIBLE en la imagen y devolverlo como JSON. NO interpretes, NO inferras, NO inventes nada que no esté explícitamente visible. Responde SOLO con JSON válido, sin markdown ni texto extra.`
 
-const PROMPT = `Analiza este pantallazo de TradingView y extrae los datos del trade o análisis visible.
+const PROMPT = `Extrae SOLO los datos que puedas leer directamente en este pantallazo de TradingView.
 
-Pares válidos: ${PAIRS.join(', ')}
-- "pair": el par más cercano a lo que se ve (obligatorio si es visible)
-- "result": "win" si P&L es positivo, "loss" si es negativo, "be" si es ~0 o no aplica
-- "pips": número de pips ganados (positivo) o perdidos (negativo), sin unidades
-- "date": fecha del trade visible en formato YYYY-MM-DD (omitir si no se ve claramente)
-- "notes": descripción breve del análisis, setup o patrón visible en el chart (máximo 200 caracteres)
+Reglas estrictas:
+- Solo incluye un campo si puedes leerlo con certeza en la imagen
+- Si no ves claramente un valor, NO lo incluyas (omite el campo)
+- NO inventes, NO interpretes, NO asumas
 
-Devuelve solo los campos que puedas determinar con certeza. Si no hay trade cerrado visible, igualmente extrae el par y las notas del análisis.
+Campos a extraer:
+- "pair": símbolo del par visible en la pantalla (ej: "XAUUSD" → "XAU/USD"). Solo de: ${PAIRS.join(', ')}
+- "result": SOLO si ves un P&L o resultado explícito — "win" si positivo, "loss" si negativo, "be" si ~0
+- "pips": SOLO si ves un número de pips o puntos ganados/perdidos explícito (número, positivo o negativo)
+- "date": SOLO si ves una fecha explícita en formato YYYY-MM-DD
+- "notes": SOLO lo que ves escrito en el chart (máximo 80 caracteres, sin inventar análisis)
 
-JSON:
-{
-  "pair": "EUR/USD",
-  "result": "win",
-  "pips": 32.5,
-  "date": "2025-06-05",
-  "notes": "Ruptura de resistencia en H1 con cierre por encima, entrada en retesteo"
-}`
+Devuelve {} si no puedes leer nada con certeza.`
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
