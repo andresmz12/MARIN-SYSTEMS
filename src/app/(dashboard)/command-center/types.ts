@@ -109,6 +109,18 @@ export type PostPlatform = 'instagram' | 'tiktok' | 'email' | 'whatsapp'
 export type PostContentType = 'reel' | 'post' | 'story' | 'caption' | 'email'
 export type PostStatus = 'draft' | 'ready' | 'published'
 
+export interface CompanyRevenue {
+  id: string
+  companyId: string
+  month: string
+  target: number
+  actual: number
+  currency: string
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface GeneratedPost {
   id: string
   userId: string
