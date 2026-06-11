@@ -5,23 +5,41 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
-const SYSTEM = `Eres un extractor de datos de pantallazos de TradingView. Tu única tarea es leer lo que ESTÁ ESCRITO O VISIBLE en la imagen y devolverlo como JSON. NO interpretes, NO inferras, NO inventes nada que no esté explícitamente visible. Responde SOLO con JSON válido, sin markdown ni texto extra.`
+const SYSTEM = `Eres un experto en extraer datos de operaciones de trading desde pantallazos de TradingView. Conoces perfectamente la interfaz de TradingView y cómo leer trades cerrados, anotaciones, P&L y métricas. Responde SOLO con JSON válido, sin markdown ni texto extra.`
 
-const PROMPT = `Extrae SOLO los datos que puedas leer directamente en este pantallazo de TradingView.
+const PROMPT = `Analiza este pantallazo de TradingView y extrae los datos del trade cerrado o la operación visible.
 
-Reglas estrictas:
-- Solo incluye un campo si puedes leerlo con certeza en la imagen
-- Si no ves claramente un valor, NO lo incluyas (omite el campo)
-- NO inventes, NO interpretes, NO asumas
+INSTRUMENTOS VÁLIDOS: ${PAIRS.join(', ')}
 
-Campos a extraer:
-- "pair": símbolo del par visible en la pantalla (ej: "XAUUSD" → "XAU/USD"). Solo de: ${PAIRS.join(', ')}
-- "result": SOLO si ves un P&L o resultado explícito — "win" si positivo, "loss" si negativo, "be" si ~0
-- "pips": SOLO si ves un número de pips o puntos ganados/perdidos explícito (número, positivo o negativo)
-- "date": SOLO si ves una fecha explícita en formato YYYY-MM-DD
-- "notes": SOLO lo que ves escrito en el chart (máximo 80 caracteres, sin inventar análisis)
+CÓMO EXTRAER CADA CAMPO:
 
-Devuelve {} si no puedes leer nada con certeza.`
+"pair" — Lee el símbolo del instrumento en la pantalla (título del chart, widget de precio, o anotaciones).
+  Convierte: XAUUSD → XAU/USD, EURUSD → EUR/USD, etc.
+
+"result" — Determina si fue ganadora o perdedora:
+  - Busca P&L visible (positivo = "win", negativo = "loss", ~0 = "be")
+  - Busca colores en las anotaciones de trade: verde = win, rojo = loss
+  - Busca texto como "Cerrado", "Closed", ganancia/pérdida
+
+"pips" — Extrae el movimiento del precio. IMPORTANTE: cada instrumento se mide diferente:
+  • XAU/USD (Oro): Los "pips" son puntos de precio. Si ves "PnL: 46.93" con 1 lot estándar (100oz),
+    pips = PnL / 10. Si ves el movimiento de precio directamente (ej: de 2350 a 2396), pips = diferencia.
+    Si ves el P&L en dólares con lot size visible, calcula el movimiento en precio.
+  • EUR/USD, GBP/USD, etc.: 1 pip = 0.0001. Si precio movió de 1.0850 a 1.0920 = 70 pips.
+  • USD/JPY: 1 pip = 0.01
+  • Si hay un número de pips/puntos explícito en la imagen, úsalo directamente.
+  • Pips positivos = ganancia, negativos = pérdida.
+
+"date" — Fecha del trade en formato YYYY-MM-DD. Busca en la línea de tiempo, anotaciones o en el widget.
+
+"notes" — Extrae datos clave y visibles del trade en formato conciso (máx 120 chars):
+  Si ves P&L, lot size, R:R ratio, precio de entrada/salida — inclúyelos.
+  Ejemplo: "PnL: +$46.93 | Lot: 1 | R:R: 4.53 | Entry: 2350 Exit: 2396"
+  NO inventes lo que no está visible.
+
+IMPORTANTE: Omite cualquier campo que NO puedas determinar con certeza. Devuelve {} si no hay trade visible.
+
+JSON:`
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
