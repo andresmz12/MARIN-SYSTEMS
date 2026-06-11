@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { DailyPlan, WorkBlock } from '../types'
 import {
@@ -8,6 +8,7 @@ import {
   formatLong, todayKey,
 } from '../utils'
 import { ContentGeneratorSheet } from './ContentGeneratorSheet'
+import { FocusMode } from './FocusMode'
 
 /** Pixels per minute (1h = 80px). */
 const PX_PER_MIN = 80 / 60
@@ -21,11 +22,21 @@ interface Props {
   onGenerate: () => void
   onRegenerate: () => void
   onBlockUpdate: (id: string, status: string) => void
+  onReloadDay?: () => void
 }
 
-export function DailyPlanTimeline({ plan, dateKey, loading, generating, onGenerate, onRegenerate, onBlockUpdate }: Props) {
+function fmtTime(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+export function DailyPlanTimeline({ plan, dateKey, loading, generating, onGenerate, onRegenerate, onBlockUpdate, onReloadDay }: Props) {
   // Live "now" indicator — re-render every 30s.
   const [nowMin, setNowMin] = useState(() => currentMinutes())
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+
   useEffect(() => {
     const t = setInterval(() => setNowMin(currentMinutes()), 30_000)
     return () => clearInterval(t)
@@ -103,7 +114,34 @@ export function DailyPlanTimeline({ plan, dateKey, loading, generating, onGenera
 
       {/* Timeline — horizontally scrollable on very small screens */}
       <div className="overflow-x-auto -mx-2 px-2">
-      <div className="relative min-w-[340px]" style={{ height: totalPx }}>
+      <div
+        ref={containerRef}
+        className="relative min-w-[340px]"
+        style={{ height: totalPx }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={async (e) => {
+          e.preventDefault()
+          const blockId = e.dataTransfer.getData('blockId')
+          if (!blockId || !containerRef.current) return
+          const block = blocks.find((b) => b.id === blockId)
+          if (!block || block.isFixed) return
+          const rect = containerRef.current.getBoundingClientRect()
+          const relY = e.clientY - rect.top
+          const rawMin = Math.round((relY / PX_PER_MIN + dayStart) / 15) * 15
+          const duration = timeToMinutes(block.endTime) - timeToMinutes(block.startTime)
+          const newStart = Math.max(dayStart, Math.min(rawMin, dayEnd - duration))
+          const newEnd = newStart + duration
+          try {
+            await fetch(`/api/ceo/work-blocks/${blockId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ startTime: fmtTime(newStart), endTime: fmtTime(newEnd) }),
+            })
+            onReloadDay?.()
+          } catch { /* silent */ }
+          setDraggingId(null)
+        }}
+      >
         {/* Vertical line */}
         <div className="absolute top-0 bottom-0 left-[50px] w-px bg-zinc-800" />
 
@@ -120,8 +158,21 @@ export function DailyPlanTimeline({ plan, dateKey, loading, generating, onGenera
         {blocks.map((block) => {
           const top = (timeToMinutes(block.startTime) - dayStart) * PX_PER_MIN
           const height = Math.max(MIN_BLOCK_PX, (timeToMinutes(block.endTime) - timeToMinutes(block.startTime)) * PX_PER_MIN)
+          const isDragging = draggingId === block.id
           return (
-            <div key={block.id} className="absolute left-0 right-0" style={{ top, height }}>
+            <div
+              key={block.id}
+              className={`absolute left-0 right-0 transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+              style={{ top, height }}
+              draggable={!block.isFixed && block.status !== 'done'}
+              onDragStart={(e) => {
+                if (block.isFixed) { e.preventDefault(); return }
+                e.dataTransfer.setData('blockId', block.id)
+                e.dataTransfer.effectAllowed = 'move'
+                setDraggingId(block.id)
+              }}
+              onDragEnd={() => setDraggingId(null)}
+            >
               {/* Time label */}
               <span className="absolute left-0 top-0 w-[44px] text-right text-[11px] font-mono text-zinc-500 -translate-y-0.5">
                 {block.startTime}
@@ -160,15 +211,57 @@ function FixedBlock({ block }: { block: WorkBlock }) {
   )
 }
 
-/** Dynamic company work block — full card with steps + actions. */
+function fmtTimer(s: number): string {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+/** Dynamic company work block — full card with steps, inline timer, notes, + focus mode. */
 function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpdate: (id: string, status: string) => void }) {
   const [showContentGen, setShowContentGen] = useState(false)
+  const [showFocus, setShowFocus] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
+  const [timerSec, setTimerSec] = useState(0)
+  const [timerRunning, setTimerRunning] = useState(false)
+  const [noteSaving, setNoteSaving] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const typeCfg = BLOCK_TYPE_CONFIG[block.blockType] ?? BLOCK_TYPE_CONFIG.work
   const statusCfg = BLOCK_STATUS_CONFIG[block.status] ?? BLOCK_STATUS_CONFIG.pending
   const color = block.company?.color ?? '#6366f1'
   const done = block.status === 'done'
   const { description, steps } = parseBlockDetails(block.description)
+  const [noteText, setNoteText] = useState(description)
   const isMarketing = ['marketing', 'deepwork'].includes(block.blockType)
+
+  async function saveNotes() {
+    setNoteSaving(true)
+    try {
+      const encoded = JSON.stringify({ description: noteText, steps })
+      await fetch(`/api/ceo/work-blocks/${block.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: encoded }),
+      })
+    } catch { /* silent */ }
+    setNoteSaving(false)
+    setShowNotes(false)
+  }
+
+  const targetSec = Math.round(block.durationHours * 3600)
+  const timerOvertime = timerSec > targetSec
+
+  useEffect(() => {
+    if (timerRunning) {
+      intervalRef.current = setInterval(() => setTimerSec((s) => s + 1), 1000)
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [timerRunning])
 
   // Visual-only step checkboxes (do not persist).
   const [checked, setChecked] = useState<boolean[]>(() => steps.map(() => false))
@@ -231,18 +324,99 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
         </ul>
       )}
 
-      {/* Content generator button for marketing blocks */}
-      {isMarketing && !done && (
-        <button
-          onClick={() => setShowContentGen(true)}
-          className="mt-2 text-xs px-2 py-1 rounded-md bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors"
-        >
-          ✨ Generar contenido
-        </button>
+      {/* Inline timer */}
+      {!done && (
+        <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+          <span className={`font-mono text-sm font-bold ${timerOvertime ? 'text-red-400' : timerSec > 0 ? 'text-white' : 'text-zinc-600'}`}>
+            ⏱ {fmtTimer(timerSec)}
+          </span>
+          <button
+            onClick={() => setTimerRunning((r) => !r)}
+            className="text-[11px] px-2 py-0.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300 transition-colors"
+          >
+            {timerRunning ? '⏸' : '▶'}
+          </button>
+          {timerSec > 0 && (
+            <button
+              onClick={() => { setTimerSec(0); setTimerRunning(false) }}
+              className="text-[11px] px-2 py-0.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-400 transition-colors"
+            >
+              🔄
+            </button>
+          )}
+          {timerOvertime && <span className="text-[10px] text-red-400 font-medium">+{fmtTimer(timerSec - targetSec)}</span>}
+        </div>
       )}
 
+      {/* Action buttons row */}
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+        {/* Content generator for marketing blocks */}
+        {isMarketing && !done && (
+          <button
+            onClick={() => setShowContentGen(true)}
+            className="text-xs px-2 py-1 rounded-md bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors"
+          >
+            ✨ Generar contenido
+          </button>
+        )}
+
+        {/* Focus mode */}
+        {!done && (
+          <button
+            onClick={() => setShowFocus(true)}
+            className="text-xs px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 transition-colors"
+          >
+            🎯 Modo foco
+          </button>
+        )}
+
+        {/* Notes toggle */}
+        <button
+          onClick={() => setShowNotes((v) => !v)}
+          className={`text-xs px-2 py-1 rounded-md transition-colors ${showNotes ? 'bg-zinc-700/60 text-zinc-200' : 'bg-zinc-700/20 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/40'}`}
+        >
+          📝 Notas
+        </button>
+      </div>
+
+      {/* Inline notes editor */}
+      <AnimatePresence>
+        {showNotes && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              rows={3}
+              placeholder="Notas de este bloque…"
+              className="mt-2 w-full bg-zinc-900/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 resize-none"
+            />
+            <div className="flex gap-1.5 mt-1.5">
+              <button
+                onClick={saveNotes}
+                disabled={noteSaving}
+                className="text-xs px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 transition-colors"
+              >
+                {noteSaving ? '…' : '💾 Guardar'}
+              </button>
+              <button
+                onClick={() => { setNoteText(description); setShowNotes(false) }}
+                className="text-xs px-2.5 py-1 rounded bg-zinc-700/50 text-zinc-400 hover:bg-zinc-700 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Footer actions */}
-      <div className="mt-2.5 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
         <AnimatePresence mode="wait">
           {done ? (
             <motion.button
@@ -255,7 +429,7 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
               ↩️ Reabrir
             </motion.button>
           ) : (
-            <motion.div key="actions" className="flex items-center gap-1.5">
+            <motion.div key="actions" className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => onBlockUpdate(block.id, 'done')}
                 className="text-xs px-2 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
@@ -287,6 +461,14 @@ function WorkBlockCard({ block, onBlockUpdate }: { block: WorkBlock; onBlockUpda
         workBlockId={block.id}
         linkedTopic={block.title}
         onClose={() => setShowContentGen(false)}
+      />
+    )}
+
+    {showFocus && (
+      <FocusMode
+        block={block}
+        onClose={() => setShowFocus(false)}
+        onBlockUpdate={onBlockUpdate}
       />
     )}
   </>

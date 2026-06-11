@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/Toast'
-import type { CEOCompany } from '../types'
+import type { CEOCompany, CompanyRevenue } from '../types'
 import { CEO_COLORS, flag } from '../utils'
 import { BrandProfileModal } from './BrandProfileModal'
 
@@ -19,6 +19,7 @@ export function CompanyManager({ companies, onChanged }: Props) {
   const [list, setList] = useState<CEOCompany[]>(companies)
   const [showModal, setShowModal] = useState(false)
   const [brandCompany, setBrandCompany] = useState<CEOCompany | null>(null)
+  const [revenueCompany, setRevenueCompany] = useState<CEOCompany | null>(null)
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => { setList(companies) }, [companies])
@@ -81,15 +82,42 @@ export function CompanyManager({ companies, onChanged }: Props) {
             <span className="text-sm font-bold text-white w-4 text-center">{c.strategicWeight}</span>
           </div>
 
-          {/* Brand profile button */}
-          <div className="mt-3 pt-3 border-t border-zinc-800">
+          {/* Brand profile + Revenue buttons */}
+          <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-2">
             <button
               onClick={() => setBrandCompany(c)}
               className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 hover:border-zinc-600 transition-colors"
             >
               🎯 Configurar marca
             </button>
+            <button
+              onClick={() => setRevenueCompany((prev) => (prev?.id === c.id ? null : c))}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                revenueCompany?.id === c.id
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:border-zinc-600'
+              }`}
+            >
+              💰 Ingresos
+            </button>
           </div>
+
+          {/* Revenue tracker panel */}
+          <AnimatePresence>
+            {revenueCompany?.id === c.id && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-3">
+                  <RevenueTracker company={c} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       ))}
 
@@ -140,6 +168,164 @@ function ColorDot({ color, onPick }: { color: string; onPick: (c: string) => voi
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+function currentYearMonth(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function RevenueTracker({ company }: { company: CEOCompany }) {
+  const { showToast } = useToast()
+  const year = String(new Date().getFullYear())
+  const [rows, setRows] = useState<CompanyRevenue[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editTarget, setEditTarget] = useState('')
+  const [editActual, setEditActual] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/ceo/companies/${company.id}/revenue?year=${year}`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: CompanyRevenue[]) => setRows(data))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false))
+  }, [company.id, year])
+
+  function getRow(month: string): CompanyRevenue | undefined {
+    return rows.find((r) => r.month === month)
+  }
+
+  function startEdit(month: string) {
+    const row = getRow(month)
+    setEditing(month)
+    setEditTarget(row ? String(row.target) : '0')
+    setEditActual(row ? String(row.actual) : '0')
+  }
+
+  async function saveEdit(month: string) {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/ceo/companies/${company.id}/revenue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month,
+          target: Number(editTarget) || 0,
+          actual: Number(editActual) || 0,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const updated: CompanyRevenue = await res.json()
+      setRows((prev) => {
+        const idx = prev.findIndex((r) => r.month === month)
+        return idx >= 0 ? prev.map((r) => (r.month === month ? updated : r)) : [...prev, updated]
+      })
+      showToast('Ingresos guardados', 'success')
+    } catch {
+      showToast('Error al guardar', 'error')
+    }
+    setSaving(false)
+    setEditing(null)
+  }
+
+  const totalTarget = rows.reduce((s, r) => s + r.target, 0)
+  const totalActual = rows.reduce((s, r) => s + r.actual, 0)
+  const currency = rows[0]?.currency ?? 'USD'
+
+  function fmt(n: number) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+  }
+
+  if (loading) return <div className="h-10 rounded-lg bg-zinc-800/50 animate-pulse" />
+
+  return (
+    <div className="rounded-xl border border-zinc-700 bg-zinc-800/30 p-3">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs font-semibold text-zinc-300">Ingresos {year}</h4>
+        <div className="flex gap-3 text-xs">
+          <span className="text-zinc-500">Meta: <span className="text-white font-medium">{fmt(totalTarget)}</span></span>
+          <span className="text-zinc-500">Real: <span className={totalActual >= totalTarget ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>{fmt(totalActual)}</span></span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+        {Array.from({ length: 12 }, (_, i) => {
+          const month = `${year}-${String(i + 1).padStart(2, '0')}`
+          const row = getRow(month)
+          const isEditing = editing === month
+          const isCurrent = month === currentYearMonth()
+          const pct = row && row.target > 0 ? Math.min(100, (row.actual / row.target) * 100) : 0
+          const achieved = row && row.actual >= row.target && row.target > 0
+
+          return (
+            <div
+              key={month}
+              className={`rounded-lg p-2 border transition-colors cursor-pointer ${
+                isCurrent ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-zinc-700 bg-zinc-800/40 hover:border-zinc-600'
+              }`}
+              onClick={() => !isEditing && startEdit(month)}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-medium text-zinc-300">{MONTHS_ES[i]}</span>
+                {achieved && <span className="text-[10px] text-emerald-400">✓</span>}
+              </div>
+
+              {isEditing ? (
+                <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="number" min={0} value={editTarget} onChange={(e) => setEditTarget(e.target.value)}
+                    placeholder="Meta" autoFocus
+                    className="w-full bg-zinc-700 border border-zinc-600 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none focus:border-indigo-500"
+                  />
+                  <input
+                    type="number" min={0} value={editActual} onChange={(e) => setEditActual(e.target.value)}
+                    placeholder="Real"
+                    className="w-full bg-zinc-700 border border-zinc-600 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none focus:border-indigo-500"
+                  />
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => saveEdit(month)}
+                      disabled={saving}
+                      className="flex-1 text-[10px] py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 transition-colors"
+                    >
+                      {saving ? '…' : '✓'}
+                    </button>
+                    <button
+                      onClick={() => setEditing(null)}
+                      className="flex-1 text-[10px] py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ) : row ? (
+                <>
+                  <p className="text-[10px] text-zinc-500">Meta: {fmt(row.target)}</p>
+                  <p className={`text-[10px] font-medium ${achieved ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                    Real: {fmt(row.actual)}
+                  </p>
+                  {row.target > 0 && (
+                    <div className="mt-1.5 h-1 rounded-full bg-zinc-700 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${achieved ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-[10px] text-zinc-600 mt-1">Click para agregar</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

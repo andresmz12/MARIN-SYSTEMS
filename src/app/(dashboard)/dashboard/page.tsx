@@ -142,17 +142,20 @@ export default function DashboardPage() {
   }
 
   async function saveDailyState(updates: Partial<DailyState>) {
+    const prevState = dailyState
     const newState = { ...dailyState, ...updates }
     setDailyState(newState)
     setSaving(true)
     try {
-      await fetch('/api/daily-state', {
+      const res = await fetch('/api/daily-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...newState, date: today }),
       })
+      if (!res.ok) throw new Error()
       showToast('Estado guardado', 'success')
     } catch {
+      setDailyState(prevState)
       showToast('Error al guardar', 'error')
     } finally {
       setSaving(false)

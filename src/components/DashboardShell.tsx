@@ -24,7 +24,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-[#0f0f0f]">
+    <div className="flex min-h-screen bg-[var(--bg-base)]">
       <Sidebar
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed(c => !c)}

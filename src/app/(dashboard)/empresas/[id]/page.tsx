@@ -261,10 +261,12 @@ export default function CompanyPage() {
 function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; tasks: Task[]; onUpdate: (t: Task[]) => void; color: string }) {
   const [filter, setFilter] = useState('todas')
   const [sortBy, setSortBy] = useState('creacion')
+  const [view, setView] = useState<'list' | 'kanban'>('list')
   const [newTitle, setNewTitle] = useState('')
   const [newPriority, setNewPriority] = useState('media')
   const [creating, setCreating] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const today = new Date().toISOString().split('T')[0]
 
   async function createTask(e: React.FormEvent) {
     e.preventDefault()
@@ -307,6 +309,14 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
     } catch (e) { console.error(e) }
   }
 
+  function handleDrop(e: React.DragEvent, newStatus: string) {
+    e.preventDefault()
+    const taskId = e.dataTransfer.getData('taskId')
+    const task = tasks.find((t) => t.id === taskId)
+    if (!task || task.status === newStatus) return
+    updateTask(taskId, { ...task, status: newStatus })
+  }
+
   const filtered = [...tasks]
     .filter((t) => filter === 'todas' || t.status === filter)
     .sort((a, b) => {
@@ -318,6 +328,15 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
+
+  const KANBAN_COLUMNS = [
+    { status: 'pendiente', label: 'Pendiente', headerCls: 'border-zinc-600 text-zinc-300', dotCls: 'bg-zinc-500' },
+    { status: 'en-progreso', label: 'En Progreso', headerCls: 'border-blue-500/50 text-blue-400', dotCls: 'bg-blue-500' },
+    { status: 'completada', label: 'Completada', headerCls: 'border-green-500/50 text-green-400', dotCls: 'bg-green-500' },
+  ] as const
+
+  const isOverdue = (task: Task) =>
+    task.status !== 'completada' && !!task.dueDate && new Date(task.dueDate) < new Date(today)
 
   return (
     <div className="space-y-4">
@@ -340,53 +359,132 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
             </button>
           ))}
         </div>
-        <select className="input text-xs py-1 w-36" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-          <option value="creacion">Por creación</option>
-          <option value="prioridad">Por prioridad</option>
-          <option value="fecha">Por fecha límite</option>
-        </select>
+        <div className="flex items-center gap-2">
+          {view === 'list' && (
+            <select className="input text-xs py-1 w-36" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="creacion">Por creación</option>
+              <option value="prioridad">Por prioridad</option>
+              <option value="fecha">Por fecha límite</option>
+            </select>
+          )}
+          <div className="flex rounded-lg border border-[#2a2a2a] overflow-hidden">
+            <button
+              onClick={() => setView('list')}
+              className={`px-3 py-1 text-xs transition-colors ${view === 'list' ? 'bg-[#2a2a2a] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              ☰ Lista
+            </button>
+            <button
+              onClick={() => setView('kanban')}
+              className={`px-3 py-1 text-xs transition-colors ${view === 'kanban' ? 'bg-[#2a2a2a] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              ⊞ Kanban
+            </button>
+          </div>
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="card text-center py-10"><p className="text-gray-500">Sin tareas {filter !== 'todas' ? 'en este estado' : 'aún'}</p></div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((task) => (
-            <div key={task.id} className="card flex items-start gap-3 group"
-              style={task.priority === 'alta' ? { borderLeft: `2px solid ${color}` } : {}}>
-              <button
-                onClick={() => {
-                  const next = task.status === 'pendiente' ? 'en-progreso' : task.status === 'en-progreso' ? 'completada' : 'pendiente'
-                  updateTask(task.id, { ...task, status: next })
-                }}
-                className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                  task.status === 'completada' ? 'bg-green-500 border-green-500' : task.status === 'en-progreso' ? 'border-blue-500' : 'border-[#444]'
-                }`}
-              >
-                {task.status === 'completada' && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                {task.status === 'en-progreso' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-sm font-medium ${TASK_STATUS_COLORS[task.status] ?? 'text-gray-200'}`}>{task.title}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority] ?? ''}`}>{task.priority}</span>
-                  {task.status !== 'completada' && task.dueDate && new Date(task.dueDate) < new Date() && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/20 text-red-400 border-red-500/40 font-semibold">VENCIDA</span>
-                  )}
+      {view === 'list' ? (
+        <>
+          {filtered.length === 0 ? (
+            <div className="card text-center py-10"><p className="text-gray-500">Sin tareas {filter !== 'todas' ? 'en este estado' : 'aún'}</p></div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map((task) => (
+                <div key={task.id} className="card flex items-start gap-3 group"
+                  style={task.priority === 'alta' ? { borderLeft: `2px solid ${color}` } : {}}>
+                  <button
+                    onClick={() => {
+                      const next = task.status === 'pendiente' ? 'en-progreso' : task.status === 'en-progreso' ? 'completada' : 'pendiente'
+                      updateTask(task.id, { ...task, status: next })
+                    }}
+                    className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                      task.status === 'completada' ? 'bg-green-500 border-green-500' : task.status === 'en-progreso' ? 'border-blue-500' : 'border-[#444]'
+                    }`}
+                  >
+                    {task.status === 'completada' && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                    {task.status === 'en-progreso' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-sm font-medium ${TASK_STATUS_COLORS[task.status] ?? 'text-gray-200'}`}>{task.title}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority] ?? ''}`}>{task.priority}</span>
+                      {isOverdue(task) && (
+                        <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">VENCIDA</span>
+                      )}
+                    </div>
+                    {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
+                    {task.dueDate && <p className={`text-xs mt-0.5 ${isOverdue(task) ? 'text-red-400' : 'text-gray-600'}`}>📅 {new Date(task.dueDate).toLocaleDateString('es-CO')}</p>}
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <button onClick={() => setEditingTask(task)} className="text-gray-600 hover:text-gray-300 p-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <button onClick={() => deleteTask(task.id)} className="text-gray-600 hover:text-red-400 p-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
                 </div>
-                {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
-                {task.dueDate && <p className={`text-xs mt-0.5 ${task.status !== 'completada' && new Date(task.dueDate) < new Date() ? 'text-red-400' : 'text-gray-600'}`}>📅 {new Date(task.dueDate).toLocaleDateString('es-CO')}</p>}
-              </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button onClick={() => setEditingTask(task)} className="text-gray-600 hover:text-gray-300 p-1">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                </button>
-                <button onClick={() => deleteTask(task.id)} className="text-gray-600 hover:text-red-400 p-1">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
+        </>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {KANBAN_COLUMNS.map(({ status, label, headerCls, dotCls }) => {
+            const colTasks = tasks.filter((t) => t.status === status)
+            return (
+              <div
+                key={status}
+                className="rounded-xl border border-[#2a2a2a] bg-[#0d0d0d] flex flex-col min-h-[200px]"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, status)}
+              >
+                <div className={`flex items-center gap-2 px-3 py-2.5 border-b ${headerCls} border-b-[#2a2a2a]`}>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls}`} />
+                  <span className="text-xs font-semibold">{label}</span>
+                  <span className="ml-auto text-xs bg-[#1a1a1a] px-1.5 py-0.5 rounded-full text-gray-500">{colTasks.length}</span>
+                </div>
+                <div className="flex-1 p-2 space-y-2 overflow-y-auto" style={{ maxHeight: '400px' }}>
+                  {colTasks.length === 0 && (
+                    <div className="text-center py-6">
+                      <p className="text-xs text-gray-700">Arrastra aquí</p>
+                    </div>
+                  )}
+                  {colTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('taskId', task.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onClick={() => setEditingTask(task)}
+                      className="bg-[#111] border border-[#2a2a2a] rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-[#3a3a3a] transition-colors"
+                      style={task.priority === 'alta' ? { borderLeft: `3px solid ${color}` } : {}}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-sm font-medium leading-snug ${task.status === 'completada' ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+                          {task.title}
+                        </p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${PRIORITY_COLORS[task.priority] ?? ''}`}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      {isOverdue(task) && (
+                        <span className="mt-1.5 inline-block text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
+                          VENCIDA
+                        </span>
+                      )}
+                      {task.dueDate && !isOverdue(task) && (
+                        <p className="mt-1.5 text-[10px] text-gray-600">📅 {new Date(task.dueDate).toLocaleDateString('es-CO')}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

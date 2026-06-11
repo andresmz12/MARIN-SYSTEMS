@@ -31,7 +31,9 @@ model User {
   dailyPlans       DailyPlan[]
   workBlocks       WorkBlock[]
   brandProfiles    BrandProfile[]
-  generatedPosts   GeneratedPost[]
+  generatedPosts        GeneratedPost[]
+  companyRevenues       CompanyRevenue[]
+  contentCreatorHistory ContentCreatorHistory[]
 }
 
 model Trade {
@@ -45,6 +47,7 @@ model Trade {
   emotion      String?
   followedPlan Boolean  @default(false)
   notes        String?
+  screenshot   String?
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
 
@@ -275,6 +278,7 @@ model CEOCompany {
   workBlocks      WorkBlock[]
   brandProfile    BrandProfile?
   generatedPosts  GeneratedPost[]
+  revenues        CompanyRevenue[]
 
   @@index([userId])
 }
@@ -404,4 +408,96 @@ model GeneratedPost {
   @@index([userId])
   @@index([companyId])
   @@index([companyId, weekNumber])
+}
+
+model CompanyRevenue {
+  id        String     @id @default(cuid())
+  userId    String
+  companyId String
+  month     String
+  target    Float      @default(0)
+  actual    Float      @default(0)
+  currency  String     @default("USD")
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   CEOCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, month])
+  @@index([userId])
+  @@index([companyId])
+}
+
+model ContentCreatorHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  tema      String
+  redSocial String
+  duracion  String
+  mapaJson  Json
+  guion     String
+  titulo    String
+  hashtags  String[]
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model IrsNews {
+  id             String   @id @default(cuid())
+  title          String
+  summary        String
+  spanishSummary String?
+  url            String   @unique
+  publishedAt    DateTime
+  used           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+}
+
+model IrsVideoContent {
+  id            String   @id @default(cuid())
+  titulo        String
+  guionCompleto String
+  mapaJson      Json
+  audioUrl      String?
+  publishedAt   DateTime
+  createdAt     DateTime @default(now())
+}
+
+model StudioSession {
+  id        String   @id @default(cuid())
+  token     String   @unique @default(cuid())
+  userId    String?
+  tema      String
+  redSocial String
+  duracion  String
+  mapaJson  Json
+  guion     String
+  audioData  String?
+  audioPath  String?
+  timestamps Json?
+  temaHash   String?
+  isEdited   Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt @default(now())
+
+  @@index([userId, temaHash])
+  @@index([userId])
+}
+
+model IrsNoticia {
+  id          String   @id @default(cuid())
+  guid        String   @unique
+  titulo      String
+  descripcion String
+  resumen     String
+  mapaJson    Json?
+  audioPath   String?
+  timestamps  Json?
+  pubDate     DateTime
+  createdAt   DateTime @default(now())
 }
