@@ -46,6 +46,7 @@ export default function TradingDiarioPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [scanning, setScanning] = useState(false)
   const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [chartPreview, setChartPreview] = useState<string | null>(null)
 
   useEffect(() => {
     loadTrades()
@@ -75,6 +76,8 @@ export default function TradingDiarioPage() {
     setEditTrade(null)
     setForm({ ...emptyForm, date: new Date().toISOString().split('T')[0] })
     setScanMsg(null)
+    if (chartPreview) URL.revokeObjectURL(chartPreview)
+    setChartPreview(null)
     setModalOpen(true)
   }
 
@@ -91,12 +94,19 @@ export default function TradingDiarioPage() {
       date: trade.date.split('T')[0],
     })
     setScanMsg(null)
+    if (chartPreview) URL.revokeObjectURL(chartPreview)
+    setChartPreview(null)
     setModalOpen(true)
   }
 
   async function handleScanImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+
+    // Show preview immediately
+    if (chartPreview) URL.revokeObjectURL(chartPreview)
+    setChartPreview(URL.createObjectURL(file))
+
     setScanning(true)
     setScanMsg(null)
     const fd = new FormData()
@@ -124,6 +134,12 @@ export default function TradingDiarioPage() {
       setScanning(false)
       e.target.value = ''
     }
+  }
+
+  function clearChart() {
+    if (chartPreview) URL.revokeObjectURL(chartPreview)
+    setChartPreview(null)
+    setScanMsg(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -343,43 +359,13 @@ export default function TradingDiarioPage() {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editTrade ? 'Editar Trade' : 'Registrar Trade'}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleScanImage}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={scanning}
-              className="btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {scanning ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  Analizando chart...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Auto-llenar desde análisis TradingView
-                </>
-              )}
-            </button>
-            {scanMsg && (
-              <p className={`text-xs mt-1.5 ${scanMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-                {scanMsg.ok ? '✓ ' : '✗ '}{scanMsg.text}
-              </p>
-            )}
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleScanImage}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -473,6 +459,54 @@ export default function TradingDiarioPage() {
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
+          </div>
+
+          <div>
+            <label className="label">Captura de TradingView</label>
+            {chartPreview ? (
+              <div className="relative">
+                <img
+                  src={chartPreview}
+                  alt="Captura TradingView"
+                  className="w-full max-h-44 object-contain rounded-lg border border-[#2a2a2a] bg-[#1a1a1a]"
+                />
+                {scanning && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 rounded-lg">
+                    <svg className="w-7 h-7 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    <span className="text-xs text-blue-300">Analizando chart...</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={clearChart}
+                  disabled={scanning}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white text-sm font-bold disabled:opacity-50 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={scanning}
+                className="w-full border border-dashed border-[#3a3a3a] hover:border-blue-600/50 rounded-lg p-5 flex flex-col items-center gap-2 text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-50"
+              >
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm">Subir captura — auto-llena el formulario</span>
+              </button>
+            )}
+            {scanMsg && (
+              <p className={`text-xs mt-1.5 ${scanMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {scanMsg.ok ? '✓ ' : '✗ '}{scanMsg.text}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-1">
