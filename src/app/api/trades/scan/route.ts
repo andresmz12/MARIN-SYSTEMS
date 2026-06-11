@@ -5,41 +5,49 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
-const SYSTEM = `Eres un experto en extraer datos de operaciones de trading desde pantallazos de TradingView. Conoces perfectamente la interfaz de TradingView y cómo leer trades cerrados, anotaciones, P&L y métricas. Responde SOLO con JSON válido, sin markdown ni texto extra.`
+const SYSTEM = `Eres un trader profesional y analista técnico experto. Puedes leer pantallazos de TradingView con precisión: identificas trades cerrados, lees precios de entrada/salida, calculas pips correctamente según el instrumento, y analizas el contexto técnico del gráfico (tendencia, estructura, niveles, patrones). Responde SOLO con JSON válido, sin markdown ni texto extra.`
 
-const PROMPT = `Analiza este pantallazo de TradingView y extrae los datos del trade cerrado o la operación visible.
+const PROMPT = `Analiza este pantallazo de TradingView. Extrae los datos del trade Y analiza el gráfico.
 
 INSTRUMENTOS VÁLIDOS: ${PAIRS.join(', ')}
 
-CÓMO EXTRAER CADA CAMPO:
+═══ CAMPO: "pair" ═══
+Lee el símbolo en el título del chart o widget de precio. Convierte: XAUUSD→XAU/USD, EURUSD→EUR/USD, etc.
 
-"pair" — Lee el símbolo del instrumento en la pantalla (título del chart, widget de precio, o anotaciones).
-  Convierte: XAUUSD → XAU/USD, EURUSD → EUR/USD, etc.
+═══ CAMPO: "result" ═══
+Busca el resultado del trade:
+- Anotación verde / PnL positivo → "win"
+- Anotación roja / PnL negativo → "loss"
+- PnL ~0 → "be"
 
-"result" — Determina si fue ganadora o perdedora:
-  - Busca P&L visible (positivo = "win", negativo = "loss", ~0 = "be")
-  - Busca colores en las anotaciones de trade: verde = win, rojo = loss
-  - Busca texto como "Cerrado", "Closed", ganancia/pérdida
+═══ CAMPO: "pips" ═══
+Calcula el movimiento real del precio según el instrumento:
 
-"pips" — Extrae el movimiento del precio. IMPORTANTE: cada instrumento se mide diferente:
-  • XAU/USD (Oro): Los "pips" son puntos de precio. Si ves "PnL: 46.93" con 1 lot estándar (100oz),
-    pips = PnL / 10. Si ves el movimiento de precio directamente (ej: de 2350 a 2396), pips = diferencia.
-    Si ves el P&L en dólares con lot size visible, calcula el movimiento en precio.
-  • EUR/USD, GBP/USD, etc.: 1 pip = 0.0001. Si precio movió de 1.0850 a 1.0920 = 70 pips.
-  • USD/JPY: 1 pip = 0.01
-  • Si hay un número de pips/puntos explícito en la imagen, úsalo directamente.
-  • Pips positivos = ganancia, negativos = pérdida.
+▸ XAU/USD (Oro):
+  1 pip = $0.01 de movimiento en precio por onza
+  Fórmula: pips = |precio_salida - precio_entrada| × 100
+  Ejemplo: entrada 2350.00, salida 2354.69 → |4.69| × 100 = 469 pips
+  Si solo ves el P&L en dólares: pips ≈ movimiento_precio × 100
+  Si ves "4.690" como movimiento → 4.690 × 100 = 469 pips
 
-"date" — Fecha del trade en formato YYYY-MM-DD. Busca en la línea de tiempo, anotaciones o en el widget.
+▸ EUR/USD, GBP/USD, AUD/USD, NZD/USD, USD/CAD, USD/CHF:
+  1 pip = 0.0001. Ejemplo: 1.0920 - 1.0850 = 0.0070 = 70 pips
 
-"notes" — Extrae datos clave y visibles del trade en formato conciso (máx 120 chars):
-  Si ves P&L, lot size, R:R ratio, precio de entrada/salida — inclúyelos.
-  Ejemplo: "PnL: +$46.93 | Lot: 1 | R:R: 4.53 | Entry: 2350 Exit: 2396"
-  NO inventes lo que no está visible.
+▸ GBP/JPY, EUR/JPY, USD/JPY:
+  1 pip = 0.01. Ejemplo: 155.50 - 154.80 = 0.70 = 70 pips
 
-IMPORTANTE: Omite cualquier campo que NO puedas determinar con certeza. Devuelve {} si no hay trade visible.
+Resultado positivo si win, negativo si loss.
 
-JSON:`
+═══ CAMPO: "date" ═══
+Fecha del trade visible en el chart (formato YYYY-MM-DD). Si no está clara, omite.
+
+═══ CAMPO: "notes" ═══
+Combina DOS cosas (máx 150 chars):
+1. Datos del trade si visibles: PnL, lote, R:R, precio entrada/salida
+2. Análisis del gráfico: ¿qué tendencia hay? ¿qué patrón o setup se ve? ¿qué niveles? ¿qué timeframe?
+Ejemplo: "XAU H1 bajista | Ruptura soporte + retest | Entrada short en resistencia | R:R 4.5"
+
+Omite campos que no puedas determinar. JSON:`
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
