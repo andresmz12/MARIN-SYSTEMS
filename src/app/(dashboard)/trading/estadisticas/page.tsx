@@ -7,6 +7,20 @@ import {
   ScatterChart, Scatter, ZAxis, LineChart, Line,
 } from 'recharts'
 
+function renderMarkdown(text: string) {
+  return text
+    .split('\n')
+    .map((line, i) => {
+      if (line.startsWith('## ')) return <h3 key={i} className="text-base font-bold text-white mt-5 mb-2">{line.slice(3)}</h3>
+      if (line.startsWith('### ')) return <h4 key={i} className="text-sm font-semibold text-gray-200 mt-3 mb-1">{line.slice(4)}</h4>
+      if (line.startsWith('- ') || line.startsWith('• ')) return <li key={i} className="text-sm text-gray-300 ml-4 mb-1 list-disc">{line.slice(2)}</li>
+      if (/^\d+\./.test(line)) return <li key={i} className="text-sm text-gray-300 ml-4 mb-1 list-decimal">{line.replace(/^\d+\.\s*/, '')}</li>
+      if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="text-sm font-semibold text-white mb-1">{line.slice(2, -2)}</p>
+      if (line.trim() === '') return <div key={i} className="h-1" />
+      return <p key={i} className="text-sm text-gray-300 mb-1">{line}</p>
+    })
+}
+
 interface Stats {
   total: number
   wins: number
@@ -45,6 +59,9 @@ export default function EstadisticasPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [analysis, setAnalysis] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   useEffect(() => { loadStats() }, [])
 
@@ -59,6 +76,30 @@ export default function EstadisticasPage() {
       setLoadError(true)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function generateAnalysis() {
+    if (!stats) return
+    setAnalyzing(true)
+    setAnalysisError(null)
+    setAnalysis(null)
+    try {
+      const res = await fetch('/api/trades/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stats),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAnalysisError(data.error ?? 'Error al generar análisis')
+        return
+      }
+      setAnalysis(data.analysis)
+    } catch {
+      setAnalysisError('Error de conexión')
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -153,6 +194,63 @@ export default function EstadisticasPage() {
           </svg>
           Exportar CSV
         </button>
+      </div>
+
+      {/* AI Analysis */}
+      <div className="card border border-blue-600/20 bg-blue-600/5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-semibold text-white">Análisis IA — Trading Coach</p>
+            <p className="text-xs text-gray-500 mt-0.5">Informe personalizado basado en todos tus trades</p>
+          </div>
+          <button
+            onClick={generateAnalysis}
+            disabled={analyzing || stats.total < 5}
+            className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {analyzing ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Analizando...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                {analysis ? 'Re-analizar' : 'Generar análisis'}
+              </>
+            )}
+          </button>
+        </div>
+
+        {stats.total < 5 && !analysis && (
+          <p className="text-xs text-gray-500 italic">Necesitas al menos 5 trades para generar un análisis.</p>
+        )}
+
+        {analysisError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-red-400">
+            {analysisError}
+          </div>
+        )}
+
+        {analyzing && (
+          <div className="space-y-2 mt-2">
+            {[80, 60, 70, 50, 65].map((w, i) => (
+              <div key={i} className={`h-3 bg-[#1a1a1a] animate-pulse rounded`} style={{ width: `${w}%` }} />
+            ))}
+          </div>
+        )}
+
+        {analysis && !analyzing && (
+          <div className="mt-2 border-t border-[#2a2a2a] pt-4 space-y-0.5">
+            {renderMarkdown(analysis)}
+          </div>
+        )}
       </div>
 
       {/* KPI Row */}
