@@ -135,6 +135,13 @@ export default function TradingDiarioPage() {
     setModalOpen(true)
   }
 
+  async function scanExistingScreenshot() {
+    if (!form.screenshot) return
+    const res = await fetch(form.screenshot)
+    const blob = await res.blob()
+    await scanFile(new File([blob], 'screenshot.jpg', { type: blob.type || 'image/jpeg' }))
+  }
+
   async function scanFile(file: File) {
     setScanning(true)
     setScanMsg(null)
@@ -500,7 +507,7 @@ export default function TradingDiarioPage() {
                   style={{ width: 180, height: 101 }}
                   onClick={() => !scanning && setLightbox(form.screenshot!)}
                 />
-                {scanning && (
+                {scanning ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70 rounded-lg">
                     <svg className="w-5 h-5 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -508,6 +515,15 @@ export default function TradingDiarioPage() {
                     </svg>
                     <span className="text-[10px] text-blue-300">Analizando...</span>
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={scanExistingScreenshot}
+                    className="absolute bottom-1 left-1 bg-blue-600/90 hover:bg-blue-500 text-white text-[10px] font-medium px-2 py-0.5 rounded transition-colors"
+                    title="Analizar con IA para llenar el formulario"
+                  >
+                    ✦ Analizar
+                  </button>
                 )}
                 <button
                   type="button"
