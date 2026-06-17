@@ -416,6 +416,27 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Corporate Tasks card */}
+      <div className="card">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">📋 Tareas Corporativas</p>
+            <Link href="/corporate-tasks" className="text-sm text-blue-400 hover:text-blue-300">
+              Ver tareas →
+            </Link>
+          </div>
+          <Link
+            href="/corporate-tasks/new"
+            className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nueva
+          </Link>
+        </div>
+      </div>
+
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
         <Link href="/trading/diario" className="btn-primary flex items-center gap-2">

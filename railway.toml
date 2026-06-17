@@ -10,3 +10,7 @@ restartPolicyMaxRetries = 10
 [deploy.healthcheck]
 path = "/api/auth/session"
 timeout = 30
+
+[cronjobs.daily_recurring_tasks]
+command = "curl -s -X POST $RAILWAY_PUBLIC_DOMAIN/api/corporate-tasks/cron -H 'Authorization: Bearer $CRON_SECRET'"
+schedule = "0 8 * * *"

@@ -188,10 +188,11 @@ model Company {
   privateNotes String?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
-  tasks        CompanyTask[]
-  notes        CompanyNote[]
-  teamMembers  CompanyTeamMember[]
-  links        CompanyLink[]
+  tasks           CompanyTask[]
+  notes           CompanyNote[]
+  teamMembers     CompanyTeamMember[]
+  links           CompanyLink[]
+  corporateTasks  CorporateTask[]
 }
 
 model CompanyTask {
@@ -500,4 +501,44 @@ model IrsNoticia {
   timestamps  Json?
   pubDate     DateTime
   createdAt   DateTime @default(now())
+}
+
+// ──────────────────────── Corporate Tasks ────────────────────────
+
+model CorporateTask {
+  id               String         @id @default(cuid())
+  title            String
+  description      String         @db.Text
+  priority         String         @default("medium")
+  dueDate          DateTime
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeEmails   String[]       @default([])
+  attachmentUrl    String?
+  internalNotes    String?        @db.Text
+  isRecurring      Boolean        @default(false)
+  recurringRule    String?
+  recurringEndDate DateTime?
+  status           String         @default("pending")
+  sentAt           DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  instances        TaskInstance[]
+
+  @@index([companyId])
+  @@index([dueDate])
+}
+
+model TaskInstance {
+  id              String        @id @default(cuid())
+  corporateTaskId String
+  corporateTask   CorporateTask @relation(fields: [corporateTaskId], references: [id], onDelete: Cascade)
+  scheduledDate   DateTime
+  sentAt          DateTime?
+  status          String        @default("pending")
+  createdAt       DateTime      @default(now())
+
+  @@unique([corporateTaskId, scheduledDate])
+  @@index([corporateTaskId])
 }
