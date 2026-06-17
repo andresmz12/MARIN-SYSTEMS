@@ -531,14 +531,18 @@ model CorporateTask {
 }
 
 model TaskInstance {
-  id              String        @id @default(cuid())
-  corporateTaskId String
-  corporateTask   CorporateTask @relation(fields: [corporateTaskId], references: [id], onDelete: Cascade)
-  scheduledDate   DateTime
-  sentAt          DateTime?
-  status          String        @default("pending")
-  createdAt       DateTime      @default(now())
+  id                     String        @id @default(cuid())
+  corporateTaskId        String
+  corporateTask          CorporateTask @relation(fields: [corporateTaskId], references: [id], onDelete: Cascade)
+  scheduledDate          DateTime
+  sentAt                 DateTime?
+  status                 String        @default("pending")
+  morningReminderSentAt  DateTime?
+  eveningReminderSentAt  DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
   @@unique([corporateTaskId, scheduledDate])
   @@index([corporateTaskId])
+  @@index([scheduledDate])
 }

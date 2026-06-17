@@ -6,39 +6,30 @@ export function generateNextOccurrences(
   endDate: Date,
   daysToGenerate = 30,
 ): Date[] {
-  const results: Date[] = []
+  const occurrences: Date[] = []
+  let current = new Date(baseDate)
   const now = new Date()
-  const cutoff = new Date(now)
-  cutoff.setDate(cutoff.getDate() + daysToGenerate)
 
-  const stepDays: Record<RecurringRule, number> = {
-    daily: 1,
-    weekly: 7,
-    biweekly: 14,
-    monthly: 0,
+  while (current <= endDate && occurrences.length < daysToGenerate) {
+    if (current >= now) {
+      occurrences.push(new Date(current))
+    }
+
+    switch (rule) {
+      case 'daily':
+        current.setDate(current.getDate() + 1)
+        break
+      case 'weekly':
+        current.setDate(current.getDate() + 7)
+        break
+      case 'biweekly':
+        current.setDate(current.getDate() + 14)
+        break
+      case 'monthly':
+        current.setMonth(current.getMonth() + 1)
+        break
+    }
   }
 
-  let cursor = new Date(baseDate)
-
-  // Advance cursor past today if baseDate is in the past
-  while (cursor <= now) {
-    cursor = addInterval(cursor, rule, stepDays[rule])
-  }
-
-  while (cursor <= cutoff && cursor <= endDate && results.length < 30) {
-    results.push(new Date(cursor))
-    cursor = addInterval(cursor, rule, stepDays[rule])
-  }
-
-  return results
-}
-
-function addInterval(date: Date, rule: RecurringRule, days: number): Date {
-  const next = new Date(date)
-  if (rule === 'monthly') {
-    next.setMonth(next.getMonth() + 1)
-  } else {
-    next.setDate(next.getDate() + days)
-  }
-  return next
+  return occurrences
 }

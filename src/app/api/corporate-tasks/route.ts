@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { generateNextOccurrences, RecurringRule } from '@/lib/recurring-tasks'
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
@@ -13,25 +14,25 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url)
   const companyId = searchParams.get('companyId')
-  const month = searchParams.get('month') // e.g. "2026-06"
+  const month = searchParams.get('month')
+  const status = searchParams.get('status')
 
-  const where: Record<string, unknown> = {
-    company: { userId: session.user.id },
-  }
-
+  const where: Record<string, unknown> = { company: { userId: session.user.id } }
   if (companyId) where.companyId = companyId
+  if (status) where.status = status
 
   if (month) {
     const [y, m] = month.split('-').map(Number)
-    const from = new Date(y, m - 1, 1)
-    const to = new Date(y, m, 0, 23, 59, 59)
-    where.dueDate = { gte: from, lte: to }
+    where.dueDate = { gte: new Date(y, m - 1, 1), lte: new Date(y, m, 0, 23, 59, 59) }
   }
 
   try {
     const tasks = await prisma.corporateTask.findMany({
       where,
-      include: { company: { select: { id: true, name: true, emoji: true, color: true } } },
+      include: {
+        company: { select: { id: true, name: true, emoji: true, color: true } },
+        _count: { select: { instances: true } },
+      },
       orderBy: { dueDate: 'asc' },
     })
     return NextResponse.json(tasks)
@@ -60,12 +61,12 @@ export async function POST(req: Request) {
     const due = new Date(dueDate)
     if (isNaN(due.getTime())) return NextResponse.json({ error: 'Fecha inválida' }, { status: 400 })
 
-    const invalidEmails = (employeeEmails as string[]).filter((e) => e.trim() && !isValidEmail(e))
+    const emails = (employeeEmails as string[]).map((e: string) => e.trim()).filter(Boolean)
+    const invalidEmails = emails.filter((e) => !isValidEmail(e))
     if (invalidEmails.length > 0) {
       return NextResponse.json({ error: `Emails inválidos: ${invalidEmails.join(', ')}` }, { status: 400 })
     }
 
-    // Verify company belongs to user
     const company = await prisma.company.findFirst({ where: { id: companyId, userId: session.user.id } })
     if (!company) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
         priority,
         dueDate: due,
         companyId,
-        employeeEmails: (employeeEmails as string[]).map((e: string) => e.trim()).filter(Boolean),
+        employeeEmails: emails,
         attachmentUrl: attachmentUrl?.trim() || null,
         internalNotes: internalNotes?.trim() || null,
         isRecurring,
@@ -85,6 +86,18 @@ export async function POST(req: Request) {
       },
     })
 
+    // Generate recurring instances if applicable
+    if (isRecurring && recurringRule && recurringEndDate) {
+      const occurrences = generateNextOccurrences(due, recurringRule as RecurringRule, new Date(recurringEndDate), 30)
+      if (occurrences.length > 0) {
+        await prisma.taskInstance.createMany({
+          data: occurrences.map((date) => ({ corporateTaskId: task.id, scheduledDate: date })),
+          skipDuplicates: true,
+        })
+      }
+    }
+
+    console.log(`[corporate-tasks] Tarea creada: ${task.title} (${task.id})`)
     return NextResponse.json({ id: task.id, status: task.status, createdAt: task.createdAt }, { status: 201 })
   } catch (err) {
     console.error('[corporate-tasks POST]', err)
