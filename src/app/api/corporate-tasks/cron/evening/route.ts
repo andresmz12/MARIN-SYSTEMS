@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendEveningReminder } from '@/lib/sendgrid-client'
 
+const N8N_WEBHOOK_URL = 'https://n8n-production-c601.up.railway.app/webhook/marin-tasks'
+
 export async function POST(req: Request) {
   const auth = req.headers.get('Authorization')
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
         eveningReminderSentAt: null,
         status: 'pending',
       },
-      include: { corporateTask: true },
+      include: { corporateTask: { include: { company: { select: { name: true } } } } },
     })
 
     // Non-recurring tasks due TODAY, still pending
@@ -31,9 +33,15 @@ export async function POST(req: Request) {
         dueDate: { gte: todayStart, lte: todayEnd },
         status: 'pending',
       },
+      include: { company: { select: { name: true } } },
     })
 
-    type EmailEntry = { taskData: { title: string; description: string; dueDate: Date; priority: string }; instanceId?: string }
+    type EmailEntry = {
+      taskData: { title: string; description: string; dueDate: Date; priority: string }
+      instanceId?: string
+      empresa: string
+      scheduledDate: Date
+    }
     // Build map: email → list of task data
     const emailTaskMap = new Map<string, EmailEntry[]>()
 
@@ -44,6 +52,8 @@ export async function POST(req: Request) {
         entry.push({
           taskData: { title: task.title, description: task.description, dueDate: instance.scheduledDate, priority: task.priority },
           instanceId: instance.id,
+          empresa: task.company.name,
+          scheduledDate: instance.scheduledDate,
         })
         emailTaskMap.set(email, entry)
       }
@@ -52,7 +62,11 @@ export async function POST(req: Request) {
     for (const task of standaloneTasks) {
       for (const email of task.employeeEmails) {
         const entry = emailTaskMap.get(email) ?? []
-        entry.push({ taskData: { title: task.title, description: task.description, dueDate: task.dueDate, priority: task.priority } })
+        entry.push({
+          taskData: { title: task.title, description: task.description, dueDate: task.dueDate, priority: task.priority },
+          empresa: task.company.name,
+          scheduledDate: task.dueDate,
+        })
         emailTaskMap.set(email, entry)
       }
     }
@@ -87,6 +101,29 @@ export async function POST(req: Request) {
         console.error(`[cron/evening] Error procesando ${email}: ${msg}`)
         errors.push(`${email}: ${msg}`)
       }
+    }
+
+    // Notify n8n webhook with all tasks grouped by employee
+    try {
+      const tareas = Array.from(emailTaskMap.entries()).map(([email, entries]) => ({
+        empleado: email,
+        email,
+        items: entries.map((e: EmailEntry) => ({
+          titulo: e.taskData.title,
+          empresa: e.empresa,
+          scheduledDate: e.scheduledDate.toISOString(),
+          status: 'pending',
+        })),
+      }))
+
+      await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: 'evening', fecha: new Date().toISOString(), tareas }),
+      })
+      console.log(`[cron/evening] Webhook n8n notificado con ${tareas.length} empleado(s)`)
+    } catch (webhookErr) {
+      console.error('[cron/evening] Error notificando webhook n8n:', webhookErr instanceof Error ? webhookErr.message : webhookErr)
     }
 
     console.log(`[cron/evening] Procesados: ${emailTaskMap.size} emails, enviados: ${sent}, errores: ${errors.length}`)
