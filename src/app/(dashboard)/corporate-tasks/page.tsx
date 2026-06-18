@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useToast } from '@/components/ui/Toast'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 interface Company {
   id: string
@@ -204,6 +206,80 @@ export default function CorporateTasksPage() {
   const monthLabel = currentDate.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
   const today = new Date()
 
+  function buildPdfRows(tasksToExport: CorporateTask[]) {
+    return tasksToExport.map((t) => [
+      t.title,
+      `${t.company.emoji} ${t.company.name}`,
+      new Date(t.startDate).toLocaleDateString('es-CO'),
+      new Date(t.dueDate).toLocaleDateString('es-CO'),
+      PRIORITY_LABEL[t.priority] ?? t.priority,
+      STATUS_LABEL[t.status] ?? t.status,
+      t.employeeEmails.join(', ') || '—',
+    ])
+  }
+
+  function downloadPDF(mode: 'daily' | 'weekly') {
+    const now = new Date()
+    let filtered: CorporateTask[]
+    let title: string
+    let subtitle: string
+
+    if (mode === 'daily') {
+      const todayStr = now.toISOString().slice(0, 10)
+      filtered = tasks.filter((t) => {
+        const s = new Date(t.startDate).toISOString().slice(0, 10)
+        const d = new Date(t.dueDate).toISOString().slice(0, 10)
+        return s <= todayStr && todayStr <= d
+      })
+      title = 'Tareas Corporativas — Diario'
+      subtitle = now.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    } else {
+      const dayOfWeek = now.getDay()
+      const weekStart = new Date(now)
+      weekStart.setDate(now.getDate() - dayOfWeek)
+      weekStart.setHours(0, 0, 0, 0)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekStart.getDate() + 6)
+      weekEnd.setHours(23, 59, 59, 999)
+      filtered = tasks.filter((t) => {
+        const s = new Date(t.startDate)
+        const d = new Date(t.dueDate)
+        return s <= weekEnd && d >= weekStart
+      })
+      const fmt = (d: Date) => d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+      title = 'Tareas Corporativas — Semanal'
+      subtitle = `Semana del ${fmt(weekStart)} al ${fmt(weekEnd)}`
+    }
+
+    const doc = new jsPDF({ orientation: 'landscape' })
+    doc.setFontSize(16)
+    doc.text(title, 14, 18)
+    doc.setFontSize(10)
+    doc.setTextColor(120)
+    doc.text(subtitle, 14, 25)
+    doc.text(`Total: ${filtered.length} tarea(s)`, 14, 31)
+
+    autoTable(doc, {
+      startY: 36,
+      head: [['Título', 'Empresa', 'Inicio', 'Vencimiento', 'Prioridad', 'Estado', 'Destinatarios']],
+      body: buildPdfRows(filtered),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      columnStyles: {
+        0: { cellWidth: 45 },
+        6: { cellWidth: 55 },
+      },
+    })
+
+    const filename = mode === 'daily'
+      ? `tareas-diario-${now.toISOString().slice(0, 10)}.pdf`
+      : `tareas-semanal-${now.toISOString().slice(0, 10)}.pdf`
+    doc.save(filename)
+  }
+
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -212,12 +288,49 @@ export default function CorporateTasksPage() {
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">📋 Tareas Corporativas</h1>
           <p className="text-[var(--text-secondary)] text-sm mt-0.5">{tasks.length} tarea(s) en este período</p>
         </div>
-        <Link href="/corporate-tasks/new" className="btn-primary flex items-center gap-2 w-fit">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nueva Tarea
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setPdfMenuOpen((v) => !v)}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              PDF
+            </button>
+            <AnimatePresence>
+              {pdfMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-lg shadow-xl z-20 min-w-[160px] overflow-hidden"
+                >
+                  <button
+                    onClick={() => { downloadPDF('daily'); setPdfMenuOpen(false) }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2"
+                  >
+                    📅 Reporte diario
+                  </button>
+                  <button
+                    onClick={() => { downloadPDF('weekly'); setPdfMenuOpen(false) }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2"
+                  >
+                    📆 Reporte semanal
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <Link href="/corporate-tasks/new" className="btn-primary flex items-center gap-2 w-fit">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nueva Tarea
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
