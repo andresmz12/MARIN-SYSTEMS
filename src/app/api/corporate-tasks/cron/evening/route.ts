@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendEveningReminder } from '@/lib/sendgrid-client'
 
-const N8N_WEBHOOK_URL = 'https://n8n-production-c601.up.railway.app/webhook/marin-tasks'
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL ?? 'https://n8n-production-c601.up.railway.app/webhook/marin-tasks'
 
 export async function POST(req: Request) {
   const auth = req.headers.get('Authorization')
