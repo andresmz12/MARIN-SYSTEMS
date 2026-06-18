@@ -15,10 +15,11 @@ export async function POST(req: Request) {
   todayEnd.setHours(23, 59, 59, 999)
 
   try {
+    // Only tasks already notified in the morning that are still pending
     const instances = await prisma.taskInstance.findMany({
       where: {
         scheduledDate: { gte: todayStart, lte: todayEnd },
-        morningReminderSentAt: null,
+        morningReminderSentAt: { not: null },
         status: 'pending',
       },
       include: { corporateTask: { include: { company: { select: { name: true } } } } },
@@ -37,7 +38,6 @@ export async function POST(req: Request) {
       titulo: string
       empresa: string
       scheduledDate: Date
-      instanceId?: string
     }
     const emailTaskMap = new Map<string, EmailEntry[]>()
 
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       const task = instance.corporateTask
       for (const email of task.employeeEmails) {
         const entry = emailTaskMap.get(email) ?? []
-        entry.push({ titulo: task.title, empresa: task.company.name, scheduledDate: instance.scheduledDate, instanceId: instance.id })
+        entry.push({ titulo: task.title, empresa: task.company.name, scheduledDate: instance.scheduledDate })
         emailTaskMap.set(email, entry)
       }
     }
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     }
 
     if (emailTaskMap.size === 0) {
-      console.log('[cron/morning] No hay tareas para HOY — sin envíos')
+      console.log('[cron/midday] No hay tareas pendientes para HOY — sin envíos')
       return NextResponse.json({ processed: 0, notified: 0 })
     }
 
@@ -79,32 +79,21 @@ export async function POST(req: Request) {
       const res = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: 'morning', fecha: new Date().toISOString(), tareas }),
+        body: JSON.stringify({ tipo: 'midday', fecha: new Date().toISOString(), tareas }),
       })
       if (res.ok) {
         notified = tareas.length
-        // Mark instances as notified so midday/evening can filter on this
-        const instanceIds = Array.from(emailTaskMap.values())
-          .flat()
-          .map((e) => e.instanceId)
-          .filter((id): id is string => !!id)
-        if (instanceIds.length > 0) {
-          await prisma.taskInstance.updateMany({
-            where: { id: { in: instanceIds } },
-            data: { morningReminderSentAt: new Date() },
-          })
-        }
-        console.log(`[cron/morning] Webhook n8n OK — ${notified} empleado(s) notificados`)
+        console.log(`[cron/midday] Webhook n8n OK — ${notified} empleado(s) notificados`)
       } else {
-        console.error(`[cron/morning] Webhook n8n respondió ${res.status}`)
+        console.error(`[cron/midday] Webhook n8n respondió ${res.status}`)
       }
     } catch (webhookErr) {
-      console.error('[cron/morning] Error notificando webhook n8n:', webhookErr instanceof Error ? webhookErr.message : webhookErr)
+      console.error('[cron/midday] Error notificando webhook n8n:', webhookErr instanceof Error ? webhookErr.message : webhookErr)
     }
 
     return NextResponse.json({ processed: emailTaskMap.size, notified })
   } catch (err) {
-    console.error('[cron/morning]', err)
-    return NextResponse.json({ error: 'Error en cron morning' }, { status: 500 })
+    console.error('[cron/midday]', err)
+    return NextResponse.json({ error: 'Error en cron midday' }, { status: 500 })
   }
 }
