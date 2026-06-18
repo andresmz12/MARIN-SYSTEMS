@@ -11,18 +11,5 @@ restartPolicyMaxRetries = 10
 path = "/api/auth/session"
 timeout = 30
 
-[cronjobs.morning_reminders]
-command = "curl -s -X POST https://$RAILWAY_PUBLIC_DOMAIN/api/corporate-tasks/cron/morning -H 'Authorization: Bearer $CRON_SECRET' -H 'Content-Type: application/json' -d '{}'"
-schedule = "30 13 * * *"
-
-[cronjobs.midday_reminders]
-command = "curl -s -X POST https://$RAILWAY_PUBLIC_DOMAIN/api/corporate-tasks/cron/midday -H 'Authorization: Bearer $CRON_SECRET' -H 'Content-Type: application/json' -d '{}'"
-schedule = "0 17 * * *"
-
-[cronjobs.evening_reminders]
-command = "curl -s -X POST https://$RAILWAY_PUBLIC_DOMAIN/api/corporate-tasks/cron/evening -H 'Authorization: Bearer $CRON_SECRET' -H 'Content-Type: application/json' -d '{}'"
-schedule = "0 23 * * *"
-
-[cronjobs.generate_recurring]
-command = "curl -s -X POST https://$RAILWAY_PUBLIC_DOMAIN/api/corporate-tasks/cron/generate -H 'Authorization: Bearer $CRON_SECRET' -H 'Content-Type: application/json' -d '{}'"
-schedule = "0 */6 * * *"
+# Los cronjobs se manejan desde GitHub Actions (.github/workflows/cron-reminders.yml)
+# Railway no reconoce la sección [cronjobs.*] en railway.toml

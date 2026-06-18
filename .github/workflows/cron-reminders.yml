@@ -1,0 +1,66 @@
+name: Cron Reminders
+
+on:
+  schedule:
+    - cron: "30 13 * * *"   # morning  — 8:30 AM Colombia (UTC-5)
+    - cron: "0 17 * * *"    # midday   — 12:00 PM Colombia
+    - cron: "0 23 * * *"    # evening  — 6:00 PM Colombia
+    - cron: "0 */6 * * *"   # generate — cada 6 horas
+  workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
+
+jobs:
+  morning:
+    name: Morning Reminder (8:30 AM COL)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 13 * * *'
+    steps:
+      - name: POST /cron/morning
+        run: |
+          curl --fail -s -X POST \
+            --max-time 30 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/corporate-tasks/cron/morning
+
+  midday:
+    name: Midday Reminder (12:00 PM COL)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 17 * * *'
+    steps:
+      - name: POST /cron/midday
+        run: |
+          curl --fail -s -X POST \
+            --max-time 30 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/corporate-tasks/cron/midday
+
+  evening:
+    name: Evening Reminder (6:00 PM COL)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 23 * * *'
+    steps:
+      - name: POST /cron/evening
+        run: |
+          curl --fail -s -X POST \
+            --max-time 30 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/corporate-tasks/cron/evening
+
+  generate:
+    name: Generate Recurring Instances (every 6h)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 */6 * * *'
+    steps:
+      - name: POST /cron/generate
+        run: |
+          curl --fail -s -X POST \
+            --max-time 30 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/corporate-tasks/cron/generate
