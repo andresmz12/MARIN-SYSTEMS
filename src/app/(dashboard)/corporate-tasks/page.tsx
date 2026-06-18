@@ -17,6 +17,7 @@ interface CorporateTask {
   title: string
   description: string
   priority: string
+  startDate: string
   dueDate: string
   status: string
   isRecurring: boolean
@@ -60,6 +61,10 @@ function buildCalendarCells(year: number, month: number): (number | null)[] {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
   while (cells.length % 7 !== 0) cells.push(null)
   return cells
+}
+
+function fmtShort(d: string | Date) {
+  return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
 }
 
 function OverlayModal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
@@ -176,9 +181,22 @@ export default function CorporateTasksPage() {
   }
 
   const calendarCells = buildCalendarCells(year, month)
+
+  // Mostrar tarea en TODOS los días entre startDate y dueDate dentro del mes
   const tasksByDay = tasks.reduce<Record<number, CorporateTask[]>>((acc, t) => {
-    const d = new Date(t.dueDate).getDate()
-    acc[d] = [...(acc[d] ?? []), t]
+    const monthStart = new Date(year, month, 1)
+    const monthEnd = new Date(year, month + 1, 0)
+    const rangeStart = new Date(t.startDate) < monthStart ? monthStart : new Date(t.startDate)
+    const rangeEnd = new Date(t.dueDate) > monthEnd ? monthEnd : new Date(t.dueDate)
+    const cur = new Date(rangeStart)
+    cur.setHours(0, 0, 0, 0)
+    const end = new Date(rangeEnd)
+    end.setHours(23, 59, 59, 999)
+    while (cur <= end) {
+      const d = cur.getDate()
+      acc[d] = [...(acc[d] ?? []), t]
+      cur.setDate(cur.getDate() + 1)
+    }
     return acc
   }, {})
 
@@ -292,7 +310,8 @@ export default function CorporateTasksPage() {
                 <tr className="text-left border-b border-[#1a1a1a]">
                   <th className="pb-2 text-xs text-gray-600 font-medium pr-4">Título</th>
                   <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden md:table-cell">Empresa</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden sm:table-cell">Fecha</th>
+                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden sm:table-cell">Inicio</th>
+                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden sm:table-cell">Vencimiento</th>
                   <th className="pb-2 text-xs text-gray-600 font-medium pr-4">Prioridad</th>
                   <th className="pb-2 text-xs text-gray-600 font-medium pr-4">Estado</th>
                   <th className="pb-2 text-xs text-gray-600 font-medium">Acciones</th>
@@ -310,7 +329,10 @@ export default function CorporateTasksPage() {
                     </td>
                     <td className="py-3 pr-4 hidden md:table-cell text-xs text-gray-400">{task.company.emoji} {task.company.name}</td>
                     <td className="py-3 pr-4 hidden sm:table-cell text-xs text-gray-500">
-                      {new Date(task.dueDate).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}
+                      {fmtShort(task.startDate)}
+                    </td>
+                    <td className="py-3 pr-4 hidden sm:table-cell text-xs text-gray-500">
+                      {fmtShort(task.dueDate)}
                     </td>
                     <td className="py-3 pr-4">
                       <span className={`text-xs px-1.5 py-0.5 rounded border ${PRIORITY_BADGE[task.priority] ?? ''}`}>
@@ -384,7 +406,7 @@ export default function CorporateTasksPage() {
                   <span className="text-gray-500">Empresa:</span> {detailTask.company.emoji} {detailTask.company.name}
                 </p>
                 <p className="text-xs text-gray-600">
-                  <span className="text-gray-500">Fecha:</span> {new Date(detailTask.dueDate).toLocaleDateString('es-CO', { dateStyle: 'full' })}
+                  <span className="text-gray-500">Inicio:</span> {fmtShort(detailTask.startDate)} &nbsp;→&nbsp; <span className="text-gray-500">Vence:</span> {fmtShort(detailTask.dueDate)}
                 </p>
                 <p className="text-xs text-gray-600">
                   <span className="text-gray-500">Destinatarios:</span> {detailTask.employeeEmails.join(', ') || '—'}

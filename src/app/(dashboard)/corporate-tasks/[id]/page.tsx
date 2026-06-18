@@ -20,6 +20,7 @@ interface CorporateTask {
   title: string
   description: string
   priority: string
+  startDate: string
   dueDate: string
   status: string
   isRecurring: boolean
@@ -58,6 +59,15 @@ const RECURRING_RULES = [
   { value: 'monthly', label: 'Mensual' },
 ]
 
+function fmtDate(d: string | Date) {
+  return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function daysBetween(a: string | Date, b: string | Date) {
+  const diff = new Date(b).getTime() - new Date(a).getTime()
+  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1)
+}
+
 function OverlayModal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
     <motion.div
@@ -91,7 +101,8 @@ export default function CorporateTaskDetailPage() {
   const [newDueDate, setNewDueDate] = useState('')
 
   const [editForm, setEditForm] = useState({
-    title: '', description: '', priority: 'medium', dueDate: '',
+    title: '', description: '', priority: 'medium',
+    startDate: '', dueDate: '',
     employeeEmails: '', attachmentUrl: '', internalNotes: '',
     isRecurring: false, recurringRule: 'weekly', recurringEndDate: '',
   })
@@ -108,6 +119,7 @@ export default function CorporateTaskDetailPage() {
         title: taskData.title,
         description: taskData.description,
         priority: taskData.priority,
+        startDate: new Date(taskData.startDate).toISOString().slice(0, 16),
         dueDate: new Date(taskData.dueDate).toISOString().slice(0, 16),
         employeeEmails: taskData.employeeEmails.join('\n'),
         attachmentUrl: taskData.attachmentUrl ?? '',
@@ -138,6 +150,9 @@ export default function CorporateTaskDetailPage() {
 
   async function handleEdit() {
     if (!task) return
+    if (new Date(editForm.startDate) > new Date(editForm.dueDate)) {
+      return showToast('La fecha de inicio debe ser anterior o igual a la fecha límite', 'error')
+    }
     const emails = editForm.employeeEmails.split('\n').map((e) => e.trim()).filter(Boolean)
     try {
       const res = await fetch(`/api/corporate-tasks/${task.id}`, {
@@ -156,7 +171,6 @@ export default function CorporateTaskDetailPage() {
       if (!res.ok) return showToast(data.error ?? 'Error al guardar', 'error')
       showToast('Cambios guardados', 'success')
       setShowEdit(false)
-      // Reload
       const t = await fetch(`/api/corporate-tasks/${task.id}`).then((r) => r.json())
       setTask(t)
     } catch {
@@ -212,7 +226,7 @@ export default function CorporateTaskDetailPage() {
     )
   }
 
-  const dueFmt = new Date(task.dueDate).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const duration = daysBetween(task.startDate, task.dueDate)
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -246,8 +260,20 @@ export default function CorporateTaskDetailPage() {
             <p className="text-gray-200 text-sm">{task.company.emoji} {task.company.name}</p>
           </div>
           <div>
-            <p className="label mb-1">Fecha límite</p>
-            <p className="text-gray-200 text-sm capitalize">{dueFmt}</p>
+            <p className="label mb-1">Duración</p>
+            <p className="text-gray-200 text-sm">{duration} día{duration !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        {/* Fechas destacadas */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg px-3 py-2.5">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-0.5">Desde</p>
+            <p className="text-sm text-gray-200 font-medium">{fmtDate(task.startDate)}</p>
+          </div>
+          <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg px-3 py-2.5">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-0.5">Hasta</p>
+            <p className="text-sm text-gray-200 font-medium">{fmtDate(task.dueDate)}</p>
           </div>
         </div>
 
@@ -281,23 +307,12 @@ export default function CorporateTaskDetailPage() {
           </div>
         )}
 
-        {/* Timeline */}
-        <div>
-          <p className="label mb-2">Historial de envíos</p>
-          <div className="space-y-2">
-            {task.sentAt ? (
-              <div className="flex items-center gap-2 text-sm text-purple-400">
-                <span className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
-                Enviado a {task.employeeEmails.length} email(s) el {new Date(task.sentAt).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span className="w-2 h-2 rounded-full bg-gray-700 flex-shrink-0" />
-                Sin envíos aún
-              </div>
-            )}
+        {task.sentAt && (
+          <div className="flex items-center gap-2 text-sm text-purple-400">
+            <span className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+            Enviado el {new Date(task.sentAt).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
           </div>
-        </div>
+        )}
 
         {task.isRecurring && task.recurringRule && (
           <div className="flex items-center gap-2 text-sm text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-lg px-3 py-2">
@@ -335,10 +350,10 @@ export default function CorporateTaskDetailPage() {
         </div>
       )}
 
-      {/* Recurring instances */}
-      {task.isRecurring && task.instances.length > 0 && (
+      {/* Instances */}
+      {task.instances.length > 0 && (
         <div className="card">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Instancias recurrentes ({task.instances.length})</h2>
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Instancias diarias ({task.instances.length})</h2>
           <div className="space-y-1 max-h-64 overflow-y-auto">
             {task.instances.map((inst) => (
               <div key={inst.id} className="flex items-center justify-between py-2 border-b border-[#111] last:border-0">
@@ -371,12 +386,16 @@ export default function CorporateTaskDetailPage() {
                   <label className="label">Descripción</label>
                   <textarea className="input min-h-[80px] resize-y" value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
                 </div>
+                <div>
+                  <label className="label">Prioridad</label>
+                  <select className="input" value={editForm.priority} onChange={(e) => setEditForm((p) => ({ ...p, priority: e.target.value }))}>
+                    {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="label">Prioridad</label>
-                    <select className="input" value={editForm.priority} onChange={(e) => setEditForm((p) => ({ ...p, priority: e.target.value }))}>
-                      {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                    <label className="label">Fecha de inicio</label>
+                    <input type="datetime-local" className="input" value={editForm.startDate} onChange={(e) => setEditForm((p) => ({ ...p, startDate: e.target.value }))} />
                   </div>
                   <div>
                     <label className="label">Fecha límite</label>

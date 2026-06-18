@@ -21,6 +21,11 @@ const RECURRING_RULES = [
   { value: 'monthly', label: 'Mensual' },
 ]
 
+function todayLocalISO() {
+  const now = new Date()
+  return now.toISOString().slice(0, 16)
+}
+
 export default function NewCorporateTaskPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -31,6 +36,7 @@ export default function NewCorporateTaskPage() {
     title: '',
     description: '',
     priority: 'medium',
+    startDate: todayLocalISO(),
     dueDate: '',
     companyId: '',
     employeeEmails: '',
@@ -53,9 +59,12 @@ export default function NewCorporateTaskPage() {
     e.preventDefault()
     if (!form.title.trim()) return showToast('El título es requerido', 'error')
     if (!form.description.trim()) return showToast('La descripción es requerida', 'error')
+    if (!form.startDate) return showToast('La fecha de inicio es requerida', 'error')
     if (!form.dueDate) return showToast('La fecha límite es requerida', 'error')
     if (!form.companyId) return showToast('Selecciona una empresa', 'error')
-    if (new Date(form.dueDate) <= new Date()) return showToast('La fecha debe ser futura', 'error')
+    if (new Date(form.startDate) > new Date(form.dueDate)) {
+      return showToast('La fecha de inicio debe ser anterior o igual a la fecha límite', 'error')
+    }
 
     const emails = form.employeeEmails.split('\n').map((e) => e.trim()).filter(Boolean)
 
@@ -108,17 +117,40 @@ export default function NewCorporateTaskPage() {
             <textarea className="input min-h-[100px] resize-y" placeholder="Detalle de la tarea, instrucciones para el equipo..." value={form.description} onChange={(e) => set('description', e.target.value)} required />
           </div>
 
+          <div>
+            <label className="label">Prioridad</label>
+            <select className="input" value={form.priority} onChange={(e) => set('priority', e.target.value)}>
+              {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Prioridad</label>
-              <select className="input" value={form.priority} onChange={(e) => set('priority', e.target.value)}>
-                {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <label className="label">Fecha de inicio *</label>
+              <input
+                type="datetime-local"
+                className="input"
+                value={form.startDate}
+                onChange={(e) => set('startDate', e.target.value)}
+                required
+              />
+              <p className="text-xs text-gray-600 mt-1">Por defecto: hoy</p>
             </div>
             <div>
               <label className="label">Fecha límite *</label>
-              <input type="datetime-local" className="input" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} required />
+              <input
+                type="datetime-local"
+                className="input"
+                value={form.dueDate}
+                min={form.startDate}
+                onChange={(e) => set('dueDate', e.target.value)}
+                required
+              />
             </div>
+          </div>
+
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+            <p className="text-xs text-blue-400">📅 Se enviará un recordatorio <strong>cada día</strong> desde la fecha de inicio hasta el vencimiento</p>
           </div>
 
           <div>
@@ -141,9 +173,6 @@ export default function NewCorporateTaskPage() {
               value={form.employeeEmails}
               onChange={(e) => set('employeeEmails', e.target.value)}
             />
-            <p className="text-xs text-gray-600 mt-1">
-              Recibirán el email inicial + recordatorio el día anterior (8 AM) + recordatorio el mismo día (6 PM)
-            </p>
           </div>
         </div>
 
@@ -190,7 +219,7 @@ export default function NewCorporateTaskPage() {
           <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 flex-1 justify-center">
             {saving
               ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Creando...</>
-              : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg> Crear y Enviar Ahora</>
+              : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg> Crear tarea</>
             }
           </button>
           <Link href="/corporate-tasks" className="btn-secondary">Cancelar</Link>

@@ -510,6 +510,7 @@ model CorporateTask {
   title            String
   description      String         @db.Text
   priority         String         @default("medium")
+  startDate        DateTime       @default(now())
   dueDate          DateTime
   companyId        String
   company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)

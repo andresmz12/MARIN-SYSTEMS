@@ -34,10 +34,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   try {
     const body = await req.json()
+    const newStartDate = body.startDate ? new Date(body.startDate) : task.startDate
     const newDueDate = body.dueDate ? new Date(body.dueDate) : task.dueDate
     const newIsRecurring = body.isRecurring ?? task.isRecurring
     const newRecurringRule = body.recurringRule ?? task.recurringRule
     const newRecurringEndDate = body.recurringEndDate ? new Date(body.recurringEndDate) : task.recurringEndDate
+
+    if (newStartDate > newDueDate) {
+      return NextResponse.json({ error: 'La fecha de inicio debe ser anterior o igual a la fecha límite' }, { status: 400 })
+    }
 
     const updated = await prisma.corporateTask.update({
       where: { id: params.id },
@@ -45,6 +50,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         title: body.title?.trim() ?? task.title,
         description: body.description?.trim() ?? task.description,
         priority: body.priority ?? task.priority,
+        startDate: newStartDate,
         dueDate: newDueDate,
         employeeEmails: body.employeeEmails ?? task.employeeEmails,
         attachmentUrl: body.attachmentUrl?.trim() || task.attachmentUrl,
@@ -55,20 +61,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       },
     })
 
-    // Regenerate instances if dueDate or recurrence changed
-    const dueDateChanged = newDueDate.getTime() !== task.dueDate.getTime()
-    if (dueDateChanged || newIsRecurring !== task.isRecurring) {
+    // Regenerar instancias si cambiaron las fechas o la recurrencia
+    const datesChanged = newStartDate.getTime() !== task.startDate.getTime() || newDueDate.getTime() !== task.dueDate.getTime()
+    if (datesChanged || newIsRecurring !== task.isRecurring) {
       await prisma.taskInstance.deleteMany({ where: { corporateTaskId: params.id, status: 'pending' } })
-      const now = new Date()
       const instanceDates = newIsRecurring && newRecurringRule && newRecurringEndDate
-        ? generateRecurringInstances(now, newDueDate, newRecurringRule as RecurringRule, newRecurringEndDate)
-        : generateDailyInstancesForTask(now, newDueDate)
+        ? generateRecurringInstances(newStartDate, newDueDate, newRecurringRule as RecurringRule, newRecurringEndDate)
+        : generateDailyInstancesForTask(newStartDate, newDueDate)
       if (instanceDates.length > 0) {
         await prisma.taskInstance.createMany({
           data: instanceDates.map((date) => ({ corporateTaskId: params.id, scheduledDate: date })),
           skipDuplicates: true,
         })
       }
+      console.log('[corporate-tasks PUT] Instancias regeneradas: ' + instanceDates.length)
     }
 
     return NextResponse.json({ id: updated.id, updated: true })

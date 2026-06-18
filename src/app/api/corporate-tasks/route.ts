@@ -23,7 +23,11 @@ export async function GET(req: Request) {
 
   if (month) {
     const [y, m] = month.split('-').map(Number)
-    where.dueDate = { gte: new Date(y, m - 1, 1), lte: new Date(y, m, 0, 23, 59, 59) }
+    const monthStart = new Date(y, m - 1, 1)
+    const monthEnd = new Date(y, m, 0, 23, 59, 59)
+    // Incluir tareas cuyo rango [startDate, dueDate] se solape con el mes
+    where.startDate = { lte: monthEnd }
+    where.dueDate = { gte: monthStart }
   }
 
   try {
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const {
-      title, description, priority = 'medium', dueDate, companyId,
+      title, description, priority = 'medium', startDate, dueDate, companyId,
       employeeEmails = [], attachmentUrl, internalNotes,
       isRecurring = false, recurringRule, recurringEndDate,
     } = body
@@ -58,8 +62,11 @@ export async function POST(req: Request) {
     if (!dueDate) return NextResponse.json({ error: 'La fecha límite es requerida' }, { status: 400 })
     if (!companyId) return NextResponse.json({ error: 'La empresa es requerida' }, { status: 400 })
 
+    const start = startDate ? new Date(startDate) : new Date()
     const due = new Date(dueDate)
-    if (isNaN(due.getTime())) return NextResponse.json({ error: 'Fecha inválida' }, { status: 400 })
+    if (isNaN(start.getTime())) return NextResponse.json({ error: 'Fecha de inicio inválida' }, { status: 400 })
+    if (isNaN(due.getTime())) return NextResponse.json({ error: 'Fecha límite inválida' }, { status: 400 })
+    if (start > due) return NextResponse.json({ error: 'La fecha de inicio debe ser anterior o igual a la fecha límite' }, { status: 400 })
 
     const emails = (employeeEmails as string[]).map((e: string) => e.trim()).filter(Boolean)
     const invalidEmails = emails.filter((e) => !isValidEmail(e))
@@ -75,6 +82,7 @@ export async function POST(req: Request) {
         title: title.trim(),
         description: description?.trim() ?? '',
         priority,
+        startDate: start,
         dueDate: due,
         companyId,
         employeeEmails: emails,
@@ -86,16 +94,14 @@ export async function POST(req: Request) {
       },
     })
 
-    // Generate TaskInstance for every day from today until dueDate
-    const now = new Date()
+    // Generar una instancia por cada día desde startDate hasta dueDate
     let instanceDates: Date[]
-
     if (!isRecurring) {
-      instanceDates = generateDailyInstancesForTask(now, due)
+      instanceDates = generateDailyInstancesForTask(start, due)
     } else if (recurringRule && recurringEndDate) {
-      instanceDates = generateRecurringInstances(now, due, recurringRule as RecurringRule, new Date(recurringEndDate))
+      instanceDates = generateRecurringInstances(start, due, recurringRule as RecurringRule, new Date(recurringEndDate))
     } else {
-      instanceDates = generateDailyInstancesForTask(now, due)
+      instanceDates = generateDailyInstancesForTask(start, due)
     }
 
     if (instanceDates.length > 0) {
@@ -105,7 +111,7 @@ export async function POST(req: Request) {
       })
     }
 
-    console.log(`[corporate-tasks] Tarea creada: "${task.title}" (${task.id}) — ${instanceDates.length} instancias generadas`)
+    console.log(`[corporate-tasks] Tarea creada: "${task.title}" (${task.id}) — inicio: ${start.toISOString().slice(0,10)}, vence: ${due.toISOString().slice(0,10)}, ${instanceDates.length} instancias`)
     return NextResponse.json({ id: task.id, status: task.status, createdAt: task.createdAt }, { status: 201 })
   } catch (err) {
     console.error('[corporate-tasks POST]', err)
