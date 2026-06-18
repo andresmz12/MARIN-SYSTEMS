@@ -90,7 +90,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   const task = await getTaskForUser(params.id, session.user.id)
   if (!task) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
-  if (task.status !== 'pending') return NextResponse.json({ error: 'Solo se pueden eliminar tareas pendientes' }, { status: 400 })
 
   try {
     await prisma.corporateTask.delete({ where: { id: params.id } })
