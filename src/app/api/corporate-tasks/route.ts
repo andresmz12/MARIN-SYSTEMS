@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateNextOccurrences, RecurringRule } from '@/lib/recurring-tasks'
+import { generateDailyInstancesForTask, generateRecurringInstances, RecurringRule } from '@/lib/recurring-tasks'
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
@@ -86,18 +86,26 @@ export async function POST(req: Request) {
       },
     })
 
-    // Generate recurring instances if applicable
-    if (isRecurring && recurringRule && recurringEndDate) {
-      const occurrences = generateNextOccurrences(due, recurringRule as RecurringRule, new Date(recurringEndDate), 30)
-      if (occurrences.length > 0) {
-        await prisma.taskInstance.createMany({
-          data: occurrences.map((date) => ({ corporateTaskId: task.id, scheduledDate: date })),
-          skipDuplicates: true,
-        })
-      }
+    // Generate TaskInstance for every day from today until dueDate
+    const now = new Date()
+    let instanceDates: Date[]
+
+    if (!isRecurring) {
+      instanceDates = generateDailyInstancesForTask(now, due)
+    } else if (recurringRule && recurringEndDate) {
+      instanceDates = generateRecurringInstances(now, due, recurringRule as RecurringRule, new Date(recurringEndDate))
+    } else {
+      instanceDates = generateDailyInstancesForTask(now, due)
     }
 
-    console.log(`[corporate-tasks] Tarea creada: ${task.title} (${task.id})`)
+    if (instanceDates.length > 0) {
+      await prisma.taskInstance.createMany({
+        data: instanceDates.map((date) => ({ corporateTaskId: task.id, scheduledDate: date })),
+        skipDuplicates: true,
+      })
+    }
+
+    console.log(`[corporate-tasks] Tarea creada: "${task.title}" (${task.id}) — ${instanceDates.length} instancias generadas`)
     return NextResponse.json({ id: task.id, status: task.status, createdAt: task.createdAt }, { status: 201 })
   } catch (err) {
     console.error('[corporate-tasks POST]', err)

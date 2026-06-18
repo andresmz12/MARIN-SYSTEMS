@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendTaskEmail } from '@/lib/sendgrid-client'
-import { generateNextOccurrences, RecurringRule } from '@/lib/recurring-tasks'
+import { generateDailyInstancesForTask, generateRecurringInstances, RecurringRule } from '@/lib/recurring-tasks'
 
 export async function POST(req: Request) {
   const auth = req.headers.get('Authorization')
@@ -14,11 +14,7 @@ export async function POST(req: Request) {
 
   try {
     const recurringTasks = await prisma.corporateTask.findMany({
-      where: {
-        isRecurring: true,
-        recurringRule: { not: null },
-        recurringEndDate: { gt: now },
-      },
+      where: { isRecurring: true, recurringRule: { not: null }, recurringEndDate: { gt: now } },
     })
 
     let processed = 0
@@ -28,14 +24,14 @@ export async function POST(req: Request) {
     for (const task of recurringTasks) {
       processed++
       try {
-        const occurrences = generateNextOccurrences(
+        const instanceDates = generateRecurringInstances(
+          now,
           task.dueDate,
           task.recurringRule as RecurringRule,
           task.recurringEndDate!,
-          30,
         )
 
-        for (const date of occurrences) {
+        for (const date of instanceDates) {
           await prisma.taskInstance.upsert({
             where: { corporateTaskId_scheduledDate: { corporateTaskId: task.id, scheduledDate: date } },
             create: { corporateTaskId: task.id, scheduledDate: date, status: 'pending' },
@@ -43,33 +39,19 @@ export async function POST(req: Request) {
           })
         }
 
-        // Send any instances due today or past
         const dueTodayInstances = await prisma.taskInstance.findMany({
           where: { corporateTaskId: task.id, scheduledDate: { lte: now }, status: 'pending' },
         })
 
         for (const instance of dueTodayInstances) {
-          const taskData = {
-            title: task.title,
-            description: task.description,
-            dueDate: instance.scheduledDate,
-            priority: task.priority,
-          }
-
+          const taskData = { title: task.title, description: task.description, dueDate: instance.scheduledDate, priority: task.priority }
           let allSent = true
           for (const email of task.employeeEmails) {
             const result = await sendTaskEmail(email, taskData, task.attachmentUrl ?? undefined)
-            if (!result.success) {
-              allSent = false
-              errors.push(`${task.id}/${email}: ${result.error}`)
-            }
+            if (!result.success) { allSent = false; errors.push(`${task.id}/${email}: ${result.error}`) }
           }
-
           if (allSent || task.employeeEmails.length === 0) {
-            await prisma.taskInstance.update({
-              where: { id: instance.id },
-              data: { status: 'sent', sentAt: now },
-            })
+            await prisma.taskInstance.update({ where: { id: instance.id }, data: { status: 'sent', sentAt: now } })
             sent++
           }
         }

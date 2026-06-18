@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { generateNextOccurrences, RecurringRule } from '@/lib/recurring-tasks'
+import { generateRecurringInstances, RecurringRule } from '@/lib/recurring-tasks'
 
 export async function POST(req: Request) {
   const auth = req.headers.get('Authorization')
@@ -19,14 +19,14 @@ export async function POST(req: Request) {
 
     for (const task of recurringTasks) {
       processed++
-      const occurrences = generateNextOccurrences(
+      const instanceDates = generateRecurringInstances(
+        now,
         task.dueDate,
         task.recurringRule as RecurringRule,
         task.recurringEndDate!,
-        30,
       )
 
-      for (const date of occurrences) {
+      for (const date of instanceDates) {
         try {
           await prisma.taskInstance.upsert({
             where: { corporateTaskId_scheduledDate: { corporateTaskId: task.id, scheduledDate: date } },
@@ -35,12 +35,12 @@ export async function POST(req: Request) {
           })
           created++
         } catch {
-          // Ignore duplicates
+          // ignore duplicates
         }
       }
     }
 
-    console.log(`[cron/generate] Procesadas: ${processed}, instancias generadas: ${created}`)
+    console.log(`[cron/generate] Procesadas: ${processed} tareas, instancias generadas: ${created}`)
     return NextResponse.json({ processed, created })
   } catch (err) {
     console.error('[cron/generate]', err)

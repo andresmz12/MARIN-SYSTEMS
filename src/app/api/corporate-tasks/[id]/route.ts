@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateNextOccurrences, RecurringRule } from '@/lib/recurring-tasks'
+import { generateDailyInstancesForTask, generateRecurringInstances, RecurringRule } from '@/lib/recurring-tasks'
 
 async function getTaskForUser(id: string, userId: string) {
   return prisma.corporateTask.findFirst({
@@ -57,12 +57,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
     // Regenerate instances if dueDate or recurrence changed
     const dueDateChanged = newDueDate.getTime() !== task.dueDate.getTime()
-    if (newIsRecurring && newRecurringRule && newRecurringEndDate && (dueDateChanged || newIsRecurring !== task.isRecurring)) {
+    if (dueDateChanged || newIsRecurring !== task.isRecurring) {
       await prisma.taskInstance.deleteMany({ where: { corporateTaskId: params.id, status: 'pending' } })
-      const occurrences = generateNextOccurrences(newDueDate, newRecurringRule as RecurringRule, newRecurringEndDate, 30)
-      if (occurrences.length > 0) {
+      const now = new Date()
+      const instanceDates = newIsRecurring && newRecurringRule && newRecurringEndDate
+        ? generateRecurringInstances(now, newDueDate, newRecurringRule as RecurringRule, newRecurringEndDate)
+        : generateDailyInstancesForTask(now, newDueDate)
+      if (instanceDates.length > 0) {
         await prisma.taskInstance.createMany({
-          data: occurrences.map((date) => ({ corporateTaskId: params.id, scheduledDate: date })),
+          data: instanceDates.map((date) => ({ corporateTaskId: params.id, scheduledDate: date })),
           skipDuplicates: true,
         })
       }
