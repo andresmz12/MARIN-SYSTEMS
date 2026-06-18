@@ -96,16 +96,16 @@ export default function NewCorporateTaskPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/corporate-tasks" className="text-gray-500 hover:text-gray-300 transition-colors">
+        <Link href="/corporate-tasks" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7"/></svg>
         </Link>
-        <h1 className="text-2xl font-bold text-white">Nueva Tarea Corporativa</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Nueva Tarea Corporativa</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Información principal */}
         <div className="card space-y-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Información principal</h2>
+          <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Información principal</h2>
 
           <div>
             <label className="label">Título *</label>
@@ -134,7 +134,7 @@ export default function NewCorporateTaskPage() {
                 onChange={(e) => set('startDate', e.target.value)}
                 required
               />
-              <p className="text-xs text-gray-600 mt-1">Por defecto: hoy</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Por defecto: hoy</p>
             </div>
             <div>
               <label className="label">Fecha límite *</label>
@@ -164,7 +164,7 @@ export default function NewCorporateTaskPage() {
 
         {/* Destinatarios */}
         <div className="card space-y-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Destinatarios</h2>
+          <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Destinatarios</h2>
           <div>
             <label className="label">Emails de empleados (uno por línea)</label>
             <textarea
@@ -178,7 +178,7 @@ export default function NewCorporateTaskPage() {
 
         {/* Opcionales */}
         <div className="card space-y-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Opcionales</h2>
+          <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Opcionales</h2>
           <div>
             <label className="label">URL de adjunto</label>
             <input className="input" placeholder="https://drive.google.com/..." value={form.attachmentUrl} onChange={(e) => set('attachmentUrl', e.target.value)} />
@@ -194,8 +194,8 @@ export default function NewCorporateTaskPage() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" checked={form.isRecurring} onChange={(e) => set('isRecurring', e.target.checked)} className="w-4 h-4 rounded accent-purple-600" />
             <div>
-              <p className="text-sm font-medium text-gray-200">🔄 Tarea recurrente</p>
-              <p className="text-xs text-gray-500">Se enviará automáticamente según la frecuencia elegida</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">🔄 Tarea recurrente</p>
+              <p className="text-xs text-[var(--text-secondary)]">Se enviará automáticamente según la frecuencia elegida</p>
             </div>
           </label>
 

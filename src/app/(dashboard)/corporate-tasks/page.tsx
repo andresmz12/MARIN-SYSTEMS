@@ -81,7 +81,7 @@ function OverlayModal({ onClose, children }: { onClose: () => void; children: Re
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="bg-[#111] border border-[#2a2a2a] rounded-xl shadow-2xl w-full max-w-lg"
+        className="bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-xl shadow-2xl w-full max-w-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -209,8 +209,8 @@ export default function CorporateTasksPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">📋 Tareas Corporativas</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{tasks.length} tarea(s) en este período</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">📋 Tareas Corporativas</h1>
+          <p className="text-[var(--text-secondary)] text-sm mt-0.5">{tasks.length} tarea(s) en este período</p>
         </div>
         <Link href="/corporate-tasks/new" className="btn-primary flex items-center gap-2 w-fit">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -236,7 +236,7 @@ export default function CorporateTasksPage() {
           <button onClick={() => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null) }} className="btn-secondary px-3 py-2">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <span className="text-sm font-medium text-gray-200 min-w-[130px] text-center capitalize">{monthLabel}</span>
+          <span className="text-sm font-medium text-[var(--text-primary)] min-w-[130px] text-center capitalize">{monthLabel}</span>
           <button onClick={() => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null) }} className="btn-secondary px-3 py-2">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </button>
@@ -245,9 +245,9 @@ export default function CorporateTasksPage() {
 
       {/* Calendar */}
       <div className="card p-0 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-[#1a1a1a]">
+        <div className="grid grid-cols-7 border-b border-[var(--bg-border)]">
           {DAYS.map((d) => (
-            <div key={d} className="text-center text-xs text-gray-600 font-medium py-2">{d}</div>
+            <div key={d} className="text-center text-xs text-[var(--text-muted)] font-medium py-2">{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -259,22 +259,22 @@ export default function CorporateTasksPage() {
               <div
                 key={i}
                 onClick={() => day && setSelectedDay(isSelected ? null : day)}
-                className={`min-h-[72px] p-1.5 border-b border-r border-[#111] transition-colors ${day ? 'cursor-pointer hover:bg-[#161616]' : 'bg-[#0a0a0a]'} ${isSelected ? 'bg-blue-500/5 ring-inset ring-1 ring-blue-500/30' : ''}`}
+                className={`min-h-[72px] p-1.5 border-b border-r border-[#111] transition-colors ${day ? 'cursor-pointer hover:bg-[var(--bg-hover)]' : 'bg-[var(--bg-base)]'} ${isSelected ? 'bg-blue-500/5 ring-inset ring-1 ring-blue-500/30' : ''}`}
               >
                 {day && (
                   <>
-                    <p className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>{day}</p>
+                    <p className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-blue-600 text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{day}</p>
                     <div className="space-y-0.5">
                       {dayTasks.slice(0, 2).map((t) => (
                         <div
                           key={t.id}
                           onClick={(e) => { e.stopPropagation(); setDetailTask(t) }}
-                          className={`text-[10px] truncate rounded px-1 py-0.5 border cursor-pointer ${PRIORITY_BADGE[t.priority] ?? 'bg-gray-500/20 text-gray-400 border-gray-500/30'}`}
+                          className={`text-[10px] truncate rounded px-1 py-0.5 border cursor-pointer ${PRIORITY_BADGE[t.priority] ?? 'bg-gray-500/20 text-[var(--text-secondary)] border-gray-500/30'}`}
                         >
                           {t.isRecurring && '🔄 '}{t.title}
                         </div>
                       ))}
-                      {dayTasks.length > 2 && <p className="text-[10px] text-gray-600 pl-1">+{dayTasks.length - 2}</p>}
+                      {dayTasks.length > 2 && <p className="text-[10px] text-[var(--text-muted)] pl-1">+{dayTasks.length - 2}</p>}
                     </div>
                   </>
                 )}
@@ -283,8 +283,8 @@ export default function CorporateTasksPage() {
           })}
         </div>
         {selectedDay && (
-          <div className="px-4 py-2 border-t border-[#1a1a1a] flex items-center justify-between">
-            <p className="text-xs text-gray-500">Día {selectedDay} — {tasksByDay[selectedDay]?.length ?? 0} tarea(s)</p>
+          <div className="px-4 py-2 border-t border-[var(--bg-border)] flex items-center justify-between">
+            <p className="text-xs text-[var(--text-secondary)]">Día {selectedDay} — {tasksByDay[selectedDay]?.length ?? 0} tarea(s)</p>
             <button onClick={() => setSelectedDay(null)} className="text-xs text-blue-400 hover:text-blue-300">Ver todas</button>
           </div>
         )}
@@ -292,46 +292,46 @@ export default function CorporateTasksPage() {
 
       {/* Task list */}
       <div className="card">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">
           {selectedDay ? `Tareas del día ${selectedDay}` : 'Tareas del mes'}
         </h2>
 
         {loading ? (
-          <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-[#1a1a1a] animate-pulse rounded-lg" />)}</div>
+          <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-[var(--bg-elevated)] animate-pulse rounded-lg" />)}</div>
         ) : displayedTasks.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-gray-600">Sin tareas en este período</p>
+            <p className="text-[var(--text-muted)]">Sin tareas en este período</p>
             <Link href="/corporate-tasks/new" className="text-sm text-blue-400 hover:text-blue-300 mt-2 inline-block">+ Crear primera tarea</Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left border-b border-[#1a1a1a]">
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4">Título</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden md:table-cell">Empresa</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden sm:table-cell">Inicio</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4 hidden sm:table-cell">Vencimiento</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4">Prioridad</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium pr-4">Estado</th>
-                  <th className="pb-2 text-xs text-gray-600 font-medium">Acciones</th>
+                <tr className="text-left border-b border-[var(--bg-border)]">
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium pr-4">Título</th>
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium pr-4 hidden md:table-cell">Empresa</th>
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium pr-4 hidden sm:table-cell">Inicio</th>
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium pr-4 hidden sm:table-cell">Vencimiento</th>
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium pr-4">Prioridad</th>
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium pr-4">Estado</th>
+                  <th className="pb-2 text-xs text-[var(--text-muted)] font-medium">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#111]">
+              <tbody className="divide-y divide-[var(--bg-border)]">
                 {displayedTasks.map((task) => (
-                  <tr key={task.id} className="hover:bg-[#111] transition-colors">
+                  <tr key={task.id} className="hover:bg-[var(--bg-card)] transition-colors">
                     <td className="py-3 pr-4">
-                      <p className="text-gray-200 font-medium truncate max-w-[180px]">
+                      <p className="text-[var(--text-primary)] font-medium truncate max-w-[180px]">
                         {task.isRecurring && <span className="text-purple-400 mr-1">🔄</span>}
                         {task.title}
                       </p>
-                      <p className="text-xs text-gray-600">{task.employeeEmails.length} destinatario(s)</p>
+                      <p className="text-xs text-[var(--text-muted)]">{task.employeeEmails.length} destinatario(s)</p>
                     </td>
-                    <td className="py-3 pr-4 hidden md:table-cell text-xs text-gray-400">{task.company.emoji} {task.company.name}</td>
-                    <td className="py-3 pr-4 hidden sm:table-cell text-xs text-gray-500">
+                    <td className="py-3 pr-4 hidden md:table-cell text-xs text-[var(--text-secondary)]">{task.company.emoji} {task.company.name}</td>
+                    <td className="py-3 pr-4 hidden sm:table-cell text-xs text-[var(--text-secondary)]">
                       {fmtShort(task.startDate)}
                     </td>
-                    <td className="py-3 pr-4 hidden sm:table-cell text-xs text-gray-500">
+                    <td className="py-3 pr-4 hidden sm:table-cell text-xs text-[var(--text-secondary)]">
                       {fmtShort(task.dueDate)}
                     </td>
                     <td className="py-3 pr-4">
@@ -346,26 +346,26 @@ export default function CorporateTasksPage() {
                     </td>
                     <td className="py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setDetailTask(task)} className="p-1.5 rounded text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Ver">
+                        <button onClick={() => setDetailTask(task)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Ver">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                         </button>
                         {task.status === 'pending' && (
                           <>
-                            <button onClick={() => handleSend(task.id)} disabled={sending === task.id} className="p-1.5 rounded text-gray-500 hover:text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-50" title="Enviar">
+                            <button onClick={() => handleSend(task.id)} disabled={sending === task.id} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-50" title="Enviar">
                               {sending === task.id
                                 ? <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                                 : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                               }
                             </button>
-                            <Link href={`/corporate-tasks/${task.id}`} className="p-1.5 rounded text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10 transition-colors" title="Editar">
+                            <Link href={`/corporate-tasks/${task.id}`} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-yellow-400 hover:bg-yellow-500/10 transition-colors" title="Editar">
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                             </Link>
-                            <button onClick={() => { setRescheduleTask(task); setNewDueDate('') }} className="p-1.5 rounded text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors" title="Mover fecha">
+                            <button onClick={() => { setRescheduleTask(task); setNewDueDate('') }} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors" title="Mover fecha">
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                             </button>
                           </>
                         )}
-                        <button onClick={() => setDeleteTask(task)} className="p-1.5 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar">
+                        <button onClick={() => setDeleteTask(task)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                         </button>
                       </div>
@@ -394,22 +394,22 @@ export default function CorporateTasksPage() {
                       {STATUS_LABEL[detailTask.status]}
                     </span>
                   </div>
-                  <h2 className="text-lg font-bold text-white">{detailTask.title}</h2>
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">{detailTask.title}</h2>
                 </div>
-                <button onClick={() => setDetailTask(null)} className="text-gray-500 hover:text-white ml-3 flex-shrink-0">
+                <button onClick={() => setDetailTask(null)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] ml-3 flex-shrink-0">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
               </div>
-              <p className="text-gray-400 text-sm mb-4 leading-relaxed">{detailTask.description}</p>
+              <p className="text-[var(--text-secondary)] text-sm mb-4 leading-relaxed">{detailTask.description}</p>
               <div className="space-y-2 mb-4">
-                <p className="text-xs text-gray-600">
-                  <span className="text-gray-500">Empresa:</span> {detailTask.company.emoji} {detailTask.company.name}
+                <p className="text-xs text-[var(--text-muted)]">
+                  <span className="text-[var(--text-secondary)]">Empresa:</span> {detailTask.company.emoji} {detailTask.company.name}
                 </p>
-                <p className="text-xs text-gray-600">
-                  <span className="text-gray-500">Inicio:</span> {fmtShort(detailTask.startDate)} &nbsp;→&nbsp; <span className="text-gray-500">Vence:</span> {fmtShort(detailTask.dueDate)}
+                <p className="text-xs text-[var(--text-muted)]">
+                  <span className="text-[var(--text-secondary)]">Inicio:</span> {fmtShort(detailTask.startDate)} &nbsp;→&nbsp; <span className="text-[var(--text-secondary)]">Vence:</span> {fmtShort(detailTask.dueDate)}
                 </p>
-                <p className="text-xs text-gray-600">
-                  <span className="text-gray-500">Destinatarios:</span> {detailTask.employeeEmails.join(', ') || '—'}
+                <p className="text-xs text-[var(--text-muted)]">
+                  <span className="text-[var(--text-secondary)]">Destinatarios:</span> {detailTask.employeeEmails.join(', ') || '—'}
                 </p>
                 {detailTask.sentAt && (
                   <p className="text-xs text-purple-400">
@@ -458,8 +458,8 @@ export default function CorporateTasksPage() {
         {rescheduleTask && (
           <OverlayModal onClose={() => setRescheduleTask(null)}>
             <div className="p-6">
-              <h2 className="text-lg font-bold text-white mb-1">📅 Mover fecha</h2>
-              <p className="text-gray-500 text-sm mb-4">{rescheduleTask.title}</p>
+              <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">📅 Mover fecha</h2>
+              <p className="text-[var(--text-secondary)] text-sm mb-4">{rescheduleTask.title}</p>
               <div className="mb-4">
                 <label className="label">Nueva fecha límite</label>
                 <input
@@ -483,9 +483,9 @@ export default function CorporateTasksPage() {
         {deleteTask && (
           <OverlayModal onClose={() => setDeleteTask(null)}>
             <div className="p-6">
-              <h2 className="text-lg font-bold text-white mb-2">🗑️ Eliminar tarea</h2>
-              <p className="text-gray-400 text-sm mb-1">¿Eliminar <strong className="text-gray-200">"{deleteTask.title}"</strong>?</p>
-              <p className="text-gray-600 text-xs mb-6">Esta acción no se puede deshacer.</p>
+              <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">🗑️ Eliminar tarea</h2>
+              <p className="text-[var(--text-secondary)] text-sm mb-1">¿Eliminar <strong className="text-[var(--text-primary)]">"{deleteTask.title}"</strong>?</p>
+              <p className="text-[var(--text-muted)] text-xs mb-6">Esta acción no se puede deshacer.</p>
               <div className="flex gap-2">
                 <button
                   onClick={() => handleDelete(deleteTask.id)}
