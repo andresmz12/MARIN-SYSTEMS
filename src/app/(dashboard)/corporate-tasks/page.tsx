@@ -150,6 +150,18 @@ export default function CorporateTasksPage() {
     }
   }
 
+  async function handleComplete(id: string) {
+    try {
+      const res = await fetch(`/api/corporate-tasks/${id}/complete-task`, { method: 'POST' })
+      if (!res.ok) { const d = await res.json(); return showToast(d.error ?? 'Error', 'error') }
+      showToast('Tarea marcada como completada ✓', 'success')
+      loadTasks()
+      setDetailTask(null)
+    } catch {
+      showToast('Error al completar', 'error')
+    }
+  }
+
   async function handleDelete(id: string) {
     try {
       const res = await fetch(`/api/corporate-tasks/${id}`, { method: 'DELETE' })
@@ -464,6 +476,9 @@ export default function CorporateTasksPage() {
                         </button>
                         {task.status === 'pending' && (
                           <>
+                            <button onClick={() => handleComplete(task.id)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Completar">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                            </button>
                             <button onClick={() => handleSend(task.id)} disabled={sending === task.id} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-50" title="Enviar">
                               {sending === task.id
                                 ? <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -533,6 +548,13 @@ export default function CorporateTasksPage() {
               <div className="flex gap-2 flex-wrap">
                 {detailTask.status === 'pending' && (
                   <>
+                    <button
+                      onClick={() => handleComplete(detailTask.id)}
+                      className="btn-secondary text-green-400 hover:border-green-500/30 text-sm py-2 px-3 flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                      Completar
+                    </button>
                     <button
                       onClick={() => handleSend(detailTask.id)}
                       disabled={sending === detailTask.id}
