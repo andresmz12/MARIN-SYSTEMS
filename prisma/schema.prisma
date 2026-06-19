@@ -538,6 +538,7 @@ model TaskInstance {
   scheduledDate          DateTime
   sentAt                 DateTime?
   status                 String        @default("pending")
+  completedAt            DateTime?
   morningReminderSentAt  DateTime?
   eveningReminderSentAt  DateTime?
   createdAt              DateTime      @default(now())

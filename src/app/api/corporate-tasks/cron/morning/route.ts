@@ -33,6 +33,8 @@ export async function POST(req: Request) {
       include: { company: { select: { name: true } } },
     })
 
+    const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+
     type EmailEntry = {
       titulo: string
       empresa: string
@@ -71,6 +73,8 @@ export async function POST(req: Request) {
         empresa: e.empresa,
         scheduledDate: e.scheduledDate.toISOString(),
         status: 'pending',
+        instanceId: e.instanceId ?? null,
+        completeUrl: e.instanceId ? `${BASE_URL}/api/corporate-tasks/complete/${e.instanceId}` : null,
       })),
     }))
 

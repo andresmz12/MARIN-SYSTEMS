@@ -34,10 +34,13 @@ export async function POST(req: Request) {
       include: { company: { select: { name: true } } },
     })
 
+    const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+
     type EmailEntry = {
       titulo: string
       empresa: string
       scheduledDate: Date
+      instanceId?: string
     }
     const emailTaskMap = new Map<string, EmailEntry[]>()
 
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
       const task = instance.corporateTask
       for (const email of task.employeeEmails) {
         const entry = emailTaskMap.get(email) ?? []
-        entry.push({ titulo: task.title, empresa: task.company.name, scheduledDate: instance.scheduledDate })
+        entry.push({ titulo: task.title, empresa: task.company.name, scheduledDate: instance.scheduledDate, instanceId: instance.id })
         emailTaskMap.set(email, entry)
       }
     }
@@ -71,6 +74,8 @@ export async function POST(req: Request) {
         empresa: e.empresa,
         scheduledDate: e.scheduledDate.toISOString(),
         status: 'pending',
+        instanceId: e.instanceId ?? null,
+        completeUrl: e.instanceId ? `${BASE_URL}/api/corporate-tasks/complete/${e.instanceId}` : null,
       })),
     }))
 
