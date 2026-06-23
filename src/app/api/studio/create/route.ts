@@ -11,6 +11,7 @@ import { datePrefix } from '@/lib/ai-date'
 export const maxDuration = 120
 
 const VOICE_ID        = '9AHim1BsYT5o3WGDtPE0'
+const MODEL           = 'claude-haiku-4-5-20251001'
 const CLAUDE_SYS_BASE = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC, ITIN y servicios financieros. Hablas en español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 const DAILY_LIMIT = 20
 
@@ -33,7 +34,7 @@ async function cleanupExpired() {
 // ─── Claude ──────────────────────────────────────────────────
 async function generarMapa(tema: string, redSocial: string, duracion: string): Promise<any> {
   const msg = await callClaude({
-    model: 'claude-sonnet-4-6',
+    model: MODEL,
     system: datePrefix() + CLAUDE_SYS_BASE,
     messages: [{
       role: 'user',

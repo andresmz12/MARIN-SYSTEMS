@@ -7,6 +7,8 @@ import { datePrefix } from '@/lib/ai-date'
 
 export const maxDuration = 60
 
+const MODEL = 'claude-haiku-4-5-20251001'
+
 const CLAUDE_SYS_BASE = `Eres experto en contenido viral para latinos en EE.UU. sobre taxes, LLC e ITIN. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.
 
 REGLAS ESTRICTAS DE LONGITUD DEL GUION:
@@ -131,7 +133,7 @@ JSON exacto (sin nada más):
   let raw: string
   try {
     raw = await callClaude({
-      model: 'claude-sonnet-4-6',
+      model: MODEL,
       system: datePrefix() + CLAUDE_SYS_BASE,
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 4000,

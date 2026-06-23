@@ -7,6 +7,8 @@ import { datePrefix } from '@/lib/ai-date'
 
 type Platform = 'tiktok' | 'youtube' | 'facebook'
 
+const MODEL = 'claude-haiku-4-5-20251001'
+
 const IRS_NEWS_SYS = `Eres experto en contenido para latinos en EE.UU. sobre impuestos e IRS. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 
 function buildPrompt(platform: Platform, title: string, summary: string): string {
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
   const prompt = buildPrompt(platform, news.title, news.summary)
 
   const raw = await callClaude({
-    model: 'claude-sonnet-4-6',
+    model: MODEL,
     system: datePrefix() + IRS_NEWS_SYS,
     messages: [{ role: 'user', content: prompt }],
     maxTokens: 1024,

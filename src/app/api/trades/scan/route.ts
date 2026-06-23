@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { callClaude } from '@/lib/ai'
 
+const MODEL = 'claude-haiku-4-5-20251001'
+
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
 const SYSTEM = `Eres un trader profesional y analista técnico experto. Puedes leer pantallazos de TradingView con precisión: identificas trades cerrados, lees precios de entrada/salida, calculas pips correctamente según el instrumento, y analizas el contexto técnico del gráfico (tendencia, estructura, niveles, patrones). Responde SOLO con JSON válido, sin markdown ni texto extra.`
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
   let raw: string
   try {
     raw = await callClaude({
-      model: 'claude-sonnet-4-6',
+      model: MODEL,
       system: SYSTEM,
       messages: [{
         role: 'user',
