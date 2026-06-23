@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import Anthropic from '@anthropic-ai/sdk'
+import { callClaude } from '@/lib/ai'
 import { writeFile, unlink, readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { randomUUID, createHash } from 'crypto'
@@ -32,10 +32,8 @@ async function cleanupExpired() {
 
 // ─── Claude ──────────────────────────────────────────────────
 async function generarMapa(tema: string, redSocial: string, duracion: string): Promise<any> {
-  const client = new Anthropic()
-  const msg = await client.messages.create({
+  const msg = await callClaude({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4000,
     system: datePrefix() + CLAUDE_SYS_BASE,
     messages: [{
       role: 'user',
@@ -79,9 +77,9 @@ JSON exacto (sin nada más):
 }
 Incluir las 5 ramas completas (r1–r5) con sus 3 hijos cada una. Colores hex vibrantes distintos por rama.`,
     }],
+    maxTokens: 4000,
   })
-  const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
-  const match = raw.match(/\{[\s\S]*\}/)
+  const match = msg.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('Claude no devolvió JSON válido')
   const parsed = JSON.parse(match[0])
   if (!parsed.centro || !Array.isArray(parsed.ramas)) throw new Error('JSON de Claude incompleto')

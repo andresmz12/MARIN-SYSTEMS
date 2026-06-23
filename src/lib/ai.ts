@@ -1,8 +1,8 @@
+import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { AI_BLOCK_TYPES } from './ceo'
 
 const AI_MODEL = 'claude-haiku-4-5-20251001'
 const AI_MODEL_SMART = 'claude-sonnet-4-6'
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
 // ──────────────────────── Shared helpers ────────────────────────
 
@@ -27,33 +27,58 @@ function str(v: unknown, fallback = ''): string {
   return typeof v === 'string' && v.trim() ? v.trim() : fallback
 }
 
-/** Call Anthropic Messages API, return the first text block. */
-async function callAI(
-  model: string,
-  prompt: string,
-  maxTokens: number,
-  extraHeaders: Record<string, string> = {},
-): Promise<string> {
+// ──────────────────────── Central AI caller ────────────────────────
+
+/**
+ * Central Anthropic SDK caller with exponential backoff retry on 429/529.
+ * All AI calls in this app route through here.
+ */
+export async function callClaude({
+  model,
+  system,
+  messages,
+  maxTokens,
+  webSearch = false,
+}: {
+  model: string
+  system?: string
+  messages: Anthropic.MessageParam[]
+  maxTokens: number
+  webSearch?: boolean
+}): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return ''
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      ...extraHeaders,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-  if (!res.ok) return ''
-  const data: unknown = await res.json()
-  const content = (data as { content?: { type: string; text?: string }[] }).content
-  return content?.find((c) => c.type === 'text')?.text ?? ''
+
+  const client = new Anthropic({ apiKey })
+  const params: Anthropic.MessageCreateParamsNonStreaming = {
+    model,
+    max_tokens: maxTokens,
+    messages,
+  }
+  if (system) params.system = system
+
+  const delays = [2000, 4000]
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const opts: Anthropic.RequestOptions = {}
+      if (webSearch) opts.headers = { 'anthropic-beta': 'web-search-2025-03-05' }
+      const msg = await client.messages.create(params, opts)
+      return msg.content.find((b) => b.type === 'text')?.text ?? ''
+    } catch (err) {
+      const status = err instanceof APIError ? (err.status ?? 0) : 0
+      if ((status === 429 || status === 529) && attempt < 2) {
+        await new Promise((r) => setTimeout(r, delays[attempt]))
+        continue
+      }
+      throw err
+    }
+  }
+  return ''
+}
+
+/** Internal helper: single-turn text call via callClaude. */
+async function callAI(model: string, prompt: string, maxTokens: number, webSearch = false): Promise<string> {
+  return callClaude({ model, messages: [{ role: 'user', content: prompt }], maxTokens, webSearch })
 }
 
 // ──────────────────────── Block content (plan generation) ────────────────────────
@@ -217,7 +242,7 @@ Basándote en tu conocimiento de mercados latinos y mejores prácticas de redes 
 
   try {
     // Try with web_search tool enabled (Sonnet), fall back to Haiku without web search.
-    const text = await callAI(AI_MODEL_SMART, prompt, 1000, { 'anthropic-beta': 'web-search-2025-03-05' })
+    const text = await callAI(AI_MODEL_SMART, prompt, 1000, true)
     if (text) return coerceBrandAnalysis(extractJson(text), input)
     const text2 = await callAI(AI_MODEL, prompt, 800)
     return coerceBrandAnalysis(extractJson(text2), input)
@@ -387,7 +412,7 @@ Responde ÚNICAMENTE con este JSON array de exactamente 5 objetos:
 ]`
 
   try {
-    const text = await callAI(AI_MODEL_SMART, prompt, 1200, { 'anthropic-beta': 'web-search-2025-03-05' })
+    const text = await callAI(AI_MODEL_SMART, prompt, 1200, true)
     if (text) {
       const angles = coerceAngles(extractJsonArray(text))
       if (angles.length > 0) return angles

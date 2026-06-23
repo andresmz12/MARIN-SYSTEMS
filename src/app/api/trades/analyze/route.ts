@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import Anthropic from '@anthropic-ai/sdk'
-
-const client = new Anthropic()
+import { callClaude } from '@/lib/ai'
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
@@ -21,13 +19,11 @@ export async function POST(req: Request) {
   const prompt = buildPrompt(stats)
 
   try {
-    const msg = await client.messages.create({
+    const text = await callClaude({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
+      maxTokens: 2048,
     })
-
-    const text = msg.content[0].type === 'text' ? msg.content[0].text : ''
     return NextResponse.json({ analysis: text })
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e)

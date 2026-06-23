@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import Anthropic from '@anthropic-ai/sdk'
+import { callClaude } from '@/lib/ai'
 import { prisma } from '@/lib/prisma'
 import { datePrefix } from '@/lib/ai-date'
 
@@ -53,8 +53,6 @@ export async function POST(req: NextRequest) {
     tema: string; redSocial: string; duracion: string
   }
   if (!tema) return NextResponse.json({ error: 'tema requerido' }, { status: 400 })
-
-  const client = new Anthropic()
 
   const prompt = `Genera mapa conceptual para video de ${duracion} sobre: "${tema}"
 Para: ${redSocial}
@@ -132,13 +130,12 @@ JSON exacto (sin nada más):
 
   let raw: string
   try {
-    const message = await client.messages.create({
+    raw = await callClaude({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
       system: datePrefix() + CLAUDE_SYS_BASE,
       messages: [{ role: 'user', content: prompt }],
+      maxTokens: 4000,
     })
-    raw = message.content[0].type === 'text' ? message.content[0].text : ''
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: `Error generando el mapa, intenta de nuevo. (${msg})` }, { status: 500 })

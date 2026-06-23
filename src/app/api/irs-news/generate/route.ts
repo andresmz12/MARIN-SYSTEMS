@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import Anthropic from '@anthropic-ai/sdk'
+import { callClaude } from '@/lib/ai'
 import { datePrefix } from '@/lib/ai-date'
 
 type Platform = 'tiktok' | 'youtube' | 'facebook'
 
-const client = new Anthropic()
 const IRS_NEWS_SYS = `Eres experto en contenido para latinos en EE.UU. sobre impuestos e IRS. Español latino conversacional. Responde SOLO JSON válido. Sin markdown. Sin texto extra.`
 
 function buildPrompt(platform: Platform, title: string, summary: string): string {
@@ -65,14 +64,12 @@ export async function POST(req: NextRequest) {
 
   const prompt = buildPrompt(platform, news.title, news.summary)
 
-  const message = await client.messages.create({
+  const raw = await callClaude({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
     system: datePrefix() + IRS_NEWS_SYS,
     messages: [{ role: 'user', content: prompt }],
+    maxTokens: 1024,
   })
-
-  const raw = message.content[0].type === 'text' ? message.content[0].text : ''
 
   let content: unknown
   try {

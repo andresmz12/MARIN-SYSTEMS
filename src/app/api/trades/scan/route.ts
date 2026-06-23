@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import Anthropic from '@anthropic-ai/sdk'
+import { callClaude } from '@/lib/ai'
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
@@ -73,10 +73,8 @@ export async function POST(req: NextRequest) {
 
   let raw: string
   try {
-    const client = new Anthropic()
-    const msg = await client.messages.create({
+    raw = await callClaude({
       model: 'claude-sonnet-4-6',
-      max_tokens: 512,
       system: SYSTEM,
       messages: [{
         role: 'user',
@@ -85,8 +83,8 @@ export async function POST(req: NextRequest) {
           { type: 'text', text: PROMPT },
         ],
       }],
+      maxTokens: 512,
     })
-    raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: `Error al analizar la imagen: ${msg}` }, { status: 500 })

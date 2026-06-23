@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import Anthropic from '@anthropic-ai/sdk'
+import { callClaude } from '@/lib/ai'
 import { datePrefix } from '@/lib/ai-date'
 
 const BROWSER_HEADERS = {
@@ -80,10 +80,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Generate Spanish summary with Claude
   let spanishSummary = ''
   try {
-    const client = new Anthropic()
-    const message = await client.messages.create({
+    spanishSummary = (await callClaude({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 500,
       system: datePrefix() + `Eres un maestro que explica noticias del IRS a personas que nunca han estudiado impuestos. Explica de forma TAN sencilla que hasta un niño de 5 años pudiera entenderla — sin tecnicismos, sin palabras raras, con ejemplos de la vida cotidiana. Responde SOLO con el resumen en español, sin introducción ni formato especial.`,
       messages: [{
         role: 'user',
@@ -98,8 +96,8 @@ Usa palabras de todos los días. Si hay que usar un término técnico, explícal
 Título de la noticia: ${article.title}
 Contenido: ${articleText}`,
       }],
-    })
-    spanishSummary = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+      maxTokens: 500,
+    })).trim()
   } catch {
     spanishSummary = `Noticia del IRS: ${article.title}. Visita el enlace original para más detalles.`
   }
