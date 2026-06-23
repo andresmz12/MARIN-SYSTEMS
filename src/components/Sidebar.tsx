@@ -77,6 +77,16 @@ const mainNavItems = [
     ),
   },
   {
+    href: '/finanzas',
+    label: 'Finanzas',
+    icon: (
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
     href: '/irs-news',
     label: 'IRS News',
     icon: (
@@ -298,12 +308,13 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {navLink('/agenda', 'Agenda', mainNavItems[3].icon)}
           {navLink('/journal', 'Journal', mainNavItems[4].icon)}
           {navLink('/metas', 'Metas', mainNavItems[5].icon)}
-          {navLink('/irs-news', 'IRS News', mainNavItems[6].icon)}
-          {navLink('/irs-video', 'IRS Video', mainNavItems[7].icon)}
-          {navLink('/content-creator', 'Content Creator', mainNavItems[8].icon)}
-          {navLink('/mis-mapas', 'Mis Mapas', mainNavItems[9].icon)}
-          {navLink('/command-center', 'Command Center', mainNavItems[10].icon)}
-          {navLink('/corporate-tasks', 'Corp. Tasks', mainNavItems[11].icon)}
+          {navLink('/finanzas', 'Finanzas', mainNavItems[6].icon)}
+          {navLink('/irs-news', 'IRS News', mainNavItems[7].icon)}
+          {navLink('/irs-video', 'IRS Video', mainNavItems[8].icon)}
+          {navLink('/content-creator', 'Content Creator', mainNavItems[9].icon)}
+          {navLink('/mis-mapas', 'Mis Mapas', mainNavItems[10].icon)}
+          {navLink('/command-center', 'Command Center', mainNavItems[11].icon)}
+          {navLink('/corporate-tasks', 'Corp. Tasks', mainNavItems[12].icon)}
         </nav>
 
         {/* Bottom */}

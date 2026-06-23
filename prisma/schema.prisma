@@ -34,6 +34,12 @@ model User {
   generatedPosts        GeneratedPost[]
   companyRevenues       CompanyRevenue[]
   contentCreatorHistory ContentCreatorHistory[]
+  financeAccounts      FinanceAccount[]
+  creditCards          CreditCard[]
+  debts                Debt[]
+  financeCategories    FinanceCategory[]
+  financeTransactions  FinanceTransaction[]
+  budgets              Budget[]
 }
 
 model Trade {
@@ -563,4 +569,104 @@ model TaskInstance {
   @@unique([corporateTaskId, scheduledDate])
   @@index([corporateTaskId])
   @@index([scheduledDate])
+}
+
+// ─── FINANZAS PERSONALES ───────────────────────────────────────
+
+model FinanceAccount {
+  id           String               @id @default(cuid())
+  userId       String
+  name         String
+  type         String               // banco|efectivo|ahorros
+  balance      Float                @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@index([userId])
+}
+
+model CreditCard {
+  id           String               @id @default(cuid())
+  userId       String
+  name         String
+  creditLimit  Float
+  usedAmount   Float                @default(0)
+  interestRate Float                @default(0)  // % mensual
+  cutoffDay    Int                              // día del mes de corte
+  paymentDay   Int                              // día del mes de pago
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@index([userId])
+}
+
+model Debt {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  originalAmount  Float
+  remainingAmount Float
+  interestRate    Float    @default(0)  // % MENSUAL
+  monthlyPayment  Float    @default(0)
+  startDate       DateTime
+  status          String   @default("active")  // active|paid_off
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model FinanceCategory {
+  id           String               @id @default(cuid())
+  userId       String
+  name         String
+  type         String               // income|expense
+  emoji        String               @default("💰")
+  createdAt    DateTime             @default(now())
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+  budgets      Budget[]
+
+  @@index([userId])
+}
+
+model FinanceTransaction {
+  id           String           @id @default(cuid())
+  userId       String
+  date         DateTime
+  amount       Float
+  type         String           // income|expense|transfer
+  categoryId   String?
+  accountId    String?
+  creditCardId String?
+  note         String?
+  isRecurring  Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     FinanceCategory? @relation(fields: [categoryId], references: [id])
+  account      FinanceAccount?  @relation(fields: [accountId], references: [id])
+  creditCard   CreditCard?      @relation(fields: [creditCardId], references: [id])
+
+  @@index([userId])
+  @@index([userId, date])
+}
+
+model Budget {
+  id            String          @id @default(cuid())
+  userId        String
+  categoryId    String
+  month         String          // formato "2026-06"
+  plannedAmount Float
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, month])
+  @@index([userId])
 }
