@@ -56,6 +56,8 @@ export async function POST(req: NextRequest) {
       tone: profile.tone,
       targetAudience: profile.targetAudience,
       contentPillars,
+      voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
+      forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
     })
 
     const post = await prisma.generatedPost.create({

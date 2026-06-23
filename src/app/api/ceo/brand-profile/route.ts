@@ -11,6 +11,8 @@ const Schema = z.object({
   targetAudience: z.string().min(1).max(500),
   contentPillars: z.array(z.string().max(80)).min(1).max(5),
   competitors: z.array(z.string().max(100)).max(5).default([]),
+  voiceSamples: z.array(z.string().max(1000)).max(3).default([]),
+  forbiddenWords: z.array(z.string().max(100)).max(50).default([]),
 })
 
 export async function POST(req: NextRequest) {
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
     }
-    const { companyId, tone, targetAudience, contentPillars, competitors } = parsed.data
+    const { companyId, tone, targetAudience, contentPillars, competitors, voiceSamples, forbiddenWords } = parsed.data
 
     const company = await prisma.cEOCompany.findFirst({ where: { id: companyId, userId } })
     if (!company) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
@@ -47,6 +49,8 @@ export async function POST(req: NextRequest) {
         competitors,
         bestDays: analysis.bestDays,
         bestHours: analysis.bestHours,
+        voiceSamples: voiceSamples.length > 0 ? voiceSamples : undefined,
+        forbiddenWords: forbiddenWords.length > 0 ? forbiddenWords : undefined,
       },
       create: {
         userId,
@@ -57,6 +61,8 @@ export async function POST(req: NextRequest) {
         competitors,
         bestDays: analysis.bestDays,
         bestHours: analysis.bestHours,
+        voiceSamples: voiceSamples.length > 0 ? voiceSamples : undefined,
+        forbiddenWords: forbiddenWords.length > 0 ? forbiddenWords : undefined,
       },
     })
 

@@ -81,7 +81,14 @@ export async function POST(req: NextRequest) {
     }
     const companyIds = companies.map((c) => c.id)
 
-    // 4. Ideas + carryover blocks for scoring (algorithm unchanged).
+    // 4. Brand profiles for voice/forbidden word injection.
+    const brandProfiles = await prisma.brandProfile.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { companyId: true, voiceSamples: true, forbiddenWords: true },
+    })
+    const profileByCompany = new Map(brandProfiles.map((p) => [p.companyId, p]))
+
+    // 5. Ideas + carryover blocks for scoring (algorithm unchanged).
     const ideas = await prisma.marketingIdea.findMany({
       where: { userId, companyId: { in: companyIds }, status: { in: ['idea', 'in_progress'] } },
       orderBy: { priority: 'desc' },
@@ -138,8 +145,9 @@ export async function POST(req: NextRequest) {
 
     // 7. AI-generate content for each company block-slot in parallel (graceful fallback inside).
     const contents = await Promise.all(
-      planned.map((p) =>
-        generateBlockContent({
+      planned.map((p) => {
+        const bp = profileByCompany.get(p.target.company.id)
+        return generateBlockContent({
           companyName: p.target.company.name,
           durationHours: p.durationHours,
           startTime: p.start,
@@ -147,8 +155,10 @@ export async function POST(req: NextRequest) {
           ideasInProgress: p.target.ideasInProgress.map((i) => i.title),
           ideasPending: p.target.ideasNew.map((i) => i.title),
           defaultBlockType: p.target.ideasInProgress.length > 0 || p.target.ideasNew.length > 0 ? 'marketing' : 'admin',
-        }),
-      ),
+          voiceSamples: Array.isArray(bp?.voiceSamples) ? (bp.voiceSamples as string[]) : undefined,
+          forbiddenWords: Array.isArray(bp?.forbiddenWords) ? (bp.forbiddenWords as string[]) : undefined,
+        })
+      }),
     )
 
     // 8. Build the fixed routine blocks (always present, immutable).

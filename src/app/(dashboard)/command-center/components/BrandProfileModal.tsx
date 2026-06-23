@@ -20,6 +20,9 @@ export function BrandProfileModal({ company, onClose }: Props) {
   const [pillarInput, setPillarInput] = useState('')
   const [competitors, setCompetitors] = useState<string[]>([])
   const [competitorInput, setCompetitorInput] = useState('')
+  const [voiceSamples, setVoiceSamples] = useState<string[]>([''])
+  const [forbiddenWords, setForbiddenWords] = useState<string[]>([])
+  const [forbiddenInput, setForbiddenInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [result, setResult] = useState<BrandProfile | null>(null)
@@ -34,6 +37,8 @@ export function BrandProfileModal({ company, onClose }: Props) {
           setAudience(data.targetAudience)
           setPillars(data.contentPillars ?? [])
           setCompetitors((data.competitors as string[]) ?? [])
+          setVoiceSamples(data.voiceSamples && data.voiceSamples.length > 0 ? data.voiceSamples : [''])
+          setForbiddenWords(data.forbiddenWords ?? [])
           setResult(data)
         }
       })
@@ -55,6 +60,26 @@ export function BrandProfileModal({ company, onClose }: Props) {
     setCompetitorInput('')
   }
 
+  function addForbiddenWord() {
+    const val = forbiddenInput.trim()
+    if (!val || forbiddenWords.includes(val)) return
+    setForbiddenWords((w) => [...w, val])
+    setForbiddenInput('')
+  }
+
+  function updateVoiceSample(index: number, value: string) {
+    setVoiceSamples((prev) => prev.map((s, i) => (i === index ? value : s)))
+  }
+
+  function addVoiceSample() {
+    if (voiceSamples.length >= 3) return
+    setVoiceSamples((prev) => [...prev, ''])
+  }
+
+  function removeVoiceSample(index: number) {
+    setVoiceSamples((prev) => prev.filter((_, i) => i !== index))
+  }
+
   async function analyze() {
     if (!audience.trim() || pillars.length === 0) {
       showToast('Completa el público y al menos un pilar de contenido', 'error')
@@ -63,10 +88,19 @@ export function BrandProfileModal({ company, onClose }: Props) {
     setLoading(true)
     setResult(null)
     try {
+      const cleanVoiceSamples = voiceSamples.map((s) => s.trim()).filter(Boolean)
       const res = await fetch('/api/ceo/brand-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: company.id, tone, targetAudience: audience, contentPillars: pillars, competitors }),
+        body: JSON.stringify({
+          companyId: company.id,
+          tone,
+          targetAudience: audience,
+          contentPillars: pillars,
+          competitors,
+          voiceSamples: cleanVoiceSamples,
+          forbiddenWords,
+        }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string }
@@ -180,6 +214,65 @@ export function BrandProfileModal({ company, onClose }: Props) {
                   <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-zinc-700/60 text-zinc-300 text-xs border border-zinc-600">
                     {c}
                     <button onClick={() => setCompetitors((prev) => prev.filter((x) => x !== c))} className="ml-0.5 hover:text-white">✕</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Voice samples */}
+            <div>
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide block mb-2">
+                Ejemplos de voz <span className="text-zinc-600">({voiceSamples.filter(Boolean).length}/3)</span>
+              </label>
+              <p className="text-xs text-zinc-600 mb-2">Pega 1-3 textos que hayas escrito tú. La IA imitará tu estilo.</p>
+              <div className="space-y-2">
+                {voiceSamples.map((sample, i) => (
+                  <div key={i} className="flex gap-2 items-start">
+                    <textarea
+                      value={sample}
+                      onChange={(e) => updateVoiceSample(i, e.target.value)}
+                      rows={2}
+                      maxLength={1000}
+                      placeholder={`Ejemplo ${i + 1}: escribe como hablarías a tus clientes…`}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 placeholder-zinc-600 resize-none"
+                    />
+                    {voiceSamples.length > 1 && (
+                      <button onClick={() => removeVoiceSample(i)} className="text-zinc-600 hover:text-zinc-400 mt-1 text-sm">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {voiceSamples.length < 3 && (
+                <button onClick={addVoiceSample} className="mt-2 text-xs text-indigo-400 hover:text-indigo-300">
+                  + Agregar otro ejemplo
+                </button>
+              )}
+            </div>
+
+            {/* Forbidden words */}
+            <div>
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide block mb-2">
+                Palabras prohibidas <span className="text-zinc-600">({forbiddenWords.length})</span>
+              </label>
+              <p className="text-xs text-zinc-600 mb-2">Palabras o frases que la IA NUNCA debe usar.</p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  value={forbiddenInput}
+                  onChange={(e) => setForbiddenInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addForbiddenWord() } }}
+                  placeholder="Ej: gratis, oferta, urgente"
+                  maxLength={100}
+                  className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500 placeholder-zinc-600"
+                />
+                <button onClick={addForbiddenWord} className="px-3 py-1.5 rounded-lg bg-zinc-700 text-zinc-300 text-sm hover:bg-zinc-600">
+                  Agregar
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {forbiddenWords.map((w) => (
+                  <span key={w} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 text-xs border border-red-500/30">
+                    {w}
+                    <button onClick={() => setForbiddenWords((prev) => prev.filter((x) => x !== w))} className="ml-0.5 hover:text-white">✕</button>
                   </span>
                 ))}
               </div>

@@ -6,6 +6,7 @@ on:
     - cron: "0 17 * * *"    # midday   — 12:00 PM Colombia
     - cron: "0 23 * * *"    # evening  — 6:00 PM Colombia
     - cron: "0 */6 * * *"   # generate — cada 6 horas
+    - cron: "0 13 * * 1"   # weekly-angles — lunes 8:00 AM Colombia (UTC-5)
   workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
 
 jobs:
@@ -64,3 +65,17 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}' \
             https://marin-systems-production.up.railway.app/api/corporate-tasks/cron/generate
+
+  weekly-angles:
+    name: Weekly Content Angles (Mon 8:00 AM COL)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 13 * * 1'
+    steps:
+      - name: POST /ceo/cron/weekly-angles
+        run: |
+          curl --fail -s -X POST \
+            --max-time 60 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/ceo/cron/weekly-angles

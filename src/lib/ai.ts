@@ -66,6 +66,8 @@ export interface BlockContentInput {
   ideasInProgress: string[]
   ideasPending: string[]
   defaultBlockType: string
+  voiceSamples?: string[]
+  forbiddenWords?: string[]
 }
 
 export interface BlockContent {
@@ -98,7 +100,15 @@ function coerceBlockContent(parsed: unknown, input: BlockContentInput): BlockCon
 
 export async function generateBlockContent(input: BlockContentInput): Promise<BlockContent> {
   if (!process.env.ANTHROPIC_API_KEY) return fallbackBlockContent(input)
-  const prompt = `Eres el asistente personal de un CEO colombiano que maneja 6 empresas.
+
+  const voiceLine = input.voiceSamples?.length
+    ? `\nEscribe imitando el tono de estos ejemplos del dueño:\n${input.voiceSamples.map((s, i) => `${i + 1}. "${s}"`).join('\n')}`
+    : ''
+  const forbiddenLine = input.forbiddenWords?.length
+    ? `\nNUNCA uses estas palabras ni frases: ${input.forbiddenWords.join(', ')}.`
+    : ''
+
+  const prompt = `Eres el asistente personal de un CEO colombiano que maneja 6 empresas.${voiceLine}${forbiddenLine}
 Genera el contenido para este bloque de trabajo:
 
 Empresa: ${input.companyName}
@@ -226,6 +236,8 @@ export interface ContentGenerationInput {
   tone: string
   targetAudience: string
   contentPillars: string[]
+  voiceSamples?: string[]
+  forbiddenWords?: string[]
 }
 
 export interface GeneratedContent {
@@ -268,7 +280,14 @@ function coerceContent(parsed: unknown, input: ContentGenerationInput): Generate
 export async function generateMarketingContent(input: ContentGenerationInput): Promise<GeneratedContent> {
   if (!process.env.ANTHROPIC_API_KEY) return fallbackContent(input)
 
-  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.
+  const voiceLine = input.voiceSamples?.length
+    ? `\nEscribe imitando el tono de estos ejemplos escritos por el dueño de la marca:\n${input.voiceSamples.map((s, i) => `${i + 1}. "${s}"`).join('\n')}`
+    : ''
+  const forbiddenLine = input.forbiddenWords?.length
+    ? `\nNUNCA uses estas palabras ni frases: ${input.forbiddenWords.join(', ')}.`
+    : ''
+
+  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}
 
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}
@@ -298,5 +317,84 @@ Responde ÚNICAMENTE con este JSON:
     return coerceContent(extractJson(text), input)
   } catch {
     return fallbackContent(input)
+  }
+}
+
+// ──────────────────────── Content angles generation ────────────────────────
+
+export interface ContentAnglesInput {
+  companyName: string
+  targetAudience: string
+  contentPillars: string[]
+  competitors: string[]
+}
+
+export interface ContentAngle {
+  angle: string
+  hook: string
+  sourceCompetitor: string | null
+}
+
+function extractJsonArray(text: string): unknown[] | null {
+  const start = text.indexOf('[')
+  if (start === -1) return null
+  let depth = 0
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '[') depth++
+    else if (text[i] === ']') {
+      depth--
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)) as unknown[] } catch { return null }
+      }
+    }
+  }
+  return null
+}
+
+function coerceAngles(parsed: unknown[] | null): ContentAngle[] {
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      angle: str(item.angle),
+      hook: str(item.hook),
+      sourceCompetitor: typeof item.sourceCompetitor === 'string' && item.sourceCompetitor.trim() ? item.sourceCompetitor.trim() : null,
+    }))
+    .filter((a) => a.angle && a.hook)
+    .slice(0, 5)
+}
+
+export async function generateContentAngles(input: ContentAnglesInput): Promise<ContentAngle[]> {
+  if (!process.env.ANTHROPIC_API_KEY) return []
+
+  const prompt = `Eres un estratega de contenido experto en negocios latinos en USA y Colombia.
+
+Analiza los siguientes competidores de la empresa "${input.companyName}" y genera 5 ángulos de contenido diferenciadores.
+
+Público objetivo: ${input.targetAudience}
+Pilares de contenido: ${input.contentPillars.join(', ') || 'no definidos'}
+Competidores: ${input.competitors.join(', ') || 'no especificados'}
+
+Para cada competidor (o en general si no hay competidores), identifica qué ángulo de contenido NO están explotando y que esta empresa podría aprovechar.
+
+Responde ÚNICAMENTE con este JSON array de exactamente 5 objetos:
+[
+  {
+    "angle": "descripción del ángulo de contenido (máximo 100 chars)",
+    "hook": "gancho concreto y específico para usar en el primer segundo del video/post (máximo 120 chars)",
+    "sourceCompetitor": "nombre del competidor del que se extrajo el insight, o null si es general"
+  }
+]`
+
+  try {
+    const text = await callAI(AI_MODEL_SMART, prompt, 1200, { 'anthropic-beta': 'web-search-2025-03-05' })
+    if (text) {
+      const angles = coerceAngles(extractJsonArray(text))
+      if (angles.length > 0) return angles
+    }
+    const text2 = await callAI(AI_MODEL, prompt, 1000)
+    return coerceAngles(extractJsonArray(text2))
+  } catch {
+    return []
   }
 }

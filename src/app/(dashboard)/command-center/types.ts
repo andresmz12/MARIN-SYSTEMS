@@ -98,11 +98,23 @@ export interface BrandProfile {
   competitors: string[] | null
   bestDays: string[] | null
   bestHours: Record<string, string> | null
+  voiceSamples: string[] | null
+  forbiddenWords: string[] | null
   createdAt: string
   updatedAt: string
   // Extra fields returned by the API after AI analysis
   competitorInsights?: string
   recommendedFrequency?: Record<string, number>
+}
+
+export interface ContentAngle {
+  id: string
+  companyId: string
+  angle: string
+  hook: string
+  sourceCompetitor: string | null
+  status: string
+  createdAt: string
 }
 
 export type PostPlatform = 'instagram' | 'tiktok' | 'email' | 'whatsapp'
