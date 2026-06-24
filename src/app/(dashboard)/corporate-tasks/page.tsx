@@ -129,7 +129,7 @@ export default function CorporateTasksPage() {
   }, [monthKey, selectedCompany, selectedStatus])
 
   useEffect(() => {
-    fetch('/api/companies').then((r) => r.json()).then(setCompanies).catch(() => {})
+    fetch('/api/companies').then((r) => r.json()).then((data) => setCompanies(Array.isArray(data) ? data : [])).catch(() => {})
   }, [])
 
   useEffect(() => { loadTasks() }, [loadTasks])
