@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
   const userId = session.user.id
 
+  try {
   const [transactions, accounts, cards, debts] = await Promise.all([
     prisma.financeTransaction.findMany({
       where: { userId, date: { gte: start, lt: end } },
@@ -68,4 +69,8 @@ export async function GET(req: NextRequest) {
     totalDebtRemaining,
     byCategory: Object.values(byCategory).sort((a, b) => b.amount - a.amount),
   })
+  } catch (err) {
+    console.error('[finance/summary]', err)
+    return NextResponse.json({ error: 'Error al obtener resumen' }, { status: 500 })
+  }
 }

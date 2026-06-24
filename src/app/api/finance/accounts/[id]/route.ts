@@ -15,20 +15,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const parsed = Schema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
-  const account = await prisma.financeAccount.updateMany({
-    where: { id: params.id, userId: session.user.id },
-    data: parsed.data,
-  })
-  if (account.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ ok: true })
+  try {
+    const result = await prisma.financeAccount.updateMany({
+      where: { id: params.id, userId: session.user.id },
+      data: parsed.data,
+    })
+    if (result.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[finance/accounts PUT]', err)
+    return NextResponse.json({ error: 'Error al actualizar cuenta' }, { status: 500 })
+  }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const result = await prisma.financeAccount.deleteMany({
-    where: { id: params.id, userId: session.user.id },
-  })
-  if (result.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ ok: true })
+  try {
+    const result = await prisma.financeAccount.deleteMany({
+      where: { id: params.id, userId: session.user.id },
+    })
+    if (result.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[finance/accounts DELETE]', err)
+    return NextResponse.json({ error: 'Error al eliminar cuenta' }, { status: 500 })
+  }
 }

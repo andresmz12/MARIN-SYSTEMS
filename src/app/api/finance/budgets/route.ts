@@ -19,12 +19,17 @@ export async function GET(req: NextRequest) {
   const where: any = { userId: session.user.id }
   if (month) where.month = month
 
-  const budgets = await prisma.budget.findMany({
-    where,
-    include: { category: true },
-    orderBy: { category: { name: 'asc' } },
-  })
-  return NextResponse.json(budgets)
+  try {
+    const budgets = await prisma.budget.findMany({
+      where,
+      include: { category: true },
+      orderBy: { category: { name: 'asc' } },
+    })
+    return NextResponse.json(budgets)
+  } catch (err) {
+    console.error('[finance/budgets GET]', err)
+    return NextResponse.json({ error: 'Error al obtener presupuestos' }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -33,15 +38,20 @@ export async function POST(req: NextRequest) {
   const parsed = Schema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
 
-  const budget = await prisma.budget.upsert({
-    where: {
-      categoryId_month: {
-        categoryId: parsed.data.categoryId,
-        month: parsed.data.month,
+  try {
+    const budget = await prisma.budget.upsert({
+      where: {
+        categoryId_month: {
+          categoryId: parsed.data.categoryId,
+          month: parsed.data.month,
+        },
       },
-    },
-    update: { plannedAmount: parsed.data.plannedAmount },
-    create: { userId: session.user.id, ...parsed.data },
-  })
-  return NextResponse.json(budget, { status: 201 })
+      update: { plannedAmount: parsed.data.plannedAmount },
+      create: { userId: session.user.id, ...parsed.data },
+    })
+    return NextResponse.json(budget, { status: 201 })
+  } catch (err) {
+    console.error('[finance/budgets POST]', err)
+    return NextResponse.json({ error: 'Error al guardar presupuesto' }, { status: 500 })
+  }
 }

@@ -32,50 +32,54 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const newAccountId = accountId !== undefined ? accountId : existing.accountId
   const newCreditCardId = creditCardId !== undefined ? creditCardId : existing.creditCardId
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await prisma.$transaction(async (tx: any) => {
-    // Reverse old balance effect
-    if (existing.accountId) {
-      await tx.financeAccount.updateMany({
-        where: { id: existing.accountId, userId: session.user.id },
-        data: { balance: { increment: existing.type === 'income' ? -existing.amount : existing.amount } },
-      })
-    }
-    if (existing.creditCardId && existing.type === 'expense') {
-      await tx.creditCard.updateMany({
-        where: { id: existing.creditCardId, userId: session.user.id },
-        data: { usedAmount: { decrement: existing.amount } },
-      })
-    }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await prisma.$transaction(async (tx: any) => {
+      // Reverse old balance effect
+      if (existing.accountId) {
+        await tx.financeAccount.updateMany({
+          where: { id: existing.accountId, userId: session.user.id },
+          data: { balance: { increment: existing.type === 'income' ? -existing.amount : existing.amount } },
+        })
+      }
+      if (existing.creditCardId && existing.type === 'expense') {
+        await tx.creditCard.updateMany({
+          where: { id: existing.creditCardId, userId: session.user.id },
+          data: { usedAmount: { decrement: existing.amount } },
+        })
+      }
 
-    // Apply new balance effect
-    if (newAccountId) {
-      await tx.financeAccount.updateMany({
-        where: { id: newAccountId, userId: session.user.id },
-        data: { balance: { increment: newType === 'income' ? newAmount : -newAmount } },
-      })
-    }
-    if (newCreditCardId && newType === 'expense') {
-      await tx.creditCard.updateMany({
-        where: { id: newCreditCardId, userId: session.user.id },
-        data: { usedAmount: { increment: newAmount } },
-      })
-    }
+      // Apply new balance effect
+      if (newAccountId) {
+        await tx.financeAccount.updateMany({
+          where: { id: newAccountId, userId: session.user.id },
+          data: { balance: { increment: newType === 'income' ? newAmount : -newAmount } },
+        })
+      }
+      if (newCreditCardId && newType === 'expense') {
+        await tx.creditCard.updateMany({
+          where: { id: newCreditCardId, userId: session.user.id },
+          data: { usedAmount: { increment: newAmount } },
+        })
+      }
 
-    await tx.financeTransaction.update({
-      where: { id: params.id },
-      data: {
-        ...(date ? { date: new Date(date) } : {}),
-        amount: newAmount,
-        type: newType,
-        accountId: newAccountId,
-        creditCardId: newCreditCardId,
-        ...rest,
-      },
+      await tx.financeTransaction.update({
+        where: { id: params.id },
+        data: {
+          ...(date ? { date: new Date(date) } : {}),
+          amount: newAmount,
+          type: newType,
+          accountId: newAccountId,
+          creditCardId: newCreditCardId,
+          ...rest,
+        },
+      })
     })
-  })
-
-  return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[finance/transactions PUT]', err)
+    return NextResponse.json({ error: 'Error al actualizar transacción' }, { status: 500 })
+  }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -87,23 +91,26 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await prisma.$transaction(async (tx: any) => {
-    // Reverse balance effect
-    if (existing.accountId) {
-      await tx.financeAccount.updateMany({
-        where: { id: existing.accountId, userId: session.user.id },
-        data: { balance: { increment: existing.type === 'income' ? -existing.amount : existing.amount } },
-      })
-    }
-    if (existing.creditCardId && existing.type === 'expense') {
-      await tx.creditCard.updateMany({
-        where: { id: existing.creditCardId, userId: session.user.id },
-        data: { usedAmount: { decrement: existing.amount } },
-      })
-    }
-    await tx.financeTransaction.delete({ where: { id: params.id } })
-  })
-
-  return NextResponse.json({ ok: true })
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await prisma.$transaction(async (tx: any) => {
+      if (existing.accountId) {
+        await tx.financeAccount.updateMany({
+          where: { id: existing.accountId, userId: session.user.id },
+          data: { balance: { increment: existing.type === 'income' ? -existing.amount : existing.amount } },
+        })
+      }
+      if (existing.creditCardId && existing.type === 'expense') {
+        await tx.creditCard.updateMany({
+          where: { id: existing.creditCardId, userId: session.user.id },
+          data: { usedAmount: { decrement: existing.amount } },
+        })
+      }
+      await tx.financeTransaction.delete({ where: { id: params.id } })
+    })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[finance/transactions DELETE]', err)
+    return NextResponse.json({ error: 'Error al eliminar transacción' }, { status: 500 })
+  }
 }

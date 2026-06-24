@@ -13,11 +13,16 @@ const Schema = z.object({
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const categories = await prisma.financeCategory.findMany({
-    where: { userId: session.user.id },
-    orderBy: [{ type: 'asc' }, { name: 'asc' }],
-  })
-  return NextResponse.json(categories)
+  try {
+    const categories = await prisma.financeCategory.findMany({
+      where: { userId: session.user.id },
+      orderBy: [{ type: 'asc' }, { name: 'asc' }],
+    })
+    return NextResponse.json(categories)
+  } catch (err) {
+    console.error('[finance/categories GET]', err)
+    return NextResponse.json({ error: 'Error al obtener categorías' }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -25,8 +30,13 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const parsed = Schema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
-  const category = await prisma.financeCategory.create({
-    data: { userId: session.user.id, ...parsed.data },
-  })
-  return NextResponse.json(category, { status: 201 })
+  try {
+    const category = await prisma.financeCategory.create({
+      data: { userId: session.user.id, ...parsed.data },
+    })
+    return NextResponse.json(category, { status: 201 })
+  } catch (err) {
+    console.error('[finance/categories POST]', err)
+    return NextResponse.json({ error: 'Error al crear categoría' }, { status: 500 })
+  }
 }

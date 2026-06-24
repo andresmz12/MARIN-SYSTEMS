@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const month = searchParams.get('month') // e.g. "2026-06"
+  const month = searchParams.get('month')
   const categoryId = searchParams.get('categoryId')
   const type = searchParams.get('type') as 'income' | 'expense' | null
 
@@ -36,12 +36,17 @@ export async function GET(req: NextRequest) {
   if (categoryId) where.categoryId = categoryId
   if (type) where.type = type
 
-  const transactions = await prisma.financeTransaction.findMany({
-    where,
-    include: { category: true },
-    orderBy: { date: 'desc' },
-  })
-  return NextResponse.json(transactions)
+  try {
+    const transactions = await prisma.financeTransaction.findMany({
+      where,
+      include: { category: true },
+      orderBy: { date: 'desc' },
+    })
+    return NextResponse.json(transactions)
+  } catch (err) {
+    console.error('[finance/transactions GET]', err)
+    return NextResponse.json({ error: 'Error al obtener transacciones' }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -52,36 +57,40 @@ export async function POST(req: NextRequest) {
 
   const { date, accountId, creditCardId, amount, type, ...rest } = parsed.data
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const transaction = await prisma.$transaction(async (tx: any) => {
-    const t = await tx.financeTransaction.create({
-      data: {
-        userId: session.user.id,
-        date: new Date(date),
-        amount,
-        type,
-        accountId: accountId ?? null,
-        creditCardId: creditCardId ?? null,
-        ...rest,
-      },
+  try {
+    const transaction = await prisma.$transaction(async (tx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const t = await tx.financeTransaction.create({
+        data: {
+          userId: session.user.id,
+          date: new Date(date),
+          amount,
+          type,
+          accountId: accountId ?? null,
+          creditCardId: creditCardId ?? null,
+          ...rest,
+        },
+      })
+
+      if (accountId) {
+        await tx.financeAccount.updateMany({
+          where: { id: accountId, userId: session.user.id },
+          data: { balance: { increment: type === 'income' ? amount : -amount } },
+        })
+      }
+
+      if (creditCardId && type === 'expense') {
+        await tx.creditCard.updateMany({
+          where: { id: creditCardId, userId: session.user.id },
+          data: { usedAmount: { increment: amount } },
+        })
+      }
+
+      return t
     })
 
-    if (accountId) {
-      await tx.financeAccount.updateMany({
-        where: { id: accountId, userId: session.user.id },
-        data: { balance: { increment: type === 'income' ? amount : -amount } },
-      })
-    }
-
-    if (creditCardId && type === 'expense') {
-      await tx.creditCard.updateMany({
-        where: { id: creditCardId, userId: session.user.id },
-        data: { usedAmount: { increment: amount } },
-      })
-    }
-
-    return t
-  })
-
-  return NextResponse.json(transaction, { status: 201 })
+    return NextResponse.json(transaction, { status: 201 })
+  } catch (err) {
+    console.error('[finance/transactions POST]', err)
+    return NextResponse.json({ error: 'Error al registrar transacción' }, { status: 500 })
+  }
 }

@@ -592,13 +592,21 @@ function BudgetTab({ month }: { month: string }) {
 // ─── Summary tab ──────────────────────────────────────────────────────────────
 function SummaryTab({ month }: { month: string }) {
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
+    setError(false)
+    setSummary(null)
     fetch(`/api/finance/summary?month=${month}`)
       .then(r => r.json())
-      .then(setSummary)
+      .then(data => {
+        if (data && Array.isArray(data.byCategory)) setSummary(data)
+        else setError(true)
+      })
+      .catch(() => setError(true))
   }, [month])
 
+  if (error) return <p className="text-gray-500 text-sm">No se pudo cargar el resumen. Intenta recargar la página.</p>
   if (!summary) return <p className="text-gray-500 text-sm">Cargando resumen…</p>
 
   return (

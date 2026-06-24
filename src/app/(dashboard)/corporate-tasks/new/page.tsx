@@ -48,7 +48,7 @@ export default function NewCorporateTaskPage() {
   })
 
   useEffect(() => {
-    fetch('/api/companies').then((r) => r.json()).then(setCompanies).catch(() => showToast('Error al cargar empresas', 'error'))
+    fetch('/api/companies').then((r) => r.json()).then((data) => setCompanies(Array.isArray(data) ? data : [])).catch(() => showToast('Error al cargar empresas', 'error'))
   }, [])
 
   function set<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
