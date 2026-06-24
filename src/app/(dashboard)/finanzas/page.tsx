@@ -31,6 +31,8 @@ interface FinanceTransaction {
   id: string; date: string; amount: number; type: string
   note: string | null; isRecurring: boolean
   category?: FinanceCategory | null
+  account?: FinanceAccount | null
+  creditCard?: CreditCard | null
 }
 interface Summary {
   month: string; totalIncome: number; totalExpenses: number; netBalance: number
@@ -51,7 +53,7 @@ type Tab = typeof TABS[number]
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-xl w-full max-w-md p-6">
+      <div className="bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-white">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
@@ -78,6 +80,7 @@ const btnPrimary = 'w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-wh
 function AccountsTab() {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<FinanceAccount | null>(null)
   const [form, setForm] = useState({ name: '', type: 'banco', balance: '' })
   const [saving, setSaving] = useState(false)
 
@@ -88,15 +91,34 @@ function AccountsTab() {
 
   useEffect(() => { load() }, [load])
 
+  function openNew() {
+    setEditing(null)
+    setForm({ name: '', type: 'banco', balance: '' })
+    setShowForm(true)
+  }
+
+  function openEdit(a: FinanceAccount) {
+    setEditing(a)
+    setForm({ name: a.name, type: a.type, balance: String(a.balance) })
+    setShowForm(true)
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await fetch('/api/finance/accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, balance: Number(form.balance) || 0 }),
-    })
-    setForm({ name: '', type: 'banco', balance: '' })
+    if (editing) {
+      await fetch(`/api/finance/accounts/${editing.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name, type: form.type, balance: Number(form.balance) || 0 }),
+      })
+    } else {
+      await fetch('/api/finance/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name, type: form.type, balance: Number(form.balance) || 0 }),
+      })
+    }
     setShowForm(false)
     setSaving(false)
     load()
@@ -117,7 +139,7 @@ function AccountsTab() {
           <p className="text-sm text-gray-400">Balance total</p>
           <p className="text-2xl font-bold text-white">{fmt(totalBalance)}</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={openNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
           + Cuenta
         </button>
       </div>
@@ -131,6 +153,7 @@ function AccountsTab() {
             </div>
             <div className="flex items-center gap-4">
               <p className={`font-semibold ${a.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(a.balance)}</p>
+              <button onClick={() => openEdit(a)} className="text-gray-500 hover:text-blue-400 text-xs transition-colors">Editar</button>
               <button onClick={() => del(a.id)} className="text-gray-600 hover:text-red-400 text-xs transition-colors">Eliminar</button>
             </div>
           </div>
@@ -139,7 +162,7 @@ function AccountsTab() {
       </div>
 
       {showForm && (
-        <Modal title="Nueva cuenta" onClose={() => setShowForm(false)}>
+        <Modal title={editing ? 'Editar cuenta' : 'Nueva cuenta'} onClose={() => setShowForm(false)}>
           <form onSubmit={submit} className="space-y-3">
             <Field label="Nombre"><input className={inputCls} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></Field>
             <Field label="Tipo">
@@ -149,8 +172,8 @@ function AccountsTab() {
                 <option value="ahorros">Ahorros</option>
               </select>
             </Field>
-            <Field label="Saldo inicial (COP)"><input className={inputCls} type="number" value={form.balance} onChange={e => setForm(f => ({ ...f, balance: e.target.value }))} /></Field>
-            <button type="submit" disabled={saving} className={btnPrimary}>{saving ? 'Guardando…' : 'Crear cuenta'}</button>
+            <Field label="Saldo (COP)"><input className={inputCls} type="number" value={form.balance} onChange={e => setForm(f => ({ ...f, balance: e.target.value }))} /></Field>
+            <button type="submit" disabled={saving} className={btnPrimary}>{saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear cuenta'}</button>
           </form>
         </Modal>
       )}
@@ -161,34 +184,92 @@ function AccountsTab() {
 // ─── Cards tab ───────────────────────────────────────────────────────────────
 function CardsTab() {
   const [cards, setCards] = useState<CreditCard[]>([])
+  const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<CreditCard | null>(null)
+  const [payingCard, setPayingCard] = useState<CreditCard | null>(null)
   const [form, setForm] = useState({ name: '', creditLimit: '', usedAmount: '', interestRate: '', cutoffDay: '', paymentDay: '' })
+  const [payForm, setPayForm] = useState({ amount: '', accountId: '' })
   const [saving, setSaving] = useState(false)
+  const [paying, setPaying] = useState(false)
 
   const load = useCallback(async () => {
-    const r = await fetch('/api/finance/cards')
-    if (r.ok) setCards(await r.json())
+    const [c, a] = await Promise.all([
+      fetch('/api/finance/cards').then(r => r.json()),
+      fetch('/api/finance/accounts').then(r => r.json()),
+    ])
+    setCards(Array.isArray(c) ? c : [])
+    setAccounts(Array.isArray(a) ? a : [])
   }, [])
 
   useEffect(() => { load() }, [load])
 
+  function openNew() {
+    setEditing(null)
+    setForm({ name: '', creditLimit: '', usedAmount: '', interestRate: '', cutoffDay: '', paymentDay: '' })
+    setShowForm(true)
+  }
+
+  function openEdit(c: CreditCard) {
+    setEditing(c)
+    setForm({
+      name: c.name,
+      creditLimit: String(c.creditLimit),
+      usedAmount: String(c.usedAmount),
+      interestRate: String(c.interestRate),
+      cutoffDay: String(c.cutoffDay),
+      paymentDay: String(c.paymentDay),
+    })
+    setShowForm(true)
+  }
+
+  function openPay(c: CreditCard) {
+    setPayingCard(c)
+    setPayForm({ amount: '', accountId: '' })
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await fetch('/api/finance/cards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: form.name,
-        creditLimit: Number(form.creditLimit),
-        usedAmount: Number(form.usedAmount) || 0,
-        interestRate: Number(form.interestRate) || 0,
-        cutoffDay: Number(form.cutoffDay),
-        paymentDay: Number(form.paymentDay),
-      }),
-    })
+    const body = {
+      name: form.name,
+      creditLimit: Number(form.creditLimit),
+      usedAmount: Number(form.usedAmount) || 0,
+      interestRate: Number(form.interestRate) || 0,
+      cutoffDay: Number(form.cutoffDay),
+      paymentDay: Number(form.paymentDay),
+    }
+    if (editing) {
+      await fetch(`/api/finance/cards/${editing.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } else {
+      await fetch('/api/finance/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    }
     setShowForm(false)
     setSaving(false)
+    load()
+  }
+
+  async function submitPayment(e: React.FormEvent) {
+    e.preventDefault()
+    if (!payingCard) return
+    setPaying(true)
+    const body: Record<string, unknown> = { amount: Number(payForm.amount) }
+    if (payForm.accountId) body.accountId = payForm.accountId
+    await fetch(`/api/finance/cards/${payingCard.id}/payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    setPayingCard(null)
+    setPaying(false)
     load()
   }
 
@@ -201,7 +282,7 @@ function CardsTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={openNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
           + Tarjeta
         </button>
       </div>
@@ -209,18 +290,33 @@ function CardsTab() {
       <div className="grid gap-3">
         {cards.map(c => {
           const pct = c.creditLimit > 0 ? (c.usedAmount / c.creditLimit) * 100 : 0
+          const available = c.creditLimit - c.usedAmount
           return (
             <div key={c.id} className="bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-xl p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <p className="font-medium text-white">{c.name}</p>
-                  <p className="text-xs text-gray-500">Corte día {c.cutoffDay} · Pago día {c.paymentDay}</p>
+                  <p className="font-medium text-white">💳 {c.name}</p>
+                  <p className="text-xs text-gray-500">Corte día {c.cutoffDay} · Pago día {c.paymentDay} · Interés {c.interestRate}%</p>
                 </div>
-                <button onClick={() => del(c.id)} className="text-gray-600 hover:text-red-400 text-xs transition-colors">Eliminar</button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => openPay(c)} className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors font-medium">Pagar</button>
+                  <button onClick={() => openEdit(c)} className="text-xs text-gray-500 hover:text-blue-400 transition-colors">Editar</button>
+                  <button onClick={() => del(c.id)} className="text-xs text-gray-600 hover:text-red-400 transition-colors">Eliminar</button>
+                </div>
               </div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-400">Usado: <span className="text-white">{fmt(c.usedAmount)}</span></span>
-                <span className="text-gray-400">Límite: <span className="text-white">{fmt(c.creditLimit)}</span></span>
+              <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                <div>
+                  <p className="text-xs text-gray-500">Usado</p>
+                  <p className="text-red-400 font-semibold">{fmt(c.usedAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Disponible</p>
+                  <p className="text-emerald-400 font-semibold">{fmt(available)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Límite</p>
+                  <p className="text-white font-semibold">{fmt(c.creditLimit)}</p>
+                </div>
               </div>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
@@ -235,18 +331,52 @@ function CardsTab() {
         {cards.length === 0 && <p className="text-gray-500 text-sm">No hay tarjetas todavía.</p>}
       </div>
 
+      {/* Add / Edit card modal */}
       {showForm && (
-        <Modal title="Nueva tarjeta" onClose={() => setShowForm(false)}>
+        <Modal title={editing ? 'Editar tarjeta' : 'Nueva tarjeta'} onClose={() => setShowForm(false)}>
           <form onSubmit={submit} className="space-y-3">
             <Field label="Nombre"><input className={inputCls} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></Field>
             <Field label="Límite (COP)"><input className={inputCls} type="number" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} required /></Field>
             <Field label="Saldo utilizado actual (COP)"><input className={inputCls} type="number" value={form.usedAmount} onChange={e => setForm(f => ({ ...f, usedAmount: e.target.value }))} /></Field>
-            <Field label="Tasa de interés (%)"><input className={inputCls} type="number" step="0.01" value={form.interestRate} onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))} /></Field>
+            <Field label="Tasa de interés (% mensual)"><input className={inputCls} type="number" step="0.01" value={form.interestRate} onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))} /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Día de corte"><input className={inputCls} type="number" min="1" max="31" value={form.cutoffDay} onChange={e => setForm(f => ({ ...f, cutoffDay: e.target.value }))} required /></Field>
               <Field label="Día de pago"><input className={inputCls} type="number" min="1" max="31" value={form.paymentDay} onChange={e => setForm(f => ({ ...f, paymentDay: e.target.value }))} required /></Field>
             </div>
-            <button type="submit" disabled={saving} className={btnPrimary}>{saving ? 'Guardando…' : 'Crear tarjeta'}</button>
+            <button type="submit" disabled={saving} className={btnPrimary}>{saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear tarjeta'}</button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Payment modal */}
+      {payingCard && (
+        <Modal title={`Pagar tarjeta — ${payingCard.name}`} onClose={() => setPayingCard(null)}>
+          <div className="mb-4 p-3 bg-[var(--bg-input)] rounded-lg">
+            <p className="text-xs text-gray-400">Saldo actual</p>
+            <p className="text-xl font-bold text-red-400">{fmt(payingCard.usedAmount)}</p>
+          </div>
+          <form onSubmit={submitPayment} className="space-y-3">
+            <Field label="Monto del pago (COP)">
+              <input
+                className={inputCls}
+                type="number"
+                min="1"
+                max={payingCard.usedAmount}
+                value={payForm.amount}
+                onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder={`Máx. ${fmt(payingCard.usedAmount)}`}
+                required
+              />
+            </Field>
+            <Field label="Descontar de cuenta (opcional)">
+              <select className={inputCls} value={payForm.accountId} onChange={e => setPayForm(f => ({ ...f, accountId: e.target.value }))}>
+                <option value="">No descontar de cuenta</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name} — {fmt(a.balance)}</option>)}
+              </select>
+            </Field>
+            <button type="submit" disabled={paying} className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors">
+              {paying ? 'Registrando…' : 'Registrar pago'}
+            </button>
           </form>
         </Modal>
       )}
@@ -297,6 +427,12 @@ function DebtsTab() {
     load()
   }
 
+  async function del(id: string) {
+    if (!confirm('¿Eliminar deuda?')) return
+    await fetch(`/api/finance/debts/${id}`, { method: 'DELETE' })
+    load()
+  }
+
   const activeDebts = debts.filter(d => d.status === 'active')
   const totalRemaining = activeDebts.reduce((s, d) => s + d.remainingAmount, 0)
 
@@ -322,9 +458,12 @@ function DebtsTab() {
                   <p className="font-medium text-white">{d.name} {d.status === 'paid' && <span className="text-xs text-emerald-400 ml-1">✓ Pagada</span>}</p>
                   <p className="text-xs text-gray-500">{d.interestRate}% EA · Cuota {fmt(d.monthlyPayment)}/mes</p>
                 </div>
-                {d.status === 'active' && (
-                  <button onClick={() => markPaid(d.id)} className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors">Marcar pagada</button>
-                )}
+                <div className="flex items-center gap-3">
+                  {d.status === 'active' && (
+                    <button onClick={() => markPaid(d.id)} className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors">Marcar pagada</button>
+                  )}
+                  <button onClick={() => del(d.id)} className="text-xs text-gray-600 hover:text-red-400 transition-colors">Eliminar</button>
+                </div>
               </div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-400">Restante: <span className="text-red-400">{fmt(d.remainingAmount)}</span></span>
@@ -366,8 +505,10 @@ function TransactionsTab({ month }: { month: string }) {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [cards, setCards] = useState<CreditCard[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
+
+  const emptyForm = {
     date: new Date().toISOString().slice(0, 10),
     amount: '',
     type: 'expense',
@@ -376,7 +517,8 @@ function TransactionsTab({ month }: { month: string }) {
     creditCardId: '',
     note: '',
     isRecurring: false,
-  })
+  }
+  const [form, setForm] = useState(emptyForm)
 
   const load = useCallback(async () => {
     const [tr, cat, acc, crd] = await Promise.all([
@@ -393,6 +535,27 @@ function TransactionsTab({ month }: { month: string }) {
 
   useEffect(() => { load() }, [load])
 
+  function openNew() {
+    setEditingTx(null)
+    setForm(emptyForm)
+    setShowForm(true)
+  }
+
+  function openEdit(t: FinanceTransaction) {
+    setEditingTx(t)
+    setForm({
+      date: t.date.slice(0, 10),
+      amount: String(t.amount),
+      type: t.type,
+      categoryId: t.category?.id ?? '',
+      accountId: t.account?.id ?? '',
+      creditCardId: t.creditCard?.id ?? '',
+      note: t.note ?? '',
+      isRecurring: t.isRecurring,
+    })
+    setShowForm(true)
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -401,16 +564,24 @@ function TransactionsTab({ month }: { month: string }) {
       amount: Number(form.amount),
       type: form.type,
       isRecurring: form.isRecurring,
+      categoryId: form.categoryId || null,
+      accountId: form.accountId || null,
+      creditCardId: form.type === 'expense' ? (form.creditCardId || null) : null,
+      note: form.note || null,
     }
-    if (form.categoryId) body.categoryId = form.categoryId
-    if (form.accountId) body.accountId = form.accountId
-    if (form.creditCardId) body.creditCardId = form.creditCardId
-    if (form.note) body.note = form.note
-    await fetch('/api/finance/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    if (editingTx) {
+      await fetch(`/api/finance/transactions/${editingTx.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } else {
+      await fetch('/api/finance/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    }
     setShowForm(false)
     setSaving(false)
     load()
@@ -425,7 +596,7 @@ function TransactionsTab({ month }: { month: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={openNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
           + Transacción
         </button>
       </div>
@@ -436,12 +607,18 @@ function TransactionsTab({ month }: { month: string }) {
             <span className="text-xl">{t.category?.emoji ?? '📦'}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-white truncate">{t.note ?? t.category?.name ?? 'Sin categoría'}</p>
-              <p className="text-xs text-gray-500">{new Date(t.date).toLocaleDateString('es-CO')} · {t.category?.name}</p>
+              <p className="text-xs text-gray-500">
+                {new Date(t.date).toLocaleDateString('es-CO')}
+                {t.category && ` · ${t.category.name}`}
+                {t.creditCard && <span className="text-amber-500"> · 💳 {t.creditCard.name}</span>}
+                {t.account && <span className="text-blue-400"> · 🏦 {t.account.name}</span>}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <p className={`font-semibold text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
                 {t.type === 'income' ? '+' : '-'}{fmt(t.amount)}
               </p>
+              <button onClick={() => openEdit(t)} className="text-gray-600 hover:text-blue-400 text-xs transition-colors">✏</button>
               <button onClick={() => del(t.id)} className="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
             </div>
           </div>
@@ -450,11 +627,11 @@ function TransactionsTab({ month }: { month: string }) {
       </div>
 
       {showForm && (
-        <Modal title="Nueva transacción" onClose={() => setShowForm(false)}>
+        <Modal title={editingTx ? 'Editar transacción' : 'Nueva transacción'} onClose={() => setShowForm(false)}>
           <form onSubmit={submit} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Tipo">
-                <select className={inputCls} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                <select className={inputCls} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, creditCardId: '' }))}>
                   <option value="expense">Gasto</option>
                   <option value="income">Ingreso</option>
                 </select>
@@ -470,26 +647,26 @@ function TransactionsTab({ month }: { month: string }) {
                 ))}
               </select>
             </Field>
-            <Field label="Cuenta">
-              <select className={inputCls} value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value, creditCardId: '' }))}>
-                <option value="">Sin cuenta</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </Field>
             {form.type === 'expense' && (
-              <Field label="Tarjeta de crédito">
-                <select className={inputCls} value={form.creditCardId} onChange={e => setForm(f => ({ ...f, creditCardId: e.target.value, accountId: '' }))}>
-                  <option value="">Sin tarjeta</option>
+              <Field label="💳 Tarjeta de crédito">
+                <select className={inputCls} value={form.creditCardId} onChange={e => setForm(f => ({ ...f, creditCardId: e.target.value, accountId: e.target.value ? '' : f.accountId }))}>
+                  <option value="">No usar tarjeta</option>
                   {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
             )}
+            <Field label={form.type === 'expense' && form.creditCardId ? '🏦 Cuenta (opcional)' : '🏦 Cuenta'}>
+              <select className={inputCls} value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}>
+                <option value="">Sin cuenta</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </Field>
             <Field label="Nota"><input className={inputCls} value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} /></Field>
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input type="checkbox" checked={form.isRecurring} onChange={e => setForm(f => ({ ...f, isRecurring: e.target.checked }))} className="rounded" />
               Recurrente
             </label>
-            <button type="submit" disabled={saving} className={btnPrimary}>{saving ? 'Guardando…' : 'Registrar'}</button>
+            <button type="submit" disabled={saving} className={btnPrimary}>{saving ? 'Guardando…' : editingTx ? 'Guardar cambios' : 'Registrar'}</button>
           </form>
         </Modal>
       )}
@@ -611,7 +788,6 @@ function SummaryTab({ month }: { month: string }) {
 
   return (
     <div className="space-y-6">
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         {[
           { label: 'Ingresos', value: summary.totalIncome, color: 'text-emerald-400' },
@@ -628,7 +804,6 @@ function SummaryTab({ month }: { month: string }) {
         ))}
       </div>
 
-      {/* Spending by category */}
       {summary.byCategory.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-gray-300 mb-3">Gastos por categoría</h3>
@@ -665,7 +840,6 @@ export default function FinanzasPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 lg:p-6 space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Finanzas</h1>
@@ -679,7 +853,6 @@ export default function FinanzasPage() {
         />
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto pb-1">
         {TABS.map(tab => (
           <button
@@ -696,7 +869,6 @@ export default function FinanzasPage() {
         ))}
       </div>
 
-      {/* Tab content */}
       <div>
         {activeTab === 'Resumen' && <SummaryTab month={month} />}
         {activeTab === 'Cuentas' && <AccountsTab />}

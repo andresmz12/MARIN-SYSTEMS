@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   try {
     const transactions = await prisma.financeTransaction.findMany({
       where,
-      include: { category: true },
+      include: { category: true, account: true, creditCard: true },
       orderBy: { date: 'desc' },
     })
     return NextResponse.json(transactions)
