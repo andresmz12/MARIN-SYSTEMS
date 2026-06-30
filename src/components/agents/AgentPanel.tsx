@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
 import { HealthStatus } from '@/types/agents';
 import { useAgentStore } from '@/stores/agentStore';
+import { formatDateTime } from '@/lib/utils';
 import { AgentDetailsModal } from './AgentDetailsModal';
 
 interface AgentPanelProps {
@@ -27,6 +28,15 @@ function usageBarColor(value: number) {
   if (value > 85) return 'bg-red-500';
   if (value > 60) return 'bg-yellow-500';
   return 'bg-green-500';
+}
+
+function formatRelativeTime(date: Date): string {
+  const diffSec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (diffSec < 60) return `Hace ${diffSec} segundo${diffSec === 1 ? '' : 's'}`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Hace ${diffMin} minuto${diffMin === 1 ? '' : 's'}`;
+  const diffHour = Math.floor(diffMin / 60);
+  return `Hace ${diffHour} hora${diffHour === 1 ? '' : 's'}`;
 }
 
 function MiniUsageBar({ label, value }: { label: string; value: number | null }) {
@@ -54,6 +64,12 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
   const latency = agentData?.latency;
   const uptime = agentData?.uptime;
   const [showDetails, setShowDetails] = useState(false);
+  const [, forceTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => forceTick((n) => n + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const statusConfig = {
     healthy:  { label: 'Todo bien',     color: 'bg-green-500/20 text-green-400 border-green-500/30' },
@@ -182,6 +198,12 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
             Aún no hay suficientes datos
           </div>
         )}
+        <div
+          className="mt-2 text-[11px] text-slate-500"
+          title={agentData?.lastChecked ? formatDateTime(agentData.lastChecked) : undefined}
+        >
+          Último update: {agentData?.lastChecked ? formatRelativeTime(new Date(agentData.lastChecked)) : '—'}
+        </div>
       </div>
 
       {/* System Health compacto */}
