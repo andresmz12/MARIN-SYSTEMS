@@ -8,6 +8,7 @@ import { formatDateTime } from '@/lib/utils';
 interface AgentDetailsModalProps {
   id: string;
   name: string;
+  agentName: string;
   role: string | null;
   color: string;
   onClose: () => void;
@@ -20,7 +21,7 @@ const STATUS_CONFIG: Record<HealthStatus, { label: string; color: string; emoji:
   unknown: { label: 'Verificando...', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', emoji: '?' },
 };
 
-export function AgentDetailsModal({ id, name, role, color, onClose }: AgentDetailsModalProps) {
+export function AgentDetailsModal({ id, name, agentName, color, onClose }: AgentDetailsModalProps) {
   const agentData = useAgentStore((state) => state.agents[id]);
   const status = (agentData?.status || 'unknown') as HealthStatus;
   const config = STATUS_CONFIG[status];
@@ -33,11 +34,11 @@ export function AgentDetailsModal({ id, name, role, color, onClose }: AgentDetai
             className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0"
             style={{ backgroundColor: color }}
           >
-            {name.charAt(0)}
+            {agentName.charAt(0)}
           </div>
           <div>
-            <h3 className="font-semibold text-white text-base">{name}</h3>
-            <p className="text-xs text-slate-400">{role || 'Sin rol asignado'}</p>
+            <h3 className="font-semibold text-white text-base">{agentName}</h3>
+            <p className="text-xs text-slate-400">{name}</p>
           </div>
         </div>
 

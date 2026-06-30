@@ -53,6 +53,7 @@ export function AgentRoom({ initialApps }: AgentRoomProps) {
               key={app.id}
               id={app.id}
               name={app.name}
+              agentName={app.agentName}
               role={app.role}
               color={app.color}
             />

@@ -100,13 +100,15 @@ async function seedMonitoredApps() {
   const apps = await prisma.monitoredApp.createMany({
     data: [
       {
-        name: 'Report System',
+        name: 'Agente de salud Report System',
+        agentName: 'Ángela',
         role: 'Generación de Reportes Financieros',
         healthUrl: 'https://www.reportssystem.com/api/health',
         color: '#3B82F6',
       },
       {
-        name: 'My Profit',
+        name: 'Agente de salud My Profit and Loss',
+        agentName: 'Alejandro',
         role: 'Análisis de Rentabilidad',
         healthUrl: 'https://www.myprofitandloss.com/api/health',
         color: '#22C55E',

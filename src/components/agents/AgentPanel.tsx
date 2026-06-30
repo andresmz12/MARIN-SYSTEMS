@@ -8,11 +8,12 @@ import { AgentDetailsModal } from './AgentDetailsModal';
 interface AgentPanelProps {
   id: string;
   name: string;
+  agentName: string;
   role: string | null;
   color: string;
 }
 
-export function AgentPanel({ id, name, role, color }: AgentPanelProps) {
+export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps) {
   const agentData = useAgentStore((state) => state.agents[id]);
   const status = (agentData?.status || 'unknown') as HealthStatus;
   const latency = agentData?.latency;
@@ -45,12 +46,12 @@ export function AgentPanel({ id, name, role, color }: AgentPanelProps) {
             className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
             style={{ backgroundColor: color }}
           >
-            {name.charAt(0)}
+            {agentName.charAt(0)}
           </div>
           {/* Name */}
           <div>
-            <h3 className="font-semibold text-white text-sm">{name}</h3>
-            <p className="text-xs text-slate-400">{role || 'Monitor de salud'}</p>
+            <h3 className="font-semibold text-white text-sm">{agentName}</h3>
+            <p className="text-xs text-slate-400">{name}</p>
           </div>
         </div>
       </div>
@@ -88,6 +89,7 @@ export function AgentPanel({ id, name, role, color }: AgentPanelProps) {
         <AgentDetailsModal
           id={id}
           name={name}
+          agentName={agentName}
           role={role}
           color={color}
           onClose={() => setShowDetails(false)}
