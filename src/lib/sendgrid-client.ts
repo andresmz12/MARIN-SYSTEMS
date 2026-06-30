@@ -167,6 +167,80 @@ export async function sendMorningReminder(
   return result
 }
 
+export async function sendAgentAlertEmail({
+  agentName,
+  appName,
+  status,
+  latency,
+}: {
+  agentName: string
+  appName: string
+  status: 'down' | 'degraded'
+  latency: number | null
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+
+  const statusLabel = status === 'down' ? '🔴 CAÍDO' : '🟡 DEGRADADO'
+  const statusColor = status === 'down' ? '#ef4444' : '#f59e0b'
+  const gradientColors = status === 'down'
+    ? '#991b1b,#dc2626,#ef4444'
+    : '#92400e,#d97706,#f59e0b'
+  const now = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
+  const subject = `[Marin Systems] Alerta: ${agentName} está ${statusLabel}`
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0f0f0f;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0f0f;padding:40px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+  <tr><td style="background:linear-gradient(135deg,${gradientColors});border-radius:12px 12px 0 0;padding:28px 36px;">
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Marin Systems · Monitoreo de Agentes</p>
+    <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">⚠️ ${agentName} está ${statusLabel}</h1>
+  </td></tr>
+  <tr><td style="background:#1a1a1a;padding:28px 36px;">
+    <div style="background:${statusColor}15;border:1px solid ${statusColor}30;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+      <p style="margin:0;color:${statusColor};font-size:13px;font-weight:600;">
+        El agente <strong>${agentName}</strong> (${appName}) está reportando como <strong>${statusLabel}</strong>.
+      </p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;">
+      <tr>
+        <td width="50%">
+          <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Agente</p>
+          <p style="margin:0;color:#e4e4e7;font-size:13px;">${agentName}</p>
+        </td>
+        <td width="50%">
+          <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Latencia</p>
+          <p style="margin:0;color:#e4e4e7;font-size:13px;">${latency != null ? `${latency}ms` : '—'}</p>
+        </td>
+      </tr>
+      <tr><td colspan="2" style="padding-top:12px;">
+        <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Hora (Colombia)</p>
+        <p style="margin:0;color:#e4e4e7;font-size:13px;">${now}</p>
+      </td></tr>
+    </table>
+    <p style="margin:20px 0 0;">
+      <a href="${appUrl}/agentes"
+         style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
+        Ver en Marin Systems →
+      </a>
+    </p>
+  </td></tr>
+  <tr><td style="background:#111;border-radius:0 0 12px 12px;padding:14px 36px;border-top:1px solid #2a2a2a;">
+    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Marin Systems</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`
+
+  const text = `Alerta Marin Systems: ${agentName} está ${statusLabel}\n${appName}\n${latency != null ? `Latencia: ${latency}ms\n` : ''}Hora: ${now}\n\nVer: ${appUrl}/agentes`
+  return sendEmail(to, subject, html, text)
+}
+
 export async function sendEveningReminder(
   to: string,
   tasks: TaskEmailData[],

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendAgentAlertEmail } from '@/lib/email';
+import { sendAgentAlertEmail } from '@/lib/sendgrid-client';
 
 export const dynamic = 'force-dynamic';
 
