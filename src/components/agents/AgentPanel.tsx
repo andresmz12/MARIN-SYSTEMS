@@ -23,6 +23,30 @@ const TREND_CONFIG: Record<'up' | 'down' | 'stable', { icon: string; label: stri
   stable: { icon: '→', label: 'Latencia estable' },
 };
 
+function usageBarColor(value: number) {
+  if (value > 85) return 'bg-red-500';
+  if (value > 60) return 'bg-yellow-500';
+  return 'bg-green-500';
+}
+
+function MiniUsageBar({ label, value }: { label: string; value: number | null }) {
+  const pct = Math.min(100, Math.max(0, value ?? 0));
+  return (
+    <div className="flex items-center gap-2 text-[11px]">
+      <span className="text-slate-400 w-12 shrink-0">{label}</span>
+      <div className="h-1.5 flex-1 rounded-full bg-slate-700/60 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${usageBarColor(pct)}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-slate-300 font-medium w-12 text-right shrink-0">
+        {value != null ? `${value.toFixed(1)}%` : '—'}
+      </span>
+    </div>
+  );
+}
+
 export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps) {
   const agentData = useAgentStore((state) => state.agents[id]);
   const history = useAgentStore((state) => state.history[id]);
@@ -158,6 +182,12 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
             Aún no hay suficientes datos
           </div>
         )}
+      </div>
+
+      {/* System Health compacto */}
+      <div className="border-t border-slate-700/60 pt-3 space-y-1.5">
+        <MiniUsageBar label="Memory" value={agentData?.memoryUsage ?? null} />
+        <MiniUsageBar label="CPU" value={agentData?.cpuUsage ?? null} />
       </div>
 
       {/* View Details Button */}
