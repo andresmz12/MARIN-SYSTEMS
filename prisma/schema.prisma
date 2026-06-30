@@ -676,7 +676,7 @@ model Budget {
 model MonitoredApp {
   id        String   @id @default(cuid())
   name      String
-  agentName String
+  agentName String @default("Agente")
   role      String?
   healthUrl String
   color     String
