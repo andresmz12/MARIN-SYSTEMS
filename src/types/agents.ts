@@ -10,6 +10,10 @@ export interface AgentHealthData {
   lastStatusChange: Date | null;
   consecutiveFailures: number;
   message: string | null;
+  errorRate: number | null;      // %
+  databaseConnected: boolean;
+  memoryUsage: number | null;    // %
+  cpuUsage: number | null;       // %
 }
 
 // Una app registrada en Prisma

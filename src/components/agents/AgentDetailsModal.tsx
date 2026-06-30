@@ -25,6 +25,29 @@ const STATUS_CONFIG: Record<HealthStatus, { label: string; color: string; emoji:
   unknown: { label: 'Verificando...', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', emoji: '?' },
 };
 
+function barColor(value: number, kind: 'error' | 'usage') {
+  if (kind === 'error') {
+    if (value > 5) return 'bg-red-500';
+    if (value > 2) return 'bg-yellow-500';
+    return 'bg-green-500';
+  }
+  if (value > 85) return 'bg-red-500';
+  if (value > 60) return 'bg-yellow-500';
+  return 'bg-green-500';
+}
+
+function ProgressBar({ value, kind }: { value: number; kind: 'error' | 'usage' }) {
+  const pct = Math.min(100, Math.max(0, value));
+  return (
+    <div className="h-1.5 w-full rounded-full bg-slate-700/60 overflow-hidden">
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${barColor(value, kind)}`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
 interface HistoryResponse {
   points: AgentHistoryPoint[];
   transitions: AgentTransition[];
@@ -136,6 +159,56 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
         {agentData?.message && (
           <p className="text-xs text-slate-400">{agentData.message}</p>
         )}
+
+        {/* System Health */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-semibold text-slate-300">System Health</h4>
+            {(agentData?.consecutiveFailures ?? 0) >= 3 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+                ⚠️ ALERTAS CRÍTICAS
+              </span>
+            )}
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3 space-y-3">
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-slate-400">Error Rate</span>
+                <span className="text-slate-100 font-semibold">
+                  {agentData?.errorRate != null ? `${agentData.errorRate.toFixed(1)}%` : '—'}
+                </span>
+              </div>
+              <ProgressBar value={agentData?.errorRate ?? 0} kind="error" />
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Database</span>
+              <span className="text-slate-100 font-semibold">
+                {agentData?.databaseConnected ? '🟢 Conectado' : '🔴 Desconectado'}
+              </span>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-slate-400">Memory</span>
+                <span className="text-slate-100 font-semibold">
+                  {agentData?.memoryUsage != null ? `${agentData.memoryUsage.toFixed(1)}%` : '—'}
+                </span>
+              </div>
+              <ProgressBar value={agentData?.memoryUsage ?? 0} kind="usage" />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-slate-400">CPU</span>
+                <span className="text-slate-100 font-semibold">
+                  {agentData?.cpuUsage != null ? `${agentData.cpuUsage.toFixed(1)}%` : '—'}
+                </span>
+              </div>
+              <ProgressBar value={agentData?.cpuUsage ?? 0} kind="usage" />
+            </div>
+          </div>
+        </div>
 
         {/* Gráfico de latencia 24h */}
         <div>

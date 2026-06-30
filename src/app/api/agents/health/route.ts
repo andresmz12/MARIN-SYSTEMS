@@ -11,13 +11,25 @@ interface HealthCheckResult {
   latency: number | null;
   uptime: number | null;
   message: string | null;
+  errorRate: number | null;
+  consecutiveFailures: number;
+  databaseConnected: boolean;
+  memoryUsage: number | null;
+  cpuUsage: number | null;
 }
 
-async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<{
+interface AppHealthFields {
   status: 'healthy' | 'degraded' | 'down';
   latency: number | null;
   uptime: number | null;
-}> {
+  errorRate: number | null;
+  consecutiveFailures: number;
+  databaseConnected: boolean;
+  memoryUsage: number | null;
+  cpuUsage: number | null;
+}
+
+async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHealthFields> {
   const startTime = Date.now();
 
   try {
@@ -33,7 +45,16 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<{
     const latency = Date.now() - startTime;
 
     if (!response.ok) {
-      return { status: 'degraded', latency, uptime: null };
+      return {
+        status: 'degraded',
+        latency,
+        uptime: null,
+        errorRate: null,
+        consecutiveFailures: 0,
+        databaseConnected: true,
+        memoryUsage: null,
+        cpuUsage: null,
+      };
     }
 
     const data = await response.json();
@@ -42,12 +63,22 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<{
       status: 'healthy',
       latency,
       uptime: data.uptime ?? null,
+      errorRate: data.errorRate ?? null,
+      consecutiveFailures: data.consecutiveFailures ?? 0,
+      databaseConnected: data.databaseConnected ?? true,
+      memoryUsage: data.memoryUsage ?? null,
+      cpuUsage: data.cpuUsage ?? null,
     };
   } catch {
     return {
       status: 'down',
       latency: Date.now() - startTime,
       uptime: null,
+      errorRate: null,
+      consecutiveFailures: 0,
+      databaseConnected: false,
+      memoryUsage: null,
+      cpuUsage: null,
     };
   }
 }

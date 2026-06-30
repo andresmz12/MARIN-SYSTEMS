@@ -38,6 +38,11 @@ export function useAgentPolling() {
             status: HealthStatus;
             latency: number | null;
             uptime: number | null;
+            errorRate: number | null;
+            consecutiveFailures: number;
+            databaseConnected: boolean;
+            memoryUsage: number | null;
+            cpuUsage: number | null;
           }) => {
             const prevStatus = currentAgents[app.id]?.status;
             const statusChanged =
@@ -46,6 +51,11 @@ export function useAgentPolling() {
               status: app.status,
               latency: app.latency,
               uptime: app.uptime,
+              errorRate: app.errorRate,
+              consecutiveFailures: app.consecutiveFailures,
+              databaseConnected: app.databaseConnected,
+              memoryUsage: app.memoryUsage,
+              cpuUsage: app.cpuUsage,
               lastChecked: now,
               ...(statusChanged ? { lastStatusChange: now } : {}),
             });
