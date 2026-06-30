@@ -51,6 +51,10 @@ export const useAgentStore = create<AgentStoreState>()(
               lastStatusChange: null,
               consecutiveFailures: 0,
               message: null,
+              errorRate: null,
+              databaseConnected: true,
+              memoryUsage: null,
+              cpuUsage: null,
             },
           }),
           {}

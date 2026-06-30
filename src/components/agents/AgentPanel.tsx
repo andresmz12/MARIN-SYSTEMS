@@ -46,7 +46,11 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
   };
 
   const config = statusConfig[status];
-  const isAlerting = status === 'degraded' || status === 'down';
+  const consecutiveFailures = agentData?.consecutiveFailures ?? 0;
+  const errorRate = agentData?.errorRate ?? null;
+  const isCritical = consecutiveFailures >= 3;
+  const hasHighErrorRate = errorRate != null && errorRate > 5;
+  const isAlerting = status === 'degraded' || status === 'down' || isCritical;
 
   const isRecentChange =
     !!agentData?.lastStatusChange &&
@@ -82,11 +86,23 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
             <p className="text-xs text-slate-400">{name}</p>
           </div>
         </div>
-        {isRecentChange && (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
-            En alerta
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1">
+          {isCritical && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+              ⚠️ Críticas
+            </span>
+          )}
+          {hasHighErrorRate && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+              Error rate alto
+            </span>
+          )}
+          {isRecentChange && !isCritical && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
+              En alerta
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Status Badge */}
