@@ -113,6 +113,13 @@ async function seedMonitoredApps() {
         healthUrl: 'https://www.myprofitandloss.com/api/health',
         color: '#22C55E',
       },
+      {
+        name: 'Agente de salud Bot Llamadas',
+        agentName: 'Luisa',
+        role: null,
+        healthUrl: 'https://bot-llamadas-production.up.railway.app/api/health',
+        color: '#F59E0B',
+      },
     ],
   })
 
