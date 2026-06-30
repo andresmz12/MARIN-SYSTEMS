@@ -101,11 +101,13 @@ async function seedMonitoredApps() {
     data: [
       {
         name: 'Report System',
+        role: 'Generación de Reportes Financieros',
         healthUrl: 'https://www.reportssystem.com/api/health',
         color: '#3B82F6',
       },
       {
         name: 'My Profit',
+        role: 'Análisis de Rentabilidad',
         healthUrl: 'https://www.myprofitandloss.com/api/health',
         color: '#22C55E',
       },

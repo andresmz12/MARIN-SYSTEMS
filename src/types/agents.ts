@@ -16,6 +16,7 @@ export interface AgentHealthData {
 export interface MonitoredApp {
   id: string;
   name: string;
+  role: string | null;
   healthUrl: string;
   color: string;
   createdAt: Date;

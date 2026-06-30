@@ -1,19 +1,23 @@
 'use client';
 
+import { useState } from 'react';
 import { HealthStatus } from '@/types/agents';
 import { useAgentStore } from '@/stores/agentStore';
+import { AgentDetailsModal } from './AgentDetailsModal';
 
 interface AgentPanelProps {
   id: string;
   name: string;
+  role: string | null;
   color: string;
 }
 
-export function AgentPanel({ id, name, color }: AgentPanelProps) {
+export function AgentPanel({ id, name, role, color }: AgentPanelProps) {
   const agentData = useAgentStore((state) => state.agents[id]);
   const status = (agentData?.status || 'unknown') as HealthStatus;
   const latency = agentData?.latency;
   const uptime = agentData?.uptime;
+  const [showDetails, setShowDetails] = useState(false);
 
   const statusConfig = {
     healthy:  { label: 'Todo bien',     color: 'bg-green-500/20 text-green-400 border-green-500/30' },
@@ -46,7 +50,7 @@ export function AgentPanel({ id, name, color }: AgentPanelProps) {
           {/* Name */}
           <div>
             <h3 className="font-semibold text-white text-sm">{name}</h3>
-            <p className="text-xs text-slate-400">Monitor de salud</p>
+            <p className="text-xs text-slate-400">{role || 'Monitor de salud'}</p>
           </div>
         </div>
       </div>
@@ -73,9 +77,22 @@ export function AgentPanel({ id, name, color }: AgentPanelProps) {
       </div>
 
       {/* View Details Button */}
-      <button className="w-full text-center py-2 text-xs font-medium text-slate-300 hover:text-white border border-slate-700 rounded-lg hover:border-slate-600 transition-colors">
+      <button
+        onClick={() => setShowDetails(true)}
+        className="w-full text-center py-2 text-xs font-medium text-slate-300 hover:text-white border border-slate-700 rounded-lg hover:border-slate-600 transition-colors"
+      >
         Ver detalles →
       </button>
+
+      {showDetails && (
+        <AgentDetailsModal
+          id={id}
+          name={name}
+          role={role}
+          color={color}
+          onClose={() => setShowDetails(false)}
+        />
+      )}
     </div>
   );
 }

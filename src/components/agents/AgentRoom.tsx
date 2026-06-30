@@ -49,7 +49,13 @@ export function AgentRoom({ initialApps }: AgentRoomProps) {
       {initialApps.length > 0 ? (
         <AgentGrid>
           {initialApps.map((app) => (
-            <AgentPanel key={app.id} id={app.id} name={app.name} color={app.color} />
+            <AgentPanel
+              key={app.id}
+              id={app.id}
+              name={app.name}
+              role={app.role}
+              color={app.color}
+            />
           ))}
         </AgentGrid>
       ) : (

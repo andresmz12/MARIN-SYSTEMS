@@ -29,6 +29,9 @@ export function useAgentPolling() {
       const data = await response.json();
 
       if (data.apps && Array.isArray(data.apps)) {
+        const currentAgents = useAgentStore.getState().agents;
+        const now = new Date();
+
         data.apps.forEach(
           (app: {
             id: string;
@@ -36,11 +39,13 @@ export function useAgentPolling() {
             latency: number | null;
             uptime: number | null;
           }) => {
+            const statusChanged = currentAgents[app.id]?.status !== app.status;
             updateAgent(app.id, {
               status: app.status,
               latency: app.latency,
               uptime: app.uptime,
-              lastChecked: new Date(),
+              lastChecked: now,
+              ...(statusChanged ? { lastStatusChange: now } : {}),
             });
           }
         );
