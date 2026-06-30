@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
 import { HealthStatus } from '@/types/agents';
 import { useAgentStore } from '@/stores/agentStore';
 import { AgentDetailsModal } from './AgentDetailsModal';
@@ -13,8 +15,17 @@ interface AgentPanelProps {
   color: string;
 }
 
+const ALERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+
+const TREND_CONFIG: Record<'up' | 'down' | 'stable', { icon: string; label: string }> = {
+  up: { icon: '↑', label: 'Latencia subiendo' },
+  down: { icon: '↓', label: 'Latencia bajando' },
+  stable: { icon: '→', label: 'Latencia estable' },
+};
+
 export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps) {
   const agentData = useAgentStore((state) => state.agents[id]);
+  const history = useAgentStore((state) => state.history[id]);
   const status = (agentData?.status || 'unknown') as HealthStatus;
   const latency = agentData?.latency;
   const uptime = agentData?.uptime;
@@ -35,9 +46,26 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
   };
 
   const config = statusConfig[status];
+  const isAlerting = status === 'degraded' || status === 'down';
+
+  const isRecentChange =
+    !!agentData?.lastStatusChange &&
+    Date.now() - new Date(agentData.lastStatusChange).getTime() < ALERT_WINDOW_MS;
+
+  const trend = history?.stats.trend ?? 'stable';
+  const trendConfig = TREND_CONFIG[trend];
+  const changesToday = history?.stats.changesToday ?? 0;
+  const sparklineData = history?.points.filter((p) => p.latency != null) ?? [];
 
   return (
-    <div className="group rounded-xl border border-slate-700 bg-slate-900/50 hover:bg-slate-900 hover:border-slate-600 transition-all p-5 space-y-4">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className={`group rounded-xl border bg-slate-900/50 hover:bg-slate-900 transition-colors p-5 space-y-4 ${
+        isAlerting ? 'border-red-500/40 animate-pulse' : 'border-slate-700 hover:border-slate-600'
+      }`}
+    >
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -54,17 +82,27 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
             <p className="text-xs text-slate-400">{name}</p>
           </div>
         </div>
+        {isRecentChange && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
+            En alerta
+          </span>
+        )}
       </div>
 
       {/* Status Badge */}
-      <div className={`inline-block px-3 py-1 rounded-full border text-xs font-medium ${config.color}`}>
+      <div
+        className={`inline-block px-3 py-1 rounded-full border text-xs font-medium transition-colors duration-500 ${config.color}`}
+      >
         {statusEmoji[status]} {config.label}
       </div>
 
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="bg-slate-800/50 rounded-lg p-3">
-          <div className="text-slate-400 mb-1">Latencia</div>
+          <div className="text-slate-400 mb-1 flex items-center gap-1">
+            Latencia
+            <span title={trendConfig.label}>{trendConfig.icon}</span>
+          </div>
           <div className="text-slate-100 font-semibold">
             {latency !== null && latency !== undefined ? `${latency}ms` : '—'}
           </div>
@@ -75,6 +113,35 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
             {uptime !== null && uptime !== undefined ? `${uptime.toFixed(1)}%` : '—'}
           </div>
         </div>
+      </div>
+
+      {/* Mini sparkline + cambios hoy */}
+      <div className="bg-slate-800/50 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-1 text-xs text-slate-400">
+          <span>Latencia (6h)</span>
+          <span>{changesToday} cambios hoy</span>
+        </div>
+        {sparklineData.length > 1 ? (
+          <div className="h-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={sparklineData}>
+                <YAxis hide domain={['dataMin', 'dataMax']} />
+                <Line
+                  type="monotone"
+                  dataKey="latency"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-10 flex items-center text-[11px] text-slate-500">
+            Aún no hay suficientes datos
+          </div>
+        )}
       </div>
 
       {/* View Details Button */}
@@ -95,6 +162,6 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
           onClose={() => setShowDetails(false)}
         />
       )}
-    </div>
+    </motion.div>
   );
 }

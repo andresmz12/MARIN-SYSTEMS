@@ -39,7 +39,9 @@ export function useAgentPolling() {
             latency: number | null;
             uptime: number | null;
           }) => {
-            const statusChanged = currentAgents[app.id]?.status !== app.status;
+            const prevStatus = currentAgents[app.id]?.status;
+            const statusChanged =
+              prevStatus !== undefined && prevStatus !== 'unknown' && prevStatus !== app.status;
             updateAgent(app.id, {
               status: app.status,
               latency: app.latency,

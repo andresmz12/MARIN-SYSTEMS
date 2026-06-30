@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { MonitoredApp } from '@/types/agents';
 import { useAgentStore } from '@/stores/agentStore';
 import { useAgentPolling } from '@/hooks/useAgentPolling';
+import { useAgentHistoryPolling } from '@/hooks/useAgentHistoryPolling';
 import { AgentPanel } from './AgentPanel';
 import { AgentGrid } from './AgentGrid';
 
@@ -26,6 +27,7 @@ export function AgentRoom({ initialApps }: AgentRoomProps) {
 
   // Iniciar polling
   useAgentPolling();
+  useAgentHistoryPolling();
 
   return (
     <div className="space-y-6">

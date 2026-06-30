@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { AgentHealthData, HealthStatus } from '@/types/agents';
+import { AgentHealthData, AgentHistoryData, HealthStatus } from '@/types/agents';
 
 export interface AgentStoreState {
   agents: Record<string, AgentHealthData>;
+  history: Record<string, AgentHistoryData>;
   isPolling: boolean;
   lastGlobalRefresh: Date | null;
 
@@ -12,11 +13,13 @@ export interface AgentStoreState {
   setPolling: (v: boolean) => void;
   setLastRefresh: (date: Date) => void;
   initializeAgents: (agents: Array<{ id: string; name: string }>) => void;
+  setAllHistory: (entries: Array<{ appId: string } & AgentHistoryData>) => void;
 }
 
 export const useAgentStore = create<AgentStoreState>()(
   subscribeWithSelector((set) => ({
     agents: {},
+    history: {},
     isPolling: false,
     lastGlobalRefresh: null,
 
@@ -45,7 +48,7 @@ export const useAgentStore = create<AgentStoreState>()(
               latency: null,
               uptime: null,
               lastChecked: new Date(),
-              lastStatusChange: new Date(),
+              lastStatusChange: null,
               consecutiveFailures: 0,
               message: null,
             },
@@ -53,5 +56,13 @@ export const useAgentStore = create<AgentStoreState>()(
           {}
         ),
       }),
+
+    setAllHistory: (entries: Array<{ appId: string } & AgentHistoryData>) =>
+      set((state) => ({
+        history: entries.reduce(
+          (acc, { appId, ...data }) => ({ ...acc, [appId]: data }),
+          { ...state.history }
+        ),
+      })),
   }))
 );

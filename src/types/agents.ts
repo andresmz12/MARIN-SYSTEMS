@@ -7,7 +7,7 @@ export interface AgentHealthData {
   latency: number | null;        // ms
   uptime: number | null;         // %
   lastChecked: Date;
-  lastStatusChange: Date;
+  lastStatusChange: Date | null;
   consecutiveFailures: number;
   message: string | null;
 }
@@ -39,3 +39,33 @@ export interface AnimationFrameData {
 }
 
 export type AnimationState = 'idle' | 'typing' | 'degraded' | 'down' | 'recovering';
+
+// Punto histórico de un health check (tabla AgentHealthLog)
+export interface AgentHistoryPoint {
+  checkedAt: string;
+  status: HealthStatus;
+  latency: number | null;
+  uptime: number | null;
+}
+
+// Transición de estado detectada entre dos puntos consecutivos
+export interface AgentTransition {
+  checkedAt: string;
+  from: HealthStatus;
+  to: HealthStatus;
+}
+
+export type LatencyTrend = 'up' | 'down' | 'stable';
+
+export interface AgentHistoryStats {
+  changesToday: number;
+  peakLatencyToday: number | null;
+  lastFailureAt: string | null;
+  trend: LatencyTrend;
+}
+
+export interface AgentHistoryData {
+  points: AgentHistoryPoint[];
+  stats: AgentHistoryStats;
+  transitions?: AgentTransition[];
+}
