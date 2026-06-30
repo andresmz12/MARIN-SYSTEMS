@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendAgentAlertEmail } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+
+const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas — evita spam si sigue caído
+const CACHE_MAX_AGE = 1800; // 30 minutos en segundos
+
+// Module-level cooldown: appId → timestamp del último email enviado.
+// Funciona porque Railway corre un proceso Node persistente (no serverless).
+const lastAlertSent = new Map<string, number>();
 
 interface HealthCheckResult {
   id: string;
   name: string;
+  agentName: string;
   status: 'healthy' | 'degraded' | 'down' | 'unknown';
   latency: number | null;
   uptime: number | null;
@@ -93,12 +101,14 @@ export async function GET(_req: NextRequest) {
         return {
           id: app.id,
           name: app.name,
+          agentName: app.agentName,
           ...health,
           message: health.status === 'down' ? 'Health check failed' : null,
         } as HealthCheckResult;
       })
     );
 
+    // Persistir logs
     try {
       await prisma.agentHealthLog.createMany({
         data: results.map((r) => ({
@@ -113,17 +123,38 @@ export async function GET(_req: NextRequest) {
       console.error('Failed to persist agent health log:', logError);
     }
 
-    return NextResponse.json({
-      success: true,
-      timestamp: new Date(),
-      apps: results,
-    });
-  } catch {
+    // Enviar email si algún agente está down/degraded (con cooldown de 4h)
+    for (const result of results) {
+      if (result.status === 'down' || result.status === 'degraded') {
+        const lastSent = lastAlertSent.get(result.id) ?? 0;
+        if (Date.now() - lastSent > ALERT_COOLDOWN_MS) {
+          lastAlertSent.set(result.id, Date.now());
+          sendAgentAlertEmail({
+            agentName: result.agentName,
+            appName: result.name,
+            status: result.status,
+            latency: result.latency,
+          }).catch((err) => console.error('[email] Alert failed:', err));
+        }
+      }
+    }
+
     return NextResponse.json(
       {
-        success: false,
-        error: 'Failed to check app health',
+        success: true,
+        timestamp: new Date(),
+        apps: results,
       },
+      {
+        headers: {
+          // Cacheable 30 min en el browser, no en CDN/proxy
+          'Cache-Control': `private, max-age=${CACHE_MAX_AGE}`,
+        },
+      }
+    );
+  } catch {
+    return NextResponse.json(
+      { success: false, error: 'Failed to check app health' },
       { status: 500 }
     );
   }
