@@ -25,6 +25,29 @@ const STATUS_CONFIG: Record<HealthStatus, { label: string; color: string; emoji:
   unknown: { label: 'Verificando...', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', emoji: '?' },
 };
 
+const SIMPLE_STATUS_LABEL: Record<HealthStatus, string> = {
+  healthy: 'OK',
+  degraded: 'DEGRADED',
+  down: 'DOWN',
+  unknown: 'UNKNOWN',
+};
+
+const SIMPLE_STATUS_COLOR: Record<HealthStatus, string> = {
+  healthy: 'text-green-400',
+  degraded: 'text-yellow-400',
+  down: 'text-red-400',
+  unknown: 'text-slate-400',
+};
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+function formatLatencyDelta(delta: number | null): { text: string; color: string } {
+  if (delta == null) return { text: '—', color: 'text-slate-500' };
+  if (delta > 0) return { text: `↑ +${delta}ms`, color: 'text-red-400' };
+  if (delta < 0) return { text: `↓ ${delta}ms`, color: 'text-green-400' };
+  return { text: '→ 0ms', color: 'text-slate-400' };
+}
+
 function barColor(value: number, kind: 'error' | 'usage') {
   if (kind === 'error') {
     if (value > 5) return 'bg-red-500';
@@ -104,6 +127,17 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
         time: formatDateTime(p.checkedAt).slice(-5),
         latency: p.latency,
       })) ?? [];
+
+  const lastHourPoints = (history?.points ?? []).filter(
+    (p) => Date.now() - new Date(p.checkedAt).getTime() <= ONE_HOUR_MS
+  );
+
+  const lastHourRows = lastHourPoints.map((p, i) => ({
+    point: p,
+    delta: i > 0 && p.latency != null && lastHourPoints[i - 1].latency != null
+      ? p.latency - (lastHourPoints[i - 1].latency as number)
+      : null,
+  }));
 
   const timeSinceLastFailure = history?.stats.lastFailureAt
     ? formatDistanceToNow(new Date(history.stats.lastFailureAt), { addSuffix: true, locale: es })
@@ -259,6 +293,34 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
           <div className="bg-slate-800/50 rounded-lg p-3">
             <div className="text-slate-400 mb-1">Última falla</div>
             <div className="text-slate-100 font-semibold">{timeSinceLastFailure}</div>
+          </div>
+        </div>
+
+        {/* Historial última hora */}
+        <div>
+          <h4 className="text-xs font-semibold text-slate-300 mb-2">Historial última hora</h4>
+          <div className="bg-slate-800/50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+            {loadingHistory ? (
+              <p className="text-xs text-slate-500">Cargando...</p>
+            ) : lastHourRows.length > 0 ? (
+              [...lastHourRows].reverse().map(({ point, delta }, i) => {
+                const deltaInfo = formatLatencyDelta(delta);
+                return (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">{formatDateTime(point.checkedAt).slice(-5)}</span>
+                    <span className={`font-semibold ${SIMPLE_STATUS_COLOR[point.status]}`}>
+                      {SIMPLE_STATUS_LABEL[point.status]}
+                    </span>
+                    <span className="text-slate-300">
+                      {point.latency != null ? `${point.latency}ms` : '—'}
+                    </span>
+                    <span className={deltaInfo.color}>{deltaInfo.text}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-xs text-slate-500">Sin health checks en la última hora</p>
+            )}
           </div>
         </div>
 
