@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useAgentStore } from '@/stores/agentStore';
 import { HealthStatus } from '@/types/agents';
 
-const POLL_INTERVAL = 300000; // 5 minutos
+const POLL_INTERVAL = 600000; // 10 minutos en lugar de 5
 
 export function useAgentPolling() {
   const updateAgent = useAgentStore((state) => state.updateAgent);
