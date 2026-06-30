@@ -129,6 +129,16 @@ const mainNavItems = [
     ),
   },
   {
+    href: '/agentes',
+    label: 'Agentes',
+    icon: (
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+      </svg>
+    ),
+  },
+  {
     href: '/command-center',
     label: 'Command Center',
     icon: (
@@ -313,8 +323,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {navLink('/irs-video', 'IRS Video', mainNavItems[8].icon)}
           {navLink('/content-creator', 'Content Creator', mainNavItems[9].icon)}
           {navLink('/mis-mapas', 'Mis Mapas', mainNavItems[10].icon)}
-          {navLink('/command-center', 'Command Center', mainNavItems[11].icon)}
-          {navLink('/corporate-tasks', 'Corp. Tasks', mainNavItems[12].icon)}
+          {navLink('/agentes', 'Agentes', mainNavItems[11].icon)}
+          {navLink('/command-center', 'Command Center', mainNavItems[12].icon)}
+          {navLink('/corporate-tasks', 'Corp. Tasks', mainNavItems[13].icon)}
         </nav>
 
         {/* Bottom */}

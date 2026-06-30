@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { AgentRoom } from '@/components/agents/AgentRoom';
 import { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Agent Monitoring | Marin Systems',
   description: 'Real-time monitoring of external applications',
