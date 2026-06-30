@@ -59,6 +59,7 @@ async function main() {
   console.log('✅ Empresas iniciales creadas')
 
   await seedCEOCompanies()
+  await seedMonitoredApps()
 
   console.log('\n🚀 Seed completado!')
   console.log('   Email: admin@marinsystems.com')
@@ -91,6 +92,27 @@ async function seedCEOCompanies() {
   }
 
   console.log('✅ Empresas CEO Command Center creadas')
+}
+
+async function seedMonitoredApps() {
+  await prisma.monitoredApp.deleteMany()
+
+  const apps = await prisma.monitoredApp.createMany({
+    data: [
+      {
+        name: 'Report System',
+        healthUrl: 'https://www.reportssystem.com/api/health',
+        color: '#3B82F6',
+      },
+      {
+        name: 'My Profit',
+        healthUrl: 'https://www.myprofitandloss.com/api/health',
+        color: '#22C55E',
+      },
+    ],
+  })
+
+  console.log(`✅ MonitoredApps creadas: ${apps.count}`)
 }
 
 main()
