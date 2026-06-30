@@ -37,6 +37,16 @@ const mainNavItems = [
     ),
   },
   {
+    href: '/agentes',
+    label: 'Agentes',
+    icon: (
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+      </svg>
+    ),
+  },
+  {
     href: '/habitos',
     label: 'Hábitos',
     icon: (
@@ -125,16 +135,6 @@ const mainNavItems = [
       <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
           d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-      </svg>
-    ),
-  },
-  {
-    href: '/agentes',
-    label: 'Agentes',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
       </svg>
     ),
   },
@@ -271,6 +271,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {navLink('/dashboard', 'Dashboard', mainNavItems[0].icon)}
           {navLink('/empresas', 'Empresas', mainNavItems[1].icon)}
+          {navLink('/agentes', 'Agentes', mainNavItems[2].icon)}
 
           {/* Trading */}
           <div>
@@ -314,16 +315,15 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             )}
           </div>
 
-          {navLink('/habitos', 'Hábitos', mainNavItems[2].icon)}
-          {navLink('/agenda', 'Agenda', mainNavItems[3].icon)}
-          {navLink('/journal', 'Journal', mainNavItems[4].icon)}
-          {navLink('/metas', 'Metas', mainNavItems[5].icon)}
-          {navLink('/finanzas', 'Finanzas', mainNavItems[6].icon)}
-          {navLink('/irs-news', 'IRS News', mainNavItems[7].icon)}
-          {navLink('/irs-video', 'IRS Video', mainNavItems[8].icon)}
-          {navLink('/content-creator', 'Content Creator', mainNavItems[9].icon)}
-          {navLink('/mis-mapas', 'Mis Mapas', mainNavItems[10].icon)}
-          {navLink('/agentes', 'Agentes', mainNavItems[11].icon)}
+          {navLink('/habitos', 'Hábitos', mainNavItems[3].icon)}
+          {navLink('/agenda', 'Agenda', mainNavItems[4].icon)}
+          {navLink('/journal', 'Journal', mainNavItems[5].icon)}
+          {navLink('/metas', 'Metas', mainNavItems[6].icon)}
+          {navLink('/finanzas', 'Finanzas', mainNavItems[7].icon)}
+          {navLink('/irs-news', 'IRS News', mainNavItems[8].icon)}
+          {navLink('/irs-video', 'IRS Video', mainNavItems[9].icon)}
+          {navLink('/content-creator', 'Content Creator', mainNavItems[10].icon)}
+          {navLink('/mis-mapas', 'Mis Mapas', mainNavItems[11].icon)}
           {navLink('/command-center', 'Command Center', mainNavItems[12].icon)}
           {navLink('/corporate-tasks', 'Corp. Tasks', mainNavItems[13].icon)}
         </nav>
