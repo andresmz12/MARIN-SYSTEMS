@@ -681,4 +681,19 @@ model MonitoredApp {
   healthUrl String
   color     String
   createdAt DateTime @default(now())
+
+  healthLogs AgentHealthLog[]
+}
+
+model AgentHealthLog {
+  id        String       @id @default(cuid())
+  appId     String
+  app       MonitoredApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  status    String
+  latency   Int?
+  uptime    Float?
+  message   String?
+  checkedAt DateTime     @default(now())
+
+  @@index([appId, checkedAt])
 }

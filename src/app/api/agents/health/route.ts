@@ -68,6 +68,20 @@ export async function GET(_req: NextRequest) {
       })
     );
 
+    try {
+      await prisma.agentHealthLog.createMany({
+        data: results.map((r) => ({
+          appId: r.id,
+          status: r.status,
+          latency: r.latency,
+          uptime: r.uptime,
+          message: r.message,
+        })),
+      });
+    } catch (logError) {
+      console.error('Failed to persist agent health log:', logError);
+    }
+
     return NextResponse.json({
       success: true,
       timestamp: new Date(),
