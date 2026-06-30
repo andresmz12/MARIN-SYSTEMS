@@ -670,3 +670,13 @@ model Budget {
   @@unique([categoryId, month])
   @@index([userId])
 }
+
+// ─── AGENT MONITORING ─────────────────────────────────────────────────────────
+
+model MonitoredApp {
+  id        String   @id @default(cuid())
+  name      String
+  healthUrl String
+  color     String
+  createdAt DateTime @default(now())
+}
