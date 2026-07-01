@@ -686,14 +686,18 @@ model MonitoredApp {
 }
 
 model AgentHealthLog {
-  id        String       @id @default(cuid())
-  appId     String
-  app       MonitoredApp @relation(fields: [appId], references: [id], onDelete: Cascade)
-  status    String
-  latency   Int?
-  uptime    Float?
-  message   String?
-  checkedAt DateTime     @default(now())
+  id                String       @id @default(cuid())
+  appId             String
+  app               MonitoredApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  status            String
+  latency           Int?
+  uptime            Float?
+  message           String?
+  errorRate         Float?
+  memoryUsage       Float?
+  cpuUsage          Float?
+  databaseConnected Boolean?
+  checkedAt         DateTime     @default(now())
 
   @@index([appId, checkedAt])
 }

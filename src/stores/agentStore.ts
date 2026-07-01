@@ -39,11 +39,11 @@ export const useAgentStore = create<AgentStoreState>()(
     setLastRefresh: (date: Date) => set({ lastGlobalRefresh: date }),
 
     initializeAgents: (agents: Array<{ id: string; name: string }>) =>
-      set({
+      set((state) => ({
         agents: agents.reduce(
           (acc, app) => ({
             ...acc,
-            [app.id]: {
+            [app.id]: state.agents[app.id] ?? {
               status: 'unknown' as HealthStatus,
               latency: null,
               uptime: null,
@@ -59,7 +59,7 @@ export const useAgentStore = create<AgentStoreState>()(
           }),
           {}
         ),
-      }),
+      })),
 
     setAllHistory: (entries: Array<{ appId: string } & AgentHistoryData>) =>
       set((state) => ({

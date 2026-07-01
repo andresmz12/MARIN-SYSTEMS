@@ -50,6 +50,10 @@ export interface AgentHistoryPoint {
   status: HealthStatus;
   latency: number | null;
   uptime: number | null;
+  errorRate: number | null;
+  memoryUsage: number | null;
+  cpuUsage: number | null;
+  databaseConnected: boolean | null;
 }
 
 // Transición de estado detectada entre dos puntos consecutivos

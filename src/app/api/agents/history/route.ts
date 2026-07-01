@@ -10,6 +10,10 @@ interface LogRow {
   status: string;
   latency: number | null;
   uptime: number | null;
+  errorRate: number | null;
+  memoryUsage: number | null;
+  cpuUsage: number | null;
+  databaseConnected: boolean | null;
 }
 
 function computeStats(rangeLogs: LogRow[], todayLogs: LogRow[]) {
@@ -79,6 +83,10 @@ async function buildAppHistory(appId: string, since: Date, dayStart: Date, dayEn
       status: l.status,
       latency: l.latency,
       uptime: l.uptime,
+      errorRate: l.errorRate,
+      memoryUsage: l.memoryUsage,
+      cpuUsage: l.cpuUsage,
+      databaseConnected: l.databaseConnected,
     })),
     transitions: computeTransitions(logs),
     stats: {
