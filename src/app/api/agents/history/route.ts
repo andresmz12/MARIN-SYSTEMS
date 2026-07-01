@@ -78,7 +78,7 @@ async function buildAppHistory(appId: string, since: Date, dayStart: Date, dayEn
   const stats = computeStats(logs, todayLogs);
 
   return {
-    points: logs.map((l) => ({
+    points: logs.map((l: LogRow) => ({
       checkedAt: l.checkedAt,
       status: l.status,
       latency: l.latency,
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
 
     const apps = await prisma.monitoredApp.findMany({ select: { id: true } });
     const results = await Promise.all(
-      apps.map(async (app) => {
+      apps.map(async (app: { id: string }) => {
         const history = await buildAppHistory(app.id, since, dayStart, dayEnd);
         return { appId: app.id, points: history.points, stats: history.stats };
       })

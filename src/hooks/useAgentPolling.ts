@@ -5,6 +5,9 @@ import { useAgentStore } from '@/stores/agentStore';
 import { HealthStatus } from '@/types/agents';
 
 const POLL_INTERVAL = 300000; // 5 minutos
+// Short debounce to avoid double-fetch on React strict-mode double-invoke,
+// but short enough that navigating away and back always gets fresh data.
+const INITIAL_FETCH_DEBOUNCE_MS = 10_000; // 10 segundos
 
 // Module-level state: survives component unmount/remount within the same JS session.
 // On hard refresh (F5) the JS module reinitializes, so a new fetch is always made then.
@@ -76,13 +79,9 @@ async function poll() {
 
 export function useAgentPolling() {
   useEffect(() => {
-    // Fetch if never fetched, the full interval has elapsed, or any agent is still unknown
-    // (e.g. first mount when the store was just initialized with unknown placeholders).
-    const hasUnknown = Object.values(useAgentStore.getState().agents).some(
-      (a) => a.status === 'unknown'
-    );
-    const shouldFetch =
-      lastFetchedAt === null || Date.now() - lastFetchedAt >= POLL_INTERVAL || hasUnknown;
+    // Fetch immediately unless we just fetched (debounce for React strict-mode double-invoke).
+    // 10s is short enough that re-navigating to /agentes always gets fresh data.
+    const shouldFetch = lastFetchedAt === null || Date.now() - lastFetchedAt >= INITIAL_FETCH_DEBOUNCE_MS;
     if (shouldFetch) {
       poll();
     }

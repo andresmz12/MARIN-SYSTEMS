@@ -47,6 +47,10 @@ function parseNum(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
+function clamp(v: number | null): number | null {
+  return v != null ? Math.min(100, Math.max(0, v)) : null;
+}
+
 async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHealthFields> {
   const startTime = Date.now();
 
@@ -77,7 +81,6 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
 
     const data = await response.json();
 
-    const clamp = (v: number | null) => (v != null ? Math.min(100, Math.max(0, v)) : null);
     return {
       status: 'healthy',
       latency,
@@ -106,8 +109,8 @@ export async function GET(_req: NextRequest) {
   try {
     const apps = await prisma.monitoredApp.findMany();
 
-    const results = await Promise.all(
-      apps.map(async (app) => {
+    const results: HealthCheckResult[] = await Promise.all(
+      apps.map(async (app: { id: string; name: string; agentName: string; healthUrl: string }) => {
         const health = await checkAppHealth(app.healthUrl);
 
         // Track consecutive failures server-side so the UI badge triggers correctly
@@ -131,14 +134,39 @@ export async function GET(_req: NextRequest) {
             : health.status === 'degraded'
             ? 'Service degraded — non-2xx response'
             : null,
-        } as HealthCheckResult;
+        };
       })
     );
 
-    // Persistir logs
+    // Compute uptime from last 24h logs for apps whose endpoint didn't report it.
+    // Done BEFORE persisting so: (a) the current check isn't counted yet (no pessimism),
+    // (b) the persisted log row gets the computed value instead of null.
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const computedUptimeMap = new Map<string, number>();
+    await Promise.all(
+      results
+        .filter((r) => r.uptime == null)
+        .map(async (r) => {
+          const logs = await prisma.agentHealthLog.findMany({
+            where: { appId: r.id, checkedAt: { gte: since24h } },
+            select: { status: true },
+          });
+          if (logs.length > 0) {
+            const healthyCount = logs.filter((l: { status: string }) => l.status === 'healthy').length;
+            computedUptimeMap.set(r.id, (healthyCount / logs.length) * 100);
+          }
+        })
+    );
+
+    const enrichedResults: HealthCheckResult[] = results.map((r) => ({
+      ...r,
+      uptime: r.uptime ?? computedUptimeMap.get(r.id) ?? null,
+    }));
+
+    // Persistir logs con el uptime ya enriquecido y todos los campos disponibles
     try {
       await prisma.agentHealthLog.createMany({
-        data: results.map((r) => ({
+        data: enrichedResults.map((r) => ({
           appId: r.id,
           status: r.status,
           latency: r.latency,
@@ -153,29 +181,6 @@ export async function GET(_req: NextRequest) {
     } catch (logError) {
       console.error('Failed to persist agent health log:', logError);
     }
-
-    // Compute uptime from last 24h logs for apps whose endpoint didn't report it
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const computedUptimeMap = new Map<string, number>();
-    await Promise.all(
-      results
-        .filter((r) => r.uptime == null)
-        .map(async (r) => {
-          const logs = await prisma.agentHealthLog.findMany({
-            where: { appId: r.id, checkedAt: { gte: since24h } },
-            select: { status: true },
-          });
-          if (logs.length > 0) {
-            const healthyCount = logs.filter((l) => l.status === 'healthy').length;
-            computedUptimeMap.set(r.id, (healthyCount / logs.length) * 100);
-          }
-        })
-    );
-
-    const enrichedResults = results.map((r) => ({
-      ...r,
-      uptime: r.uptime ?? computedUptimeMap.get(r.id) ?? null,
-    }));
 
     // Enviar email si algún agente está down/degraded (con cooldown de 4h).
     // Cooldown is set optimistically before send; reset on failure so the next
