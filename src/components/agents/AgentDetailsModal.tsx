@@ -185,7 +185,7 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
           <div className="bg-slate-800/50 rounded-lg p-3">
             <div className="text-slate-400 mb-1">Último cambio de estado</div>
             <div className="text-slate-100 font-semibold">
-              {agentData?.lastStatusChange ? formatDateTime(agentData.lastStatusChange) : '—'}
+              {agentData?.lastStatusChange ? formatDateTime(agentData.lastStatusChange) : 'Sin cambios'}
             </div>
           </div>
         </div>
