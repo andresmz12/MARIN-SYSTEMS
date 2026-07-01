@@ -41,6 +41,12 @@ interface AppHealthFields {
   cpuUsage: number | null;
 }
 
+function parseNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
 async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHealthFields> {
   const startTime = Date.now();
 
@@ -74,12 +80,12 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
     return {
       status: 'healthy',
       latency,
-      uptime: data.uptime ?? null,
-      errorRate: data.errorRate ?? null,
-      consecutiveFailures: data.consecutiveFailures ?? 0,
-      databaseConnected: data.databaseConnected ?? true,
-      memoryUsage: data.memoryUsage ?? null,
-      cpuUsage: data.cpuUsage ?? null,
+      uptime: parseNum(data.uptime),
+      errorRate: parseNum(data.errorRate),
+      consecutiveFailures: parseNum(data.consecutiveFailures) ?? 0,
+      databaseConnected: Boolean(data.databaseConnected ?? true),
+      memoryUsage: parseNum(data.memoryUsage),
+      cpuUsage: parseNum(data.cpuUsage),
     };
   } catch {
     return {
