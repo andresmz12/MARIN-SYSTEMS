@@ -5,9 +5,9 @@ import { sendAgentAlertEmail } from '@/lib/sendgrid-client';
 export const dynamic = 'force-dynamic';
 
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas
-// Shorter than POLL_INTERVAL (30 min) so the cache expires before the next interval tick fires,
+// Shorter than POLL_INTERVAL (5 min) so the cache expires before the next interval tick fires,
 // ensuring every setInterval call reaches the server and runs a real health check.
-const CACHE_MAX_AGE = 1500; // 25 minutos
+const CACHE_MAX_AGE = 240; // 4 minutos
 
 // Module-level state — works because Railway runs a persistent Node process, not serverless.
 // Resets on process restart; acceptable trade-off (cooldown is best-effort, not critical-path).

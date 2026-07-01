@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useAgentStore } from '@/stores/agentStore';
 import { HealthStatus } from '@/types/agents';
 
-const POLL_INTERVAL = 1800000; // 30 minutos
+const POLL_INTERVAL = 300000; // 5 minutos
 
 // Module-level state: survives component unmount/remount within the same JS session.
 // On hard refresh (F5) the JS module reinitializes, so a new fetch is always made then.
