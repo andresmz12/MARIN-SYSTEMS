@@ -7,7 +7,7 @@ const MODEL = 'claude-haiku-4-5-20251001'
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'NZD/USD', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'XAU/USD']
 
-const SYSTEM = `Eres un trader profesional y analista técnico experto. Puedes leer pantallazos de TradingView con precisión: identificas trades cerrados, lees precios de entrada/salida, calculas pips correctamente según el instrumento, y analizas el contexto técnico del gráfico (tendencia, estructura, niveles, patrones). Responde SOLO con JSON válido, sin markdown ni texto extra.`
+const SYSTEM = `Eres un trader profesional y analista técnico experto. Puedes leer pantallazos de TradingView con precisión: identificas trades cerrados, lees precios de entrada/salida, calculas pips correctamente según el instrumento, y analizas el contexto técnico del gráfico (tendencia, estructura, niveles, patrones). Responde SOLO con JSON válido, sin markdown ni texto extra. IMPORTANTE: Todos los valores de texto (especialmente "notes") deben estar escritos en español.`
 
 const PROMPT = `Analiza este pantallazo de TradingView. Extrae los datos del trade Y analiza el gráfico.
 
