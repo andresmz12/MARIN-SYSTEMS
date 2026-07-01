@@ -19,6 +19,7 @@ async function poll() {
     const response = await fetch('/api/agents/health', {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -75,8 +76,13 @@ async function poll() {
 
 export function useAgentPolling() {
   useEffect(() => {
-    // Only fetch if never fetched, or the full interval has elapsed since last fetch.
-    const shouldFetch = lastFetchedAt === null || Date.now() - lastFetchedAt >= POLL_INTERVAL;
+    // Fetch if never fetched, the full interval has elapsed, or any agent is still unknown
+    // (e.g. first mount when the store was just initialized with unknown placeholders).
+    const hasUnknown = Object.values(useAgentStore.getState().agents).some(
+      (a) => a.status === 'unknown'
+    );
+    const shouldFetch =
+      lastFetchedAt === null || Date.now() - lastFetchedAt >= POLL_INTERVAL || hasUnknown;
     if (shouldFetch) {
       poll();
     }

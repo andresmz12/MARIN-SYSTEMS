@@ -143,6 +143,10 @@ export async function GET(_req: NextRequest) {
           latency: r.latency,
           uptime: r.uptime,
           message: r.message,
+          errorRate: r.errorRate,
+          memoryUsage: r.memoryUsage,
+          cpuUsage: r.cpuUsage,
+          databaseConnected: r.databaseConnected,
         })),
       });
     } catch (logError) {
