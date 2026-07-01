@@ -26,11 +26,10 @@ Busca el resultado del trade:
 Calcula el movimiento real del precio según el instrumento:
 
 ▸ XAU/USD (Oro):
-  1 pip = $0.01 de movimiento en precio por onza
-  Fórmula: pips = |precio_salida - precio_entrada| × 100
-  Ejemplo: entrada 2350.00, salida 2354.69 → |4.69| × 100 = 469 pips
-  Si solo ves el P&L en dólares: pips ≈ movimiento_precio × 100
-  Si ves "4.690" como movimiento → 4.690 × 100 = 469 pips
+  1 pip = $0.10 de movimiento en precio
+  Fórmula: pips = |precio_salida - precio_entrada| × 10
+  Ejemplo: entrada 4020.00, salida 4032.987 → |12.987| × 10 = 129.87 ≈ 130 pips
+  Si ves el movimiento como "12,987" (notación española) → 12.987 × 10 = 129.87 pips
 
 ▸ EUR/USD, GBP/USD, AUD/USD, NZD/USD, USD/CAD, USD/CHF:
   1 pip = 0.0001. Ejemplo: 1.0920 - 1.0850 = 0.0070 = 70 pips
