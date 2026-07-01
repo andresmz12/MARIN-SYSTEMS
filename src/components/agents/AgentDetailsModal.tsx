@@ -303,10 +303,10 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
             {loadingHistory ? (
               <p className="text-xs text-slate-500">Cargando...</p>
             ) : lastHourRows.length > 0 ? (
-              [...lastHourRows].reverse().map(({ point, delta }, i) => {
+              [...lastHourRows].reverse().map(({ point, delta }) => {
                 const deltaInfo = formatLatencyDelta(delta);
                 return (
-                  <div key={i} className="flex items-center justify-between text-xs">
+                  <div key={point.checkedAt} className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">{formatDateTime(point.checkedAt).slice(-5)}</span>
                     <span className={`font-semibold ${SIMPLE_STATUS_COLOR[point.status]}`}>
                       {SIMPLE_STATUS_LABEL[point.status]}
