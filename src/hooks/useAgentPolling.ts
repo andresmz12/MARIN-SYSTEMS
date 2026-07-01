@@ -46,8 +46,8 @@ async function poll() {
           cpuUsage: number | null;
         }) => {
           const prevStatus = currentAgents[app.id]?.status;
-          const statusChanged =
-            prevStatus !== undefined && prevStatus !== 'unknown' && prevStatus !== app.status;
+          const isFirstRealStatus = prevStatus === undefined || prevStatus === 'unknown';
+          const statusChanged = !isFirstRealStatus && prevStatus !== app.status;
           updateAgent(app.id, {
             status: app.status,
             latency: app.latency,
@@ -58,7 +58,7 @@ async function poll() {
             memoryUsage: app.memoryUsage,
             cpuUsage: app.cpuUsage,
             lastChecked: now,
-            ...(statusChanged ? { lastStatusChange: now } : {}),
+            ...(statusChanged || isFirstRealStatus ? { lastStatusChange: now } : {}),
           });
         }
       );

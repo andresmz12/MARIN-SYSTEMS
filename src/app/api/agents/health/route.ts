@@ -149,10 +149,33 @@ export async function GET(_req: NextRequest) {
       console.error('Failed to persist agent health log:', logError);
     }
 
+    // Compute uptime from last 24h logs for apps whose endpoint didn't report it
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const computedUptimeMap = new Map<string, number>();
+    await Promise.all(
+      results
+        .filter((r) => r.uptime == null)
+        .map(async (r) => {
+          const logs = await prisma.agentHealthLog.findMany({
+            where: { appId: r.id, checkedAt: { gte: since24h } },
+            select: { status: true },
+          });
+          if (logs.length > 0) {
+            const healthyCount = logs.filter((l) => l.status === 'healthy').length;
+            computedUptimeMap.set(r.id, (healthyCount / logs.length) * 100);
+          }
+        })
+    );
+
+    const enrichedResults = results.map((r) => ({
+      ...r,
+      uptime: r.uptime ?? computedUptimeMap.get(r.id) ?? null,
+    }));
+
     // Enviar email si algún agente está down/degraded (con cooldown de 4h).
     // Cooldown is set optimistically before send; reset on failure so the next
     // check can retry rather than silently skipping alerts for 4 hours.
-    for (const result of results) {
+    for (const result of enrichedResults) {
       if (result.status === 'down' || result.status === 'degraded') {
         const lastSent = lastAlertSent.get(result.id) ?? 0;
         if (Date.now() - lastSent > ALERT_COOLDOWN_MS) {
@@ -187,7 +210,7 @@ export async function GET(_req: NextRequest) {
       {
         success: true,
         timestamp: new Date(),
-        apps: results,
+        apps: enrichedResults,
       },
       {
         headers: {
