@@ -77,15 +77,16 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
 
     const data = await response.json();
 
+    const clamp = (v: number | null) => (v != null ? Math.min(100, Math.max(0, v)) : null);
     return {
       status: 'healthy',
       latency,
-      uptime: parseNum(data.uptime),
-      errorRate: parseNum(data.errorRate),
+      uptime: clamp(parseNum(data.uptime)),
+      errorRate: clamp(parseNum(data.errorRate)),
       consecutiveFailures: parseNum(data.consecutiveFailures) ?? 0,
       databaseConnected: Boolean(data.databaseConnected ?? true),
-      memoryUsage: parseNum(data.memoryUsage),
-      cpuUsage: parseNum(data.cpuUsage),
+      memoryUsage: clamp(parseNum(data.memoryUsage)),
+      cpuUsage: clamp(parseNum(data.cpuUsage)),
     };
   } catch {
     return {
