@@ -17,7 +17,7 @@ interface Trade {
   emotion: string | null
   followedPlan: boolean
   notes: string | null
-  screenshot: string | null
+  hasScreenshot: boolean
 }
 
 const emptyForm = {
@@ -100,9 +100,14 @@ export default function TradingDiarioPage() {
       if (filterPair)   params.set('pair', filterPair)
       if (filterDate)   params.set('date', filterDate)
       const res = await fetch(`/api/trades?${params}`)
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        console.error('[trades] load failed:', res.status, body)
+        throw new Error(res.status.toString())
+      }
       setTrades(await res.json())
-    } catch {
+    } catch (err) {
+      console.error('[trades] loadTrades error:', err)
       setLoadError(true)
     }
     setPageLoading(false)
@@ -118,7 +123,18 @@ export default function TradingDiarioPage() {
     setModalOpen(true)
   }
 
-  function openEdit(trade: Trade) {
+  async function openEdit(trade: Trade) {
+    // Fetch the full trade (including screenshot) before opening the modal
+    let screenshot: string | null = null
+    try {
+      const res = await fetch(`/api/trades/${trade.id}`)
+      if (res.ok) {
+        const full = await res.json()
+        screenshot = full.screenshot ?? null
+      }
+    } catch {
+      // Non-blocking — open modal without screenshot if fetch fails
+    }
     setEditTrade(trade)
     setForm({
       pair: trade.pair,
@@ -129,7 +145,7 @@ export default function TradingDiarioPage() {
       followedPlan: trade.followedPlan,
       notes: trade.notes || '',
       date: trade.date.split('T')[0],
-      screenshot: trade.screenshot ?? null,
+      screenshot,
     })
     setScanMsg(null)
     setModalOpen(true)
@@ -377,10 +393,18 @@ export default function TradingDiarioPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {/* Screenshot icon */}
-                        {trade.screenshot && (
+                        {/* Screenshot icon — fetches full trade on click */}
+                        {trade.hasScreenshot && (
                           <button
-                            onClick={() => setLightbox(trade.screenshot!)}
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/trades/${trade.id}`)
+                                if (res.ok) {
+                                  const full = await res.json()
+                                  if (full.screenshot) setLightbox(full.screenshot)
+                                }
+                              } catch { /* ignore */ }
+                            }}
                             className="text-blue-500 hover:text-blue-300 transition-colors"
                             title="Ver captura de TradingView"
                           >

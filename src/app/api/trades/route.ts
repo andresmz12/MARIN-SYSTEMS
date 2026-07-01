@@ -38,9 +38,25 @@ export async function GET(req: NextRequest) {
       orderBy: { date: 'desc' },
       take: pageSize,
       skip: (page - 1) * pageSize,
+      select: {
+        id: true,
+        date: true,
+        pair: true,
+        result: true,
+        pips: true,
+        setup: true,
+        emotion: true,
+        followedPlan: true,
+        notes: true,
+        createdAt: true,
+        screenshot: true,
+      },
     })
 
-    return NextResponse.json(trades)
+    // Strip screenshot data from list response — clients fetch individually via GET /api/trades/[id]
+    return NextResponse.json(
+      trades.map(({ screenshot, ...t }) => ({ ...t, hasScreenshot: screenshot !== null }))
+    )
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Error al obtener trades' }, { status: 500 })
