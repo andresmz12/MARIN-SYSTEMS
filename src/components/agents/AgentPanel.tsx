@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
 import { HealthStatus } from '@/types/agents';
@@ -64,12 +64,6 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
   const latency = agentData?.latency;
   const uptime = agentData?.uptime;
   const [showDetails, setShowDetails] = useState(false);
-  const [, forceTick] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => forceTick((n) => n + 1), 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const statusConfig = {
     healthy:  { label: 'Todo bien',     color: 'bg-green-500/20 text-green-400 border-green-500/30' },
