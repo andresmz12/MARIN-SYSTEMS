@@ -30,8 +30,8 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${sizeClass} bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-2xl`}>
-        <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a]">
+      <div className={`relative w-full ${sizeClass} max-h-[85vh] flex flex-col bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-2xl`}>
+        <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-semibold text-white text-sm">{title}</h2>
           <button
             onClick={onClose}
@@ -42,7 +42,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
             </svg>
           </button>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="p-4 overflow-y-auto">{children}</div>
       </div>
     </div>
   )
