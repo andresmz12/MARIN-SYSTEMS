@@ -48,6 +48,23 @@ function hashString(s: string): number {
   return h;
 }
 
+// Known female agent names + a Spanish heuristic (names ending in "a"), with the
+// common male exceptions excluded — so Ángela/Luisa get long hair, Alejandro doesn't.
+const FEMALE_NAMES = new Set([
+  'angela', 'luisa', 'ana', 'maria', 'sofia', 'laura', 'valentina', 'camila',
+  'daniela', 'carolina', 'paula', 'andrea', 'gabriela', 'juliana', 'natalia',
+  'isabella', 'mariana', 'lucia', 'elena', 'clara', 'angie',
+]);
+const MALE_ENDS_IN_A = new Set(['joshua', 'elias', 'lucas', 'jonas', 'noa']);
+
+function isFeminineName(name: string): boolean {
+  const n = name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const first = n.split(/\s+/)[0] ?? '';
+  if (FEMALE_NAMES.has(first)) return true;
+  if (MALE_ENDS_IN_A.has(first)) return false;
+  return first.endsWith('a');
+}
+
 // ─── Floating status bubble (only when something's wrong) ────
 function StatusBubble({ state }: { state: AnimationState }) {
   if (state !== 'down' && state !== 'degraded') return null;
@@ -81,6 +98,7 @@ export function AgentCharacter({ id, name, agentName, role, color }: AgentCharac
   const seed = hashString(id + agentName);
   const skin = SKIN_TONES[seed % SKIN_TONES.length];
   const hair = HAIR_COLORS[(seed >> 3) % HAIR_COLORS.length];
+  const feminine = isFeminineName(agentName);
 
   const mouthPath = isDown
     ? 'M94 71 Q100 68 106 71'          // small frown
@@ -188,12 +206,24 @@ export function AgentCharacter({ id, name, agentName, role, color }: AgentCharac
                     : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }
               }
             >
+              {/* Long hair (feminine names) — drawn behind the head so it falls to the shoulders */}
+              {feminine && (
+                <path
+                  d="M70 52 Q58 96 74 112 Q78 92 76 74 Q74 64 80 56 L120 56 Q126 64 124 74 Q122 92 126 112 Q142 96 130 52 Q126 30 100 30 Q74 30 70 52 Z"
+                  fill={hair}
+                />
+              )}
               <circle cx={100} cy={58} r={27} fill={skin} />
               {/* Ears */}
               <circle cx={73} cy={60} r={5} fill={skin} />
               <circle cx={127} cy={60} r={5} fill={skin} />
               {/* Hair */}
-              <path d="M74 56 Q78 29 100 29 Q122 29 126 56 Q108 44 100 44 Q92 44 74 56 Z" fill={hair} />
+              {feminine ? (
+                // Fuller top + side bangs framing the face
+                <path d="M72 58 Q72 28 100 28 Q128 28 128 58 Q120 46 108 45 Q104 40 100 40 Q96 40 92 45 Q80 46 72 58 Z" fill={hair} />
+              ) : (
+                <path d="M74 56 Q78 29 100 29 Q122 29 126 56 Q108 44 100 44 Q92 44 74 56 Z" fill={hair} />
+              )}
               {/* Eyes (blink) */}
               <motion.g
                 style={{ transformBox: 'fill-box', transformOrigin: 'center' }}

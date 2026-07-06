@@ -51,6 +51,35 @@ function clamp(v: number | null): number | null {
   return v != null ? Math.min(100, Math.max(0, v)) : null;
 }
 
+// Interpret an app's self-reported `status` string. Returns null when the value
+// is missing or unrecognized (so we fall back to the HTTP-code signal).
+function mapReportedStatus(v: unknown): 'healthy' | 'degraded' | 'down' | null {
+  if (typeof v !== 'string') return null;
+  const s = v.trim().toLowerCase();
+  if (['ok', 'okay', 'healthy', 'up', 'online', 'operational', 'pass', 'passing', 'ready', 'alive'].includes(s)) return 'healthy';
+  if (['degraded', 'warning', 'warn', 'partial', 'slow', 'unstable'].includes(s)) return 'degraded';
+  if (['error', 'down', 'unhealthy', 'fail', 'failed', 'failing', 'critical', 'offline', 'dead'].includes(s)) return 'down';
+  return null;
+}
+
+// Tolerant read of DB connectivity: some apps send `databaseConnected: bool`,
+// others send `db: 'connected'|'disconnected'` (Marin-style) or `database`.
+function readDbConnected(data: Record<string, unknown>): boolean {
+  if (typeof data.databaseConnected === 'boolean') return data.databaseConnected;
+  const db = data.db ?? data.database;
+  if (typeof db === 'boolean') return db;
+  if (typeof db === 'string') return !/disconnect|down|error|fail|off/i.test(db);
+  return true;
+}
+
+// Field-name-tolerant metric extraction (memoryUsage vs memory, cpuUsage vs cpu, …).
+function pickNum(data: Record<string, unknown>, keys: string[]): number | null {
+  for (const k of keys) {
+    if (data[k] != null) return clamp(parseNum(data[k]));
+  }
+  return null;
+}
+
 async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHealthFields> {
   const startTime = Date.now();
 
@@ -66,31 +95,33 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
     clearTimeout(timeoutId);
     const latency = Date.now() - startTime;
 
-    if (!response.ok) {
-      return {
-        status: 'degraded',
-        latency,
-        uptime: null,
-        errorRate: null,
-        consecutiveFailures: 0,
-        databaseConnected: true,
-        memoryUsage: null,
-        cpuUsage: null,
-      };
+    // Parse the body even on non-2xx — health endpoints often return their real
+    // state (db down, degraded) with a 503/500 status code.
+    let data: Record<string, unknown> = {};
+    try {
+      data = (await response.json()) as Record<string, unknown>;
+    } catch {
+      // non-JSON or empty body — fall back to HTTP-code signal only
     }
 
-    const data = await response.json();
-
-    return {
-      status: 'healthy',
+    const reported = mapReportedStatus(data.status);
+    const fields = {
       latency,
-      uptime: clamp(parseNum(data.uptime)),
-      errorRate: clamp(parseNum(data.errorRate)),
+      uptime: pickNum(data, ['uptime', 'uptimePercent', 'uptimePercentage']),
+      errorRate: pickNum(data, ['errorRate', 'error_rate', 'errors']),
       consecutiveFailures: parseNum(data.consecutiveFailures) ?? 0,
-      databaseConnected: Boolean(data.databaseConnected ?? true),
-      memoryUsage: clamp(parseNum(data.memoryUsage)),
-      cpuUsage: clamp(parseNum(data.cpuUsage)),
+      databaseConnected: readDbConnected(data),
+      memoryUsage: pickNum(data, ['memoryUsage', 'memory', 'mem', 'memoryPercent']),
+      cpuUsage: pickNum(data, ['cpuUsage', 'cpu', 'cpuPercent']),
     };
+
+    if (!response.ok) {
+      // Trust an explicit "down" over the generic non-2xx → degraded default.
+      return { status: reported === 'down' ? 'down' : 'degraded', ...fields };
+    }
+
+    // 2xx: honor the app's own status when it self-reports a problem, else healthy.
+    return { status: reported ?? 'healthy', ...fields };
   } catch {
     return {
       status: 'down',
