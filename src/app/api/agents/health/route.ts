@@ -146,7 +146,9 @@ export async function GET(_req: NextRequest) {
 
         // Track consecutive failures server-side so the UI badge triggers correctly
         // even for apps that are unreachable (which always return consecutiveFailures:0).
-        if (health.status === 'down' || health.status === 'degraded') {
+        // Only a hard "down" escalates to "critical" — a self-reported "degraded"
+        // (high memory/CPU) is a soft warning and resets the counter.
+        if (health.status === 'down') {
           consecutiveFailuresTracker.set(app.id, (consecutiveFailuresTracker.get(app.id) ?? 0) + 1);
         } else {
           consecutiveFailuresTracker.set(app.id, 0);
@@ -213,11 +215,13 @@ export async function GET(_req: NextRequest) {
       console.error('Failed to persist agent health log:', logError);
     }
 
-    // Enviar email si algún agente está down/degraded (con cooldown de 4h).
+    // Enviar email solo si algún agente está down (con cooldown de 4h).
     // Cooldown is set optimistically before send; reset on failure so the next
     // check can retry rather than silently skipping alerts for 4 hours.
     for (const result of enrichedResults) {
-      if (result.status === 'down' || result.status === 'degraded') {
+      // Email only on a hard "down". "degraded" (high memory/CPU) is a soft warning,
+      // shown in the UI but not worth an alert email.
+      if (result.status === 'down') {
         const lastSent = lastAlertSent.get(result.id) ?? 0;
         if (Date.now() - lastSent > ALERT_COOLDOWN_MS) {
           const alertTime = Date.now();

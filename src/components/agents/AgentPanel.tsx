@@ -84,7 +84,10 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
   const errorRate = agentData?.errorRate ?? null;
   const isCritical = consecutiveFailures >= 3;
   const hasHighErrorRate = errorRate != null && errorRate > 5;
-  const isAlerting = status === 'degraded' || status === 'down' || isCritical;
+  // A hard "down" (or sustained failures) is a red, pulsing alarm. A self-reported
+  // "degraded" (high memory/CPU) stays a calm amber warning — it doesn't escalate.
+  const isCriticalState = status === 'down' || isCritical;
+  const isWarningState = status === 'degraded' && !isCriticalState;
 
   const isRecentChange =
     !!agentData?.lastStatusChange &&
@@ -101,7 +104,11 @@ export function AgentPanel({ id, name, agentName, role, color }: AgentPanelProps
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className={`group rounded-xl border bg-slate-900/50 hover:bg-slate-900 transition-colors p-5 space-y-4 ${
-        isAlerting ? 'border-red-500/40 animate-pulse' : 'border-slate-700 hover:border-slate-600'
+        isCriticalState
+          ? 'border-red-500/40 animate-pulse'
+          : isWarningState
+            ? 'border-amber-500/40'
+            : 'border-slate-700 hover:border-slate-600'
       }`}
     >
       {/* Header */}
