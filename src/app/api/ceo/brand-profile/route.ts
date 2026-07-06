@@ -80,11 +80,16 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = session.user.id
 
   try {
     const { searchParams } = new URL(req.url)
     const companyId = searchParams.get('companyId')
     if (!companyId) return NextResponse.json({ error: 'companyId requerido' }, { status: 400 })
+
+    // Ownership check: only return the profile if the company belongs to the caller.
+    const company = await prisma.cEOCompany.findFirst({ where: { id: companyId, userId } })
+    if (!company) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
     const profile = await prisma.brandProfile.findUnique({ where: { companyId } })
     return NextResponse.json(profile)

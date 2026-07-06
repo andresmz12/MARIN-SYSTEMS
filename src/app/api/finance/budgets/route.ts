@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
 
   try {
+    // Ownership check: the category must belong to the caller. Without this, the
+    // upsert's (categoryId, month) unique key could overwrite another user's budget.
+    const category = await prisma.financeCategory.findFirst({
+      where: { id: parsed.data.categoryId, userId: session.user.id },
+      select: { id: true },
+    })
+    if (!category) return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 })
+
     const budget = await prisma.budget.upsert({
       where: {
         categoryId_month: {
