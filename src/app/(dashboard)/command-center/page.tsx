@@ -10,12 +10,14 @@ import { DailyPlanTimeline } from './components/DailyPlanTimeline'
 import { MarketingIdeasBank } from './components/MarketingIdeasBank'
 import { CompanyManager } from './components/CompanyManager'
 import { ContentGrid } from './components/ContentGrid'
+import { CampaignPlanner } from './components/CampaignPlanner'
 import { WeeklyReview } from './components/WeeklyReview'
 
-type View = 'plan' | 'ideas' | 'companies' | 'grid' | 'review'
+type View = 'plan' | 'campaign' | 'ideas' | 'companies' | 'grid' | 'review'
 
 const VIEWS: { key: View; label: string }[] = [
   { key: 'plan', label: '📅 Plan del día' },
+  { key: 'campaign', label: '🎯 Plan de mercadeo' },
   { key: 'ideas', label: '💡 Banco de ideas' },
   { key: 'companies', label: '🏢 Empresas' },
   { key: 'grid', label: '📅 Parrilla' },
@@ -290,6 +292,10 @@ export default function CommandCenterPage() {
           onBlockUpdate={handleBlockUpdate}
           onReloadDay={() => loadDay(selectedDate)}
         />
+      )}
+
+      {view === 'campaign' && (
+        <CampaignPlanner companies={companies.filter((c) => c.isActive)} />
       )}
 
       {view === 'ideas' && (

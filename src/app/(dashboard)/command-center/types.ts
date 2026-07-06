@@ -117,6 +117,28 @@ export interface ContentAngle {
   createdAt: string
 }
 
+export interface CampaignWeek {
+  week: number
+  theme: string
+  focus: string
+  contentIdeas: string[]
+}
+
+export interface MarketingCampaign {
+  id: string
+  userId: string
+  companyId: string
+  month: string
+  objective: string
+  bigIdea: string | null
+  pillars: string[]
+  weeks: CampaignWeek[]
+  kpis: string[] | null
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type PostPlatform = 'instagram' | 'tiktok' | 'email' | 'whatsapp'
 export type PostContentType = 'reel' | 'post' | 'story' | 'caption' | 'email'
 export type PostStatus = 'draft' | 'ready' | 'published'

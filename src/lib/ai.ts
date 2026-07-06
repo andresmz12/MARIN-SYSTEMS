@@ -56,14 +56,32 @@ export async function callClaude({
     messages,
   }
   if (system) params.system = system
+  // Web search is a server-side tool — it must be declared in `tools`, not toggled
+  // via a header. Bounded to 3 searches per call to cap cost/latency.
+  if (webSearch) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    params.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 } as any]
+  }
+
+  const extractText = (msg: Anthropic.Message) =>
+    msg.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
 
   const delays = [2000, 4000]
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const opts: Anthropic.RequestOptions = {}
-      if (webSearch) opts.headers = { 'anthropic-beta': 'web-search-2025-03-05' }
-      const msg = await client.messages.create(params, opts)
-      return msg.content.find((b) => b.type === 'text')?.text ?? ''
+      let convo = messages
+      let msg = await client.messages.create({ ...params, messages: convo })
+      // Server-side tool loop: continue while the model pauses to run web searches.
+      let guard = 0
+      while (msg.stop_reason === 'pause_turn' && guard < 4) {
+        guard++
+        convo = [...convo, { role: 'assistant', content: msg.content }]
+        msg = await client.messages.create({ ...params, messages: convo })
+      }
+      return extractText(msg)
     } catch (err) {
       const status = err instanceof APIError ? (err.status ?? 0) : 0
       if ((status === 429 || status === 529) && attempt < 2) {
@@ -263,6 +281,8 @@ export interface ContentGenerationInput {
   contentPillars: string[]
   voiceSamples?: string[]
   forbiddenWords?: string[]
+  angles?: { angle: string; hook: string }[]
+  pillar?: string
 }
 
 export interface GeneratedContent {
@@ -311,8 +331,14 @@ export async function generateMarketingContent(input: ContentGenerationInput): P
   const forbiddenLine = input.forbiddenWords?.length
     ? `\nNUNCA uses estas palabras ni frases: ${input.forbiddenWords.join(', ')}.`
     : ''
+  const anglesLine = input.angles?.length
+    ? `\nBasa el contenido en uno de estos ángulos diferenciadores (elige el más relevante y NO repitas los ya usados):\n${input.angles.map((a, i) => `${i + 1}. Ángulo: ${a.angle} — Gancho: "${a.hook}"`).join('\n')}`
+    : ''
+  const pillarLine = input.pillar
+    ? `\nPilar de contenido de esta pieza (enfócala aquí): ${input.pillar}`
+    : ''
 
-  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}
+  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}
 
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}
@@ -421,5 +447,125 @@ Responde ÚNICAMENTE con este JSON array de exactamente 5 objetos:
     return coerceAngles(extractJsonArray(text2))
   } catch {
     return []
+  }
+}
+
+// ──────────────────────── Marketing campaign plan ────────────────────────
+
+export interface CampaignPlanInput {
+  companyName: string
+  objective: string
+  month: string // e.g. "2026-07" or "julio 2026"
+  targetAudience: string
+  tone: string
+  contentPillars: string[]
+  competitors: string[]
+}
+
+export interface CampaignWeek {
+  week: number
+  theme: string
+  focus: string
+  contentIdeas: string[]
+}
+
+export interface CampaignPlan {
+  bigIdea: string
+  pillars: string[]
+  weeks: CampaignWeek[]
+  kpis: string[]
+}
+
+function fallbackCampaignPlan(input: CampaignPlanInput): CampaignPlan {
+  const pillars = input.contentPillars.length > 0
+    ? input.contentPillars.slice(0, 5)
+    : ['Educación', 'Casos de éxito', 'Detrás de escenas', 'Ofertas']
+  return {
+    bigIdea: `Posicionar a ${input.companyName} alrededor de: ${input.objective}.`,
+    pillars,
+    weeks: [1, 2, 3, 4].map((w) => ({
+      week: w,
+      theme: pillars[(w - 1) % pillars.length],
+      focus: `Semana enfocada en ${pillars[(w - 1) % pillars.length].toLowerCase()} para avanzar el objetivo.`,
+      contentIdeas: ['Reel educativo', 'Post de caso real', 'Historia con CTA'],
+    })),
+    kpis: ['Alcance semanal', 'Interacciones por post', 'Leads / DMs generados'],
+  }
+}
+
+function coerceCampaignPlan(parsed: unknown, input: CampaignPlanInput): CampaignPlan {
+  const fb = fallbackCampaignPlan(input)
+  if (typeof parsed !== 'object' || parsed === null) return fb
+  const obj = parsed as Record<string, unknown>
+
+  const pillars = Array.isArray(obj.pillars)
+    ? obj.pillars.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim()).slice(0, 5)
+    : fb.pillars
+
+  const weeks = Array.isArray(obj.weeks)
+    ? obj.weeks
+        .filter((w): w is Record<string, unknown> => typeof w === 'object' && w !== null)
+        .map((w, i) => ({
+          week: typeof w.week === 'number' ? w.week : i + 1,
+          theme: str(w.theme, pillars[i % Math.max(pillars.length, 1)] ?? `Semana ${i + 1}`),
+          focus: str(w.focus, ''),
+          contentIdeas: Array.isArray(w.contentIdeas)
+            ? w.contentIdeas.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim()).slice(0, 4)
+            : [],
+        }))
+        .slice(0, 4)
+    : fb.weeks
+
+  const kpis = Array.isArray(obj.kpis)
+    ? obj.kpis.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim()).slice(0, 5)
+    : fb.kpis
+
+  return {
+    bigIdea: str(obj.bigIdea, fb.bigIdea),
+    pillars: pillars.length > 0 ? pillars : fb.pillars,
+    weeks: weeks.length > 0 ? weeks : fb.weeks,
+    kpis: kpis.length > 0 ? kpis : fb.kpis,
+  }
+}
+
+/** Generate a month-long marketing campaign plan. Grounded with web search; falls back gracefully. */
+export async function generateCampaignPlan(input: CampaignPlanInput): Promise<CampaignPlan> {
+  if (!process.env.ANTHROPIC_API_KEY) return fallbackCampaignPlan(input)
+
+  const prompt = `Eres un estratega de marketing digital experto en negocios latinos en USA y Colombia.
+
+Diseña un plan de mercadeo de un mes para esta empresa. Investiga tendencias actuales relevantes con búsqueda web cuando aporte valor.
+
+Empresa: ${input.companyName}
+Objetivo del mes: ${input.objective}
+Mes: ${input.month}
+Público objetivo: ${input.targetAudience}
+Tono de marca: ${input.tone}
+Pilares actuales: ${input.contentPillars.join(', ') || 'no definidos'}
+Competidores: ${input.competitors.join(', ') || 'no especificados'}
+
+El plan debe tener una gran idea central, 3-5 pilares afinados al objetivo, 4 semanas con tema y enfoque concreto, y KPIs medibles.
+
+Responde ÚNICAMENTE con este JSON:
+{
+  "bigIdea": "narrativa central del mes en 1-2 oraciones",
+  "pillars": ["pilar 1", "pilar 2", "pilar 3"],
+  "weeks": [
+    { "week": 1, "theme": "tema de la semana", "focus": "enfoque concreto en 1-2 oraciones", "contentIdeas": ["idea 1", "idea 2", "idea 3"] }
+  ],
+  "kpis": ["kpi medible 1", "kpi medible 2"]
+}
+Incluye exactamente 4 semanas (week 1 a 4).`
+
+  try {
+    const text = await callAI(AI_MODEL_SMART, prompt, 1600, true)
+    if (text) {
+      const plan = coerceCampaignPlan(extractJson(text), input)
+      if (plan.weeks.length > 0) return plan
+    }
+    const text2 = await callAI(AI_MODEL, prompt, 1400)
+    return coerceCampaignPlan(extractJson(text2), input)
+  } catch {
+    return fallbackCampaignPlan(input)
   }
 }

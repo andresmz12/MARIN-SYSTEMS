@@ -70,25 +70,29 @@ export function ContentGrid({ companies }: Props) {
     if (!companyId) return
     setGenerating(true)
     setProgress(0)
-    const cells: { day: number; platform: PostPlatform }[] = []
-    for (let d = 1; d <= 5; d++) {
-      for (const platform of GRID_PLATFORMS) {
-        cells.push({ day: d, platform })
+    // Indeterminate progress: the server generates the whole week with a coherent
+    // pillar/angle strategy and topic dedup, so we can't track per-cell here.
+    const tick = setInterval(() => setProgress((p) => Math.min(p + 7, 90)), 900)
+    try {
+      const res = await fetch('/api/ceo/generate-week', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, weekNumber }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(err.error ?? 'Error')
       }
+      setProgress(100)
+      await loadGrid()
+      showToast('⚡ Semana generada con estrategia', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Error al generar la semana', 'error')
+    } finally {
+      clearInterval(tick)
+      setGenerating(false)
+      setProgress(0)
     }
-    let done = 0
-    for (const cell of cells) {
-      try {
-        await generateCell(cell.day, cell.platform)
-      } catch {
-        // continue on error
-      }
-      done++
-      setProgress(Math.round((done / cells.length) * 100))
-    }
-    showToast('⚡ Semana generada', 'success')
-    setGenerating(false)
-    setProgress(0)
   }
 
   async function markPublished() {

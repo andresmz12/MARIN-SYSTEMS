@@ -35,18 +35,31 @@ export async function POST(req: NextRequest) {
     if (!company) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
     if (!profile) return NextResponse.json({ error: 'Configura primero el perfil de marca de esta empresa' }, { status: 400 })
 
-    // Last 5 marketing ideas for context
-    const ideas = await prisma.marketingIdea.findMany({
-      where: { userId, companyId, status: { in: ['idea', 'in_progress'] } },
-      orderBy: { priority: 'desc' },
-      take: 5,
-    })
+    // Last 5 marketing ideas + differentiating angles for context
+    const [ideas, angleRows] = await Promise.all([
+      prisma.marketingIdea.findMany({
+        where: { userId, companyId, status: { in: ['idea', 'in_progress'] } },
+        orderBy: { priority: 'desc' },
+        take: 5,
+      }),
+      prisma.contentAngle.findMany({
+        where: { companyId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+    ])
     const contentPillars = Array.isArray(profile.contentPillars)
       ? (profile.contentPillars as string[])
       : []
+    const angles = angleRows.map((a) => ({ angle: a.angle, hook: a.hook }))
 
-    // Merge pillars from profile with idea titles for richer context
-    const enrichedTopic = topic || ideas.map((i) => i.title).slice(0, 2).join(' / ') || ''
+    // Enrich the topic with idea titles + descriptions when the user left it blank.
+    const enrichedTopic = topic
+      || ideas
+        .slice(0, 2)
+        .map((i) => (i.description ? `${i.title} — ${i.description}` : i.title))
+        .join(' / ')
+      || ''
 
     const generated = await generateMarketingContent({
       companyName: company.name,
@@ -56,6 +69,7 @@ export async function POST(req: NextRequest) {
       tone: profile.tone,
       targetAudience: profile.targetAudience,
       contentPillars,
+      angles: angles.length > 0 ? angles : undefined,
       voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
       forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
     })

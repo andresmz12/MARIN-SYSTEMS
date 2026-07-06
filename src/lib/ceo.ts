@@ -119,6 +119,52 @@ export function splitSlot(start: string, end: string, n: number): { start: strin
   return parts
 }
 
+// ──────────────────────── Weekly content strategy ────────────────────────
+
+export type GridPlatform = 'instagram' | 'tiktok'
+
+export interface WeekCellPlan {
+  dayOfWeek: number // 1 (Mon) … 5 (Fri)
+  platform: GridPlatform
+  contentType: 'reel' | 'post'
+  pillar: string
+  angle: string | null
+  hook: string | null
+}
+
+/**
+ * Build a strategic 5-day × 2-platform content plan: rotate the brand's pillars
+ * across the week and assign a distinct angle to each cell round-robin, so the
+ * week reads as a coherent, non-repeating campaign instead of random topics.
+ */
+export function planWeek(
+  pillars: string[],
+  angles: { angle: string; hook: string }[],
+  platforms: GridPlatform[] = ['instagram', 'tiktok'],
+  days = 5,
+): WeekCellPlan[] {
+  const safePillars = pillars.length > 0 ? pillars : ['General']
+  const cells: WeekCellPlan[] = []
+  let i = 0
+  for (let day = 1; day <= days; day++) {
+    platforms.forEach((platform, p) => {
+      // Offset pillar by platform so IG and TikTok on the same day differ.
+      const pillar = safePillars[(i + p) % safePillars.length]
+      const angle = angles.length > 0 ? angles[i % angles.length] : null
+      cells.push({
+        dayOfWeek: day,
+        platform,
+        contentType: platform === 'instagram' ? 'reel' : 'post',
+        pillar,
+        angle: angle?.angle ?? null,
+        hook: angle?.hook ?? null,
+      })
+      i++
+    })
+  }
+  return cells
+}
+
 // ──────────────────────── Block details (description + steps) ────────────────────────
 
 export interface BlockDetails {
