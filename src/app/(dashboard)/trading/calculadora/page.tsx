@@ -15,12 +15,57 @@ const PIP_VALUES: Record<string, number> = {
   'XAU/USD': 10,
 }
 
+const DEFAULTS_KEY = 'trading-calc-defaults'
+const FAV_PAIRS_KEY = 'trading-calc-fav-pairs'
+
+type Defaults = { capital: string; riskPct: string; par: string }
+
+function ls<T>(key: string, fallback: T): T {
+  try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch { return fallback }
+}
+function lsSet(key: string, val: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* noop */ }
+}
+
 export default function CalculadoraPage() {
   const [capital, setCapital] = useState('10000')
   const [riskPct, setRiskPct] = useState('1')
   const [par, setPar] = useState('EUR/USD')
   const [slPips, setSlPips] = useState('20')
   const [tpPips, setTpPips] = useState('40')
+  const [favPairs, setFavPairs] = useState<string[]>([])
+
+  // Carga los valores por defecto guardados (capital, riesgo, par) al abrir la página,
+  // así no hay que volver a escribirlos cada vez.
+  useEffect(() => {
+    const saved = ls<Partial<Defaults>>(DEFAULTS_KEY, {})
+    if (saved.capital) setCapital(saved.capital)
+    if (saved.riskPct) setRiskPct(saved.riskPct)
+    if (saved.par) setPar(saved.par)
+    setFavPairs(ls<string[]>(FAV_PAIRS_KEY, []))
+  }, [])
+
+  // Cada cambio se guarda al vuelo (en lugar de un efecto reactivo) para evitar que el
+  // valor recién cargado en el mount sea pisado por el estado inicial todavía no actualizado.
+  const updateCapital = (v: string) => {
+    setCapital(v)
+    lsSet(DEFAULTS_KEY, { capital: v, riskPct, par })
+  }
+  const updateRiskPct = (v: string) => {
+    setRiskPct(v)
+    lsSet(DEFAULTS_KEY, { capital, riskPct: v, par })
+  }
+  const updatePar = (v: string) => {
+    setPar(v)
+    lsSet(DEFAULTS_KEY, { capital, riskPct, par: v })
+  }
+
+  const isFav = favPairs.includes(par)
+  const toggleFavPair = () => {
+    const next = isFav ? favPairs.filter((p) => p !== par) : [...favPairs, par]
+    setFavPairs(next)
+    lsSet(FAV_PAIRS_KEY, next)
+  }
 
   const capitalNum = parseFloat(capital) || 0
   const riskPctNum = parseFloat(riskPct) || 0
@@ -53,7 +98,7 @@ export default function CalculadoraPage() {
               type="number"
               className="input"
               value={capital}
-              onChange={(e) => setCapital(e.target.value)}
+              onChange={(e) => updateCapital(e.target.value)}
               min="0"
               step="100"
             />
@@ -65,7 +110,7 @@ export default function CalculadoraPage() {
                 type="number"
                 className="input"
                 value={riskPct}
-                onChange={(e) => setRiskPct(e.target.value)}
+                onChange={(e) => updateRiskPct(e.target.value)}
                 min="0.1"
                 max="10"
                 step="0.1"
@@ -75,7 +120,7 @@ export default function CalculadoraPage() {
               {['0.5', '1', '1.5', '2'].map((v) => (
                 <button
                   key={v}
-                  onClick={() => setRiskPct(v)}
+                  onClick={() => updateRiskPct(v)}
                   className={`flex-1 text-xs py-1 rounded transition-colors ${
                     riskPct === v
                       ? 'bg-blue-600 text-white'
@@ -89,9 +134,40 @@ export default function CalculadoraPage() {
           </div>
           <div>
             <label className="label">Par de divisas</label>
-            <select className="input" value={par} onChange={(e) => setPar(e.target.value)}>
-              {Object.keys(PIP_VALUES).map((p) => <option key={p}>{p}</option>)}
-            </select>
+            <div className="flex gap-2">
+              <select className="input" value={par} onChange={(e) => updatePar(e.target.value)}>
+                {Object.keys(PIP_VALUES).map((p) => <option key={p}>{p}</option>)}
+              </select>
+              <button
+                type="button"
+                onClick={toggleFavPair}
+                title={isFav ? 'Quitar de favoritos' : 'Guardar como favorito'}
+                className={`px-3 rounded text-sm transition-colors ${
+                  isFav
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
+                }`}
+              >
+                {isFav ? '★' : '☆'}
+              </button>
+            </div>
+            {favPairs.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {favPairs.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => updatePar(p)}
+                    className={`text-xs py-1 px-2 rounded transition-colors ${
+                      par === p
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="label">Valor por pip (1 lote estándar)</label>
