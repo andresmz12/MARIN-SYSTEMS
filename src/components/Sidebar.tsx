@@ -9,7 +9,6 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 const tradingItems = [
   { label: 'Mi Sistema', href: '/trading/sistema' },
   { label: 'Diario', href: '/trading/diario' },
-  { label: 'Checklist', href: '/trading/checklist' },
   { label: 'Calculadora', href: '/trading/calculadora' },
   { label: 'Estadísticas', href: '/trading/estadisticas' },
   { label: 'Resumen Semanal', href: '/trading/resumen' },

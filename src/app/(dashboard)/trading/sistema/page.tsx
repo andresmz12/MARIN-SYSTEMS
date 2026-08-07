@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import { PreTradeChecklist } from '@/components/trading/PreTradeChecklist'
+import { BreathingTimer } from '@/components/trading/BreathingTimer'
 
 const RUTINA = [
   { time: '7:00', label: 'Despertar' },
@@ -12,24 +14,40 @@ const RUTINA = [
   { time: '8:20 – 8:30', label: 'Checklist' },
 ]
 
+const MEDITATION_PRESETS = [
+  { label: '1 min', seconds: 60 },
+  { label: '3 min', seconds: 180 },
+  { label: '5 min', seconds: 300 },
+  { label: '10 min', seconds: 600 },
+]
+
 type FomoAnswer = 'plan' | 'emocion' | null
 
 export default function MiSistemaPage() {
-  const [fomoRunning, setFomoRunning] = useState(false)
-  const [fomoSecondsLeft, setFomoSecondsLeft] = useState(60)
+  const [fomoStarted, setFomoStarted] = useState(false)
+  const [fomoDone, setFomoDone] = useState(false)
   const [fomoAnswer, setFomoAnswer] = useState<FomoAnswer>(null)
+  const [fomoKey, setFomoKey] = useState(0)
 
-  useEffect(() => {
-    if (!fomoRunning) return
-    if (fomoSecondsLeft <= 0) { setFomoRunning(false); return }
-    const t = setTimeout(() => setFomoSecondsLeft((s) => s - 1), 1000)
-    return () => clearTimeout(t)
-  }, [fomoRunning, fomoSecondsLeft])
+  const [meditationSeconds, setMeditationSeconds] = useState(300)
+  const [meditationKey, setMeditationKey] = useState(0)
 
   function startFomoProtocol() {
     setFomoAnswer(null)
-    setFomoSecondsLeft(60)
-    setFomoRunning(true)
+    setFomoDone(false)
+    setFomoStarted(true)
+  }
+
+  function restartFomoProtocol() {
+    setFomoAnswer(null)
+    setFomoDone(false)
+    setFomoStarted(false)
+    setFomoKey((k) => k + 1)
+  }
+
+  function changeMeditationPreset(seconds: number) {
+    setMeditationSeconds(seconds)
+    setMeditationKey((k) => k + 1)
   }
 
   return (
@@ -71,20 +89,9 @@ export default function MiSistemaPage() {
         </div>
       </div>
 
-      {/* Reglas del Sistema — el detalle interactivo y el conteo de operaciones del
-          día viven en el Checklist, para no mantener el mismo dato en dos lugares. */}
-      <Link
-        href="/trading/checklist"
-        className="card flex items-center justify-between hover:border-blue-500/30 transition-colors"
-      >
-        <div>
-          <p className="font-semibold text-white text-sm">🛡️ Reglas del Sistema</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Riesgo fijo, máx. 1 operación/día, sin FOMO, sin setup no hay trade — verifícalas en el checklist
-          </p>
-        </div>
-        <span className="text-blue-400 text-sm flex-shrink-0 ml-3">Ir al checklist →</span>
-      </Link>
+      {/* Checklist Pre-Trade — embebido, es la única fuente de verdad (antes vivía
+          también en /trading/checklist, que ahora redirige aquí). */}
+      <PreTradeChecklist />
 
       {/* Protocolo Anti-FOMO */}
       <div className="card border border-orange-500/20 bg-orange-500/5">
@@ -93,22 +100,24 @@ export default function MiSistemaPage() {
           Cuando sientas que &quot;se va el movimiento&quot;: detente, respira 60 segundos y responde la pregunta.
         </p>
 
-        {!fomoRunning && fomoSecondsLeft === 60 && fomoAnswer === null && (
+        {!fomoStarted && (
           <button onClick={startFomoProtocol} className="btn-primary text-sm">
             Iniciar protocolo (60s)
           </button>
         )}
 
-        {fomoRunning && (
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full border-4 border-orange-500/30 border-t-orange-400 flex items-center justify-center text-xl font-bold text-orange-300 animate-pulse">
-              {fomoSecondsLeft}
-            </div>
-            <p className="text-sm text-gray-300">Respira. No operes todavía.</p>
-          </div>
+        {fomoStarted && !fomoDone && (
+          <BreathingTimer
+            key={fomoKey}
+            durationSeconds={60}
+            color="orange"
+            size={180}
+            autoStart
+            onComplete={() => setFomoDone(true)}
+          />
         )}
 
-        {!fomoRunning && fomoSecondsLeft === 0 && fomoAnswer === null && (
+        {fomoDone && fomoAnswer === null && (
           <div className="space-y-3">
             <p className="text-sm text-gray-200 font-medium">¿Estoy siguiendo mi plan o mi emoción?</p>
             <div className="flex gap-3">
@@ -129,15 +138,38 @@ export default function MiSistemaPage() {
               <p className={`text-sm font-semibold ${fomoAnswer === 'plan' ? 'text-green-400' : 'text-red-400'}`}>
                 {fomoAnswer === 'plan' ? 'Puedes operar — sigue tu checklist.' : 'No operes. Es emoción, no plan.'}
               </p>
-              <button
-                onClick={() => { setFomoAnswer(null); setFomoSecondsLeft(60) }}
-                className="text-xs text-gray-500 hover:text-gray-300 mt-1"
-              >
+              <button onClick={restartFomoProtocol} className="text-xs text-gray-500 hover:text-gray-300 mt-1">
                 Reiniciar protocolo
               </button>
             </div>
           </div>
         )}
+      </div>
+
+      {/* Meditación / Respiración */}
+      <div className="card border border-teal-500/20 bg-teal-500/5">
+        <p className="font-semibold text-white text-sm mb-1">🧘 Meditación / Respiración</p>
+        <p className="text-xs text-gray-400 mb-4">
+          Parte de tu rutina matutina (5–10 min). Respiración en caja: inhala, sostén, exhala, sostén — 4s cada fase.
+        </p>
+
+        <div className="flex gap-1.5 mb-5">
+          {MEDITATION_PRESETS.map((p) => (
+            <button
+              key={p.seconds}
+              onClick={() => changeMeditationPreset(p.seconds)}
+              className={`text-xs py-1.5 px-3 rounded transition-colors ${
+                meditationSeconds === p.seconds
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <BreathingTimer key={meditationKey} durationSeconds={meditationSeconds} color="teal" size={240} />
       </div>
 
       {/* Revisión Semanal */}
@@ -151,14 +183,14 @@ export default function MiSistemaPage() {
 
       {/* Quick links */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Link href="/trading/checklist" className="card hover:border-blue-500/30 transition-colors text-center py-4">
-          <p className="text-sm font-medium text-gray-200">Checklist Pre-Trade</p>
-        </Link>
         <Link href="/trading/diario" className="card hover:border-blue-500/30 transition-colors text-center py-4">
           <p className="text-sm font-medium text-gray-200">Diario</p>
         </Link>
         <Link href="/trading/calculadora" className="card hover:border-blue-500/30 transition-colors text-center py-4">
           <p className="text-sm font-medium text-gray-200">Calculadora</p>
+        </Link>
+        <Link href="/trading/estadisticas" className="card hover:border-blue-500/30 transition-colors text-center py-4">
+          <p className="text-sm font-medium text-gray-200">Estadísticas</p>
         </Link>
       </div>
     </div>

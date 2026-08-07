@@ -43,6 +43,31 @@ function getWeekDates(offset = 0): { date: Date; str: string }[] {
   })
 }
 
+function getMonthDates(offset = 0): { date: Date; str: string; inMonth: boolean }[] {
+  const now = new Date()
+  const targetMonth = now.getMonth() + offset
+  const first = new Date(now.getFullYear(), targetMonth, 1)
+  const last = new Date(now.getFullYear(), targetMonth + 1, 0)
+
+  const startDay = first.getDay()
+  const gridStart = new Date(first)
+  gridStart.setDate(first.getDate() - (startDay === 0 ? 6 : startDay - 1))
+
+  const endDay = last.getDay()
+  const gridEnd = new Date(last)
+  gridEnd.setDate(last.getDate() + (endDay === 0 ? 0 : 7 - endDay))
+
+  const days: { date: Date; str: string; inMonth: boolean }[] = []
+  for (const cur = new Date(gridStart); cur <= gridEnd; cur.setDate(cur.getDate() + 1)) {
+    days.push({
+      date: new Date(cur),
+      str: cur.toISOString().split('T')[0],
+      inMonth: cur.getMonth() === first.getMonth() && cur.getFullYear() === first.getFullYear(),
+    })
+  }
+  return days
+}
+
 const emptyForm = {
   title: '',
   date: new Date().toISOString().split('T')[0],
@@ -54,6 +79,7 @@ const emptyForm = {
 }
 
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAYS_ES_MON_FIRST = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 export default function AgendaPage() {
   const { showToast } = useToast()
@@ -62,8 +88,9 @@ export default function AgendaPage() {
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
-  const [view, setView] = useState<'semana' | 'lista'>('lista')
+  const [view, setView] = useState<'semana' | 'mes' | 'lista'>('lista')
   const [weekOffset, setWeekOffset] = useState(0)
+  const [monthOffset, setMonthOffset] = useState(0)
   const [hideCompleted, setHideCompleted] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
@@ -73,22 +100,28 @@ export default function AgendaPage() {
   const [showCalendarSection, setShowCalendarSection] = useState(false)
 
   const weekDates = getWeekDates(weekOffset)
+  const monthDates = getMonthDates(monthOffset)
+  const monthLabelRaw = new Date(new Date().getFullYear(), new Date().getMonth() + monthOffset, 1)
+    .toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+  const monthLabel = monthLabelRaw.charAt(0).toUpperCase() + monthLabelRaw.slice(1)
   const today = new Date().toISOString().split('T')[0]
 
   const loadEvents = useCallback(async () => {
+    // Ventana amplia (6 meses atrás / adelante) para que Semana, Mes y Lista
+    // puedan navegar sin tener que re-consultar la API en cada cambio de vista.
     const past = new Date()
-    past.setDate(past.getDate() - 30)
+    past.setDate(past.getDate() - 180)
     const from = past.toISOString().split('T')[0]
     const future = new Date()
-    future.setDate(future.getDate() + 60)
+    future.setDate(future.getDate() + 180)
     const to = future.toISOString().split('T')[0]
     const res = await fetch(`/api/events?from=${from}&to=${to}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
-  }, [weekOffset])
+  }, [])
 
   useEffect(() => {
     loadEvents()
-  }, [weekOffset])
+  }, [loadEvents])
 
   async function getCalendarToken() {
     setCalendarLoading(true)
@@ -217,6 +250,14 @@ export default function AgendaPage() {
               }`}
             >
               Semana
+            </button>
+            <button
+              onClick={() => setView('mes')}
+              className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                view === 'mes' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Mes
             </button>
             <button
               onClick={() => setView('lista')}
@@ -400,6 +441,91 @@ export default function AgendaPage() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : view === 'mes' ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setMonthOffset(m => m - 1)}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-400">{monthLabel}</p>
+              {monthOffset !== 0 && (
+                <button onClick={() => setMonthOffset(0)} className="text-[10px] text-blue-400 hover:text-blue-300">
+                  Hoy
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setMonthOffset(m => m + 1)}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className="min-w-[560px]">
+                <div className="grid grid-cols-7 divide-x divide-[#2a2a2a] border-b border-[#2a2a2a]">
+                  {DAYS_ES_MON_FIRST.map((d) => (
+                    <p key={d} className="p-2 text-center text-[10px] text-gray-500">{d}</p>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 divide-x divide-y divide-[#2a2a2a]">
+                  {monthDates.map(({ date, str, inMonth }) => {
+                    const dayEvents = getEventsForDay(str)
+                    const isToday = str === today
+                    const visible = dayEvents.slice(0, 3)
+                    const overflow = dayEvents.length - visible.length
+                    return (
+                      <div
+                        key={str}
+                        className={`min-h-24 p-1 ${!inMonth ? 'opacity-40' : ''} ${isToday ? 'bg-blue-600/10' : ''}`}
+                      >
+                        <p className={`text-[11px] px-1 pt-0.5 font-semibold ${isToday ? 'text-blue-400' : 'text-gray-400'}`}>
+                          {date.getDate()}
+                        </p>
+                        <div className="space-y-0.5 mt-0.5">
+                          {visible.map((event) => (
+                            <div
+                              key={event.id}
+                              onClick={() => openEdit(event)}
+                              className={`rounded px-1 py-0.5 text-[9px] leading-tight border truncate cursor-pointer ${
+                                event.completed
+                                  ? 'bg-[#1a1a1a] border-[#2a2a2a] opacity-50 line-through'
+                                  : event.isForexNews
+                                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                  : TYPE_COLORS[event.type]
+                              }`}
+                            >
+                              {event.title}
+                            </div>
+                          ))}
+                          {overflow > 0 && (
+                            <p className="text-[9px] text-gray-600 px-1">+{overflow} más</p>
+                          )}
+                          <button
+                            onClick={() => openCreate(str)}
+                            className="w-full text-[10px] text-gray-700 hover:text-gray-500 text-center transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
