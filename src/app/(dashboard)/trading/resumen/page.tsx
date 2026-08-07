@@ -10,6 +10,8 @@ interface WeekStats {
   losses: number
   be: number
   winRate: number
+  complianceRate: number | null
+  followedCount: number
   totalPips: number
   bestDay: { date: string; pips: number } | null
   worstDay: { date: string; pips: number } | null
@@ -43,7 +45,7 @@ export default function ResumenSemanalPage() {
         fetch(`/api/journal?from=${fromStr}&to=${toStr}`),
       ])
 
-      const trades: { id: string; date: string; pair: string; result: string; pips: number | null; setup: string | null }[] =
+      const trades: { id: string; date: string; pair: string; result: string; pips: number | null; setup: string | null; followedPlan: boolean }[] =
         tradesRes.ok ? await tradesRes.json() : []
       const journals: { date: string; mood: number; content: string }[] =
         journalRes.ok ? await journalRes.json() : []
@@ -54,6 +56,10 @@ export default function ResumenSemanalPage() {
       const be = trades.filter((t) => t.result === 'be').length
       const winRate = total > 0 ? Math.round((wins / total) * 100) : 0
       const totalPips = Math.round(trades.reduce((s, t) => s + (t.pips ?? 0), 0) * 10) / 10
+
+      // Cumplimiento del sistema: % de trades donde seguiste el plan (el TOS lo prioriza sobre el resultado)
+      const followedCount = trades.filter((t) => t.followedPlan).length
+      const complianceRate = total > 0 ? Math.round((followedCount / total) * 100) : null
 
       // By day
       const byDay: Record<string, { wins: number; losses: number; pips: number }> = {}
@@ -85,7 +91,7 @@ export default function ResumenSemanalPage() {
         : null
 
       setStats({
-        total, wins, losses, be, winRate, totalPips,
+        total, wins, losses, be, winRate, complianceRate, followedCount, totalPips,
         bestDay, worstDay, topPair, topSetup,
         journalMood: avgMood,
         journalContent: journals[0]?.content ?? null,
@@ -130,8 +136,8 @@ export default function ResumenSemanalPage() {
       </div>
 
       {loading && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="card h-20 bg-[#1a1a1a] animate-pulse" />)}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[0, 1, 2, 3, 4].map((i) => <div key={i} className="card h-20 bg-[#1a1a1a] animate-pulse" />)}
         </div>
       )}
 
@@ -151,11 +157,18 @@ export default function ResumenSemanalPage() {
           ) : (
             <>
               {/* KPIs */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="card">
                   <p className="text-xs text-gray-500 uppercase tracking-wider">Trades</p>
                   <p className="text-3xl font-bold text-white mt-1">{stats.total}</p>
                   <p className="text-xs text-gray-600 mt-1">{stats.wins}W · {stats.losses}L · {stats.be}BE</p>
+                </div>
+                <div className="card border border-blue-500/20">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Cumplimiento del sistema</p>
+                  <p className={`text-3xl font-bold mt-1 ${stats.complianceRate === null ? 'text-gray-600' : stats.complianceRate >= 80 ? 'text-green-400' : stats.complianceRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {stats.complianceRate !== null ? `${stats.complianceRate}%` : '—'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">{stats.followedCount}/{stats.total} siguiendo el plan</p>
                 </div>
                 <div className="card">
                   <p className="text-xs text-gray-500 uppercase tracking-wider">Win Rate</p>

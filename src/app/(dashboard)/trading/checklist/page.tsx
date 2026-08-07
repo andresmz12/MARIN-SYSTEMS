@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 
 interface ChecklistItems {
   personal: boolean[]
-  setup: boolean[]
-  riesgo: boolean[]
+  analisis: boolean[]
+  reglas: boolean[]
 }
 
 const ITEMS = {
@@ -15,40 +15,54 @@ const ITEMS = {
     'No estoy estresado por factores externos',
     'Estoy enfocado en el mercado, no en el dinero',
   ],
-  setup: [
-    'La tendencia principal en H4/D1 está clara',
-    'El precio está en una zona de valor (S/R, FVG)',
-    'Tengo confirmación en M15/H1',
-    'El setup coincide con mi playbook de estrategias',
+  analisis: [
+    'Tendencia en 4H y 1H',
+    'Altos y bajos de Londres',
+    'Liquidez relevante',
+    'Soportes/resistencias',
+    'Order Blocks',
+    'Confirmación en temporalidad de entrada',
   ],
-  riesgo: [
-    'El riesgo no supera el 1-2% del capital',
-    'El Stop Loss está en un nivel técnico válido',
-    'No he tenido más de 2 pérdidas consecutivas hoy',
+  reglas: [
+    'Mi riesgo está fijado en 0.5% (o el nivel definido) — no lo subo',
+    'No he abierto ya una operación hoy (máximo 1 por día)',
+    'No estoy entrando por FOMO — si siento urgencia, respiro 60s primero',
+    'Tengo un setup claro según mi playbook — si no, no opero',
+    'No he tenido 3 pérdidas consecutivas hoy',
   ],
 }
 
 const DEFAULT_ITEMS: ChecklistItems = {
   personal: [false, false, false, false],
-  setup: [false, false, false, false],
-  riesgo: [false, false, false],
+  analisis: [false, false, false, false, false, false],
+  reglas: [false, false, false, false, false],
 }
 
 export default function ChecklistPage() {
   const [items, setItems] = useState<ChecklistItems>(DEFAULT_ITEMS)
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [tradesToday, setTradesToday] = useState<number | null>(null)
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
     loadChecklist()
+    fetch(`/api/trades?date=${today}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((trades) => setTradesToday(Array.isArray(trades) ? trades.length : 0))
+      .catch(() => setTradesToday(null))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function loadChecklist() {
     const res = await fetch(`/api/checklist?date=${today}`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
-      if (data.items) setItems(data.items as ChecklistItems)
+      const loaded = data.items as Partial<ChecklistItems> | undefined
+      // Ignora checklists guardados con el esquema anterior (setup/riesgo) para no romper el render.
+      if (loaded && Array.isArray(loaded.personal) && Array.isArray(loaded.analisis) && Array.isArray(loaded.reglas)) {
+        setItems(loaded as ChecklistItems)
+      }
     }
   }
 
@@ -68,16 +82,16 @@ export default function ChecklistPage() {
     setSaving(false)
   }
 
-  const totalItems = ITEMS.personal.length + ITEMS.setup.length + ITEMS.riesgo.length
+  const totalItems = ITEMS.personal.length + ITEMS.analisis.length + ITEMS.reglas.length
   const completedItems =
     items.personal.filter(Boolean).length +
-    items.setup.filter(Boolean).length +
-    items.riesgo.filter(Boolean).length
+    items.analisis.filter(Boolean).length +
+    items.reglas.filter(Boolean).length
 
   const personalComplete = items.personal.every(Boolean)
-  const setupComplete = items.setup.every(Boolean)
-  const riesgoComplete = items.riesgo.every(Boolean)
-  const allComplete = personalComplete && setupComplete && riesgoComplete
+  const analisisComplete = items.analisis.every(Boolean)
+  const reglasComplete = items.reglas.every(Boolean)
+  const allComplete = personalComplete && analisisComplete && reglasComplete
 
   async function resetAll() {
     const newItems = DEFAULT_ITEMS
@@ -149,27 +163,36 @@ export default function ChecklistPage() {
         onToggle={(i) => toggleItem('personal', i)}
       />
 
-      {/* Section: Setup Válido */}
+      {/* Section: Checklist de Análisis */}
       <ChecklistSection
-        title="2. Setup Válido"
-        subtitle="Confluencia técnica del mercado"
+        title="2. Checklist de Análisis"
+        subtitle="Confluencia técnica (ICT/SMC) — si falta una condición, no operar"
         emoji="📊"
-        items={ITEMS.setup}
-        checked={items.setup}
-        complete={setupComplete}
-        onToggle={(i) => toggleItem('setup', i)}
+        items={ITEMS.analisis}
+        checked={items.analisis}
+        complete={analisisComplete}
+        onToggle={(i) => toggleItem('analisis', i)}
       />
 
-      {/* Section: Gestión de Riesgo */}
-      <ChecklistSection
-        title="3. Gestión de Riesgo"
-        subtitle="Parámetros de riesgo controlados"
-        emoji="🛡️"
-        items={ITEMS.riesgo}
-        checked={items.riesgo}
-        complete={riesgoComplete}
-        onToggle={(i) => toggleItem('riesgo', i)}
-      />
+      {/* Section: Reglas del Sistema */}
+      <div>
+        <ChecklistSection
+          title="3. Reglas del Sistema"
+          subtitle="Disciplina de riesgo y ejecución"
+          emoji="🛡️"
+          items={ITEMS.reglas}
+          checked={items.reglas}
+          complete={reglasComplete}
+          onToggle={(i) => toggleItem('reglas', i)}
+        />
+        {tradesToday !== null && (
+          <p className={`text-xs mt-2 ${tradesToday >= 1 ? 'text-yellow-400' : 'text-gray-500'}`}>
+            {tradesToday >= 1
+              ? `⚠️ Ya registraste ${tradesToday} operación${tradesToday > 1 ? 'es' : ''} hoy — el sistema pide máximo 1/día.`
+              : 'Operaciones hoy: 0/1'}
+          </p>
+        )}
+      </div>
 
       {/* Final Decision */}
       {allComplete && (

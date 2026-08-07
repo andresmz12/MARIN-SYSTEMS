@@ -29,7 +29,7 @@ function lsSet(key: string, val: unknown) {
 
 export default function CalculadoraPage() {
   const [capital, setCapital] = useState('10000')
-  const [riskPct, setRiskPct] = useState('1')
+  const [riskPct, setRiskPct] = useState('0.5')
   const [par, setPar] = useState('EUR/USD')
   const [slPips, setSlPips] = useState('20')
   const [tpPips, setTpPips] = useState('40')
