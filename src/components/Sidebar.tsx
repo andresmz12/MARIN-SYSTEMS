@@ -15,153 +15,91 @@ const tradingItems = [
   { label: 'Resumen Semanal', href: '/trading/resumen' },
 ]
 
-const mainNavItems = [
-  {
-    href: '/dashboard',
-    label: 'Dashboard',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-  },
-  {
-    href: '/empresas',
-    label: 'Empresas',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/agentes',
-    label: 'Agentes',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-      </svg>
-    ),
-  },
-  {
-    href: '/habitos',
-    label: 'Hábitos',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/agenda',
-    label: 'Agenda',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-  {
-    // Journal fue removido de la navegación; se mantiene aquí solo para no
-    // desplazar los índices posicionales que usan los navLink de abajo.
-    href: '/journal',
-    label: 'Journal',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-      </svg>
-    ),
-  },
-  {
-    href: '/metas',
-    label: 'Metas',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/finanzas',
-    label: 'Finanzas',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/irs-news',
-    label: 'IRS News',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M13 4v6h6M9 12h6M9 16h6" />
-      </svg>
-    ),
-  },
-  {
-    href: '/irs-video',
-    label: 'IRS Video',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/content-creator',
-    label: 'Content Creator',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4" />
-      </svg>
-    ),
-  },
-  {
-    href: '/mis-mapas',
-    label: 'Mis Mapas',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-      </svg>
-    ),
-  },
-  {
-    href: '/command-center',
-    label: 'Command Center',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <circle cx="12" cy="12" r="9" strokeWidth={1.5} />
-        <circle cx="12" cy="12" r="4.5" strokeWidth={1.5} />
-        <circle cx="12" cy="12" r="1" strokeWidth={2} />
-      </svg>
-    ),
-  },
-  {
-    href: '/corporate-tasks',
-    label: 'Corp. Tasks',
-    icon: (
-      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-      </svg>
-    ),
-  },
-]
+// Iconos de la navegación principal, indexados por ruta (no por posición) para que
+// agregar/quitar entradas no rompa las que ya estaban.
+const navIcons: Record<string, React.ReactNode> = {
+  '/dashboard': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    </svg>
+  ),
+  '/empresas': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  '/agentes': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+    </svg>
+  ),
+  '/habitos': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  '/agenda': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  '/metas': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
+  ),
+  '/finanzas': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  '/irs-news': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M13 4v6h6M9 12h6M9 16h6" />
+    </svg>
+  ),
+  '/irs-video': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+    </svg>
+  ),
+  '/content-creator': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4" />
+    </svg>
+  ),
+  '/mis-mapas': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
+  '/command-center': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <circle cx="12" cy="12" r="9" strokeWidth={1.5} />
+      <circle cx="12" cy="12" r="4.5" strokeWidth={1.5} />
+      <circle cx="12" cy="12" r="1" strokeWidth={2} />
+    </svg>
+  ),
+  '/corporate-tasks': (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  ),
+}
 
 interface SidebarProps {
   collapsed: boolean
@@ -271,9 +209,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {navLink('/dashboard', 'Dashboard', mainNavItems[0].icon)}
-          {navLink('/empresas', 'Empresas', mainNavItems[1].icon)}
-          {navLink('/agentes', 'Agentes', mainNavItems[2].icon)}
+          {navLink('/dashboard', 'Dashboard', navIcons['/dashboard'])}
+          {navLink('/empresas', 'Empresas', navIcons['/empresas'])}
+          {navLink('/agentes', 'Agentes', navIcons['/agentes'])}
 
           {/* Trading */}
           <div>
@@ -317,16 +255,16 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             )}
           </div>
 
-          {navLink('/habitos', 'Hábitos', mainNavItems[3].icon)}
-          {navLink('/agenda', 'Agenda', mainNavItems[4].icon)}
-          {navLink('/metas', 'Metas', mainNavItems[6].icon)}
-          {navLink('/finanzas', 'Finanzas', mainNavItems[7].icon)}
-          {navLink('/irs-news', 'IRS News', mainNavItems[8].icon)}
-          {navLink('/irs-video', 'IRS Video', mainNavItems[9].icon)}
-          {navLink('/content-creator', 'Content Creator', mainNavItems[10].icon)}
-          {navLink('/mis-mapas', 'Mis Mapas', mainNavItems[11].icon)}
-          {navLink('/command-center', 'Command Center', mainNavItems[12].icon)}
-          {navLink('/corporate-tasks', 'Corp. Tasks', mainNavItems[13].icon)}
+          {navLink('/habitos', 'Hábitos', navIcons['/habitos'])}
+          {navLink('/agenda', 'Agenda', navIcons['/agenda'])}
+          {navLink('/metas', 'Metas', navIcons['/metas'])}
+          {navLink('/finanzas', 'Finanzas', navIcons['/finanzas'])}
+          {navLink('/irs-news', 'IRS News', navIcons['/irs-news'])}
+          {navLink('/irs-video', 'IRS Video', navIcons['/irs-video'])}
+          {navLink('/content-creator', 'Content Creator', navIcons['/content-creator'])}
+          {navLink('/mis-mapas', 'Mis Mapas', navIcons['/mis-mapas'])}
+          {navLink('/command-center', 'Command Center', navIcons['/command-center'])}
+          {navLink('/corporate-tasks', 'Corp. Tasks', navIcons['/corporate-tasks'])}
         </nav>
 
         {/* Bottom */}

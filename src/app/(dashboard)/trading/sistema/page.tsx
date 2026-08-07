@@ -12,29 +12,12 @@ const RUTINA = [
   { time: '8:20 – 8:30', label: 'Checklist' },
 ]
 
-const REGLAS = [
-  'Riesgo fijo 0.5% (o el definido)',
-  'Máximo una operación por día',
-  'Nunca aumentar riesgo para recuperar',
-  'Nunca entrar por FOMO',
-  'Si no hay setup, no hay trade',
-]
-
 type FomoAnswer = 'plan' | 'emocion' | null
 
 export default function MiSistemaPage() {
-  const [tradesToday, setTradesToday] = useState<number | null>(null)
   const [fomoRunning, setFomoRunning] = useState(false)
   const [fomoSecondsLeft, setFomoSecondsLeft] = useState(60)
   const [fomoAnswer, setFomoAnswer] = useState<FomoAnswer>(null)
-
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]
-    fetch(`/api/trades?date=${today}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((trades) => setTradesToday(Array.isArray(trades) ? trades.length : 0))
-      .catch(() => setTradesToday(null))
-  }, [])
 
   useEffect(() => {
     if (!fomoRunning) return
@@ -88,31 +71,20 @@ export default function MiSistemaPage() {
         </div>
       </div>
 
-      {/* Reglas del Sistema */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="font-semibold text-white text-sm">🛡️ Reglas del Sistema</p>
-            <p className="text-xs text-gray-500">Disciplina de riesgo y ejecución</p>
-          </div>
-          <Link href="/trading/checklist" className="text-xs text-blue-400 hover:text-blue-300">Ir al checklist →</Link>
-        </div>
-        <ul className="space-y-2">
-          {REGLAS.map((r) => (
-            <li key={r} className="flex items-start gap-2 text-sm text-gray-300">
-              <span className="text-blue-400 mt-0.5">–</span>
-              {r}
-            </li>
-          ))}
-        </ul>
-        {tradesToday !== null && (
-          <p className={`text-xs mt-3 pt-3 border-t border-[#2a2a2a] ${tradesToday >= 1 ? 'text-yellow-400' : 'text-gray-500'}`}>
-            {tradesToday >= 1
-              ? `⚠️ Ya registraste ${tradesToday} operación${tradesToday > 1 ? 'es' : ''} hoy — máximo permitido: 1/día.`
-              : 'Operaciones hoy: 0/1'}
+      {/* Reglas del Sistema — el detalle interactivo y el conteo de operaciones del
+          día viven en el Checklist, para no mantener el mismo dato en dos lugares. */}
+      <Link
+        href="/trading/checklist"
+        className="card flex items-center justify-between hover:border-blue-500/30 transition-colors"
+      >
+        <div>
+          <p className="font-semibold text-white text-sm">🛡️ Reglas del Sistema</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Riesgo fijo, máx. 1 operación/día, sin FOMO, sin setup no hay trade — verifícalas en el checklist
           </p>
-        )}
-      </div>
+        </div>
+        <span className="text-blue-400 text-sm flex-shrink-0 ml-3">Ir al checklist →</span>
+      </Link>
 
       {/* Protocolo Anti-FOMO */}
       <div className="card border border-orange-500/20 bg-orange-500/5">
