@@ -4,15 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { PreTradeChecklist } from '@/components/trading/PreTradeChecklist'
 import { BreathingTimer } from '@/components/trading/BreathingTimer'
-
-const RUTINA = [
-  { time: '7:00', label: 'Despertar' },
-  { time: '7:00 – 7:30', label: 'Aseo personal e hidratación' },
-  { time: '7:30 – 7:40', label: 'Paseo con Teddy' },
-  { time: '7:40 – 7:50', label: 'Respiración / meditación (5–10 min)' },
-  { time: '8:00 – 8:20', label: 'Calendario económico y análisis' },
-  { time: '8:20 – 8:30', label: 'Checklist' },
-]
+import { PreMarketHabits } from '@/components/trading/PreMarketHabits'
 
 const MEDITATION_PRESETS = [
   { label: '1 min', seconds: 60 },
@@ -70,24 +62,9 @@ export default function MiSistemaPage() {
         </p>
       </div>
 
-      {/* Rutina Matutina */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="font-semibold text-white text-sm">🌅 Rutina Matutina</p>
-            <p className="text-xs text-gray-500">Cada hábito diario está en tu módulo de Hábitos</p>
-          </div>
-          <Link href="/habitos" className="text-xs text-blue-400 hover:text-blue-300">Ver hábitos →</Link>
-        </div>
-        <div className="space-y-2">
-          {RUTINA.map((r) => (
-            <div key={r.label} className="flex items-center gap-3 text-sm">
-              <span className="text-xs text-gray-500 w-24 flex-shrink-0 font-mono">{r.time}</span>
-              <span className="text-gray-300">{r.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Rutina Matutina — hábitos reales marcados como "pre-mercado", con check
+          interactivo (antes era una lista de referencia estática). */}
+      <PreMarketHabits />
 
       {/* Checklist Pre-Trade — embebido, es la única fuente de verdad (antes vivía
           también en /trading/checklist, que ahora redirige aquí). */}

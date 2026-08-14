@@ -7,6 +7,7 @@ const PHASE_SECONDS = 4
 const CYCLE_SECONDS = PHASE_SECONDS * PHASE_LABELS.length
 const GROWN_SCALE = 1.15
 const SHRUNK_SCALE = 0.75
+const FULLSCREEN_SIZE = 420
 
 const COLORS = {
   teal: { ring: '#2dd4bf', ringBg: 'rgba(45,212,191,0.15)', glow: 'rgba(45,212,191,0.35)', text: 'text-teal-300' },
@@ -28,6 +29,7 @@ export function BreathingTimer({
 }) {
   const [running, setRunning] = useState(autoStart)
   const [elapsed, setElapsed] = useState(0)
+  const [expanded, setExpanded] = useState(false)
   const done = elapsed >= durationSeconds
   const palette = COLORS[color]
 
@@ -42,6 +44,12 @@ export function BreathingTimer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done])
 
+  // Cierra la pantalla completa sola al terminar, para no dejar al usuario
+  // atrapado en el overlay tras completar la sesión.
+  useEffect(() => {
+    if (done) setExpanded(false)
+  }, [done])
+
   const secondsLeft = durationSeconds - elapsed
   const mm = Math.floor(secondsLeft / 60).toString().padStart(2, '0')
   const ss = (secondsLeft % 60).toString().padStart(2, '0')
@@ -52,21 +60,20 @@ export function BreathingTimer({
   // Sostén se mantiene el mismo valor, dando el efecto de pausa entre respiraciones.
   const targetScale = phaseIndex === 2 || phaseIndex === 3 ? SHRUNK_SCALE : GROWN_SCALE
 
-  const radius = (size - 20) / 2
-  const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference * (1 - (durationSeconds > 0 ? elapsed / durationSeconds : 0))
-
   function handleStart() { setElapsed(0); setRunning(true) }
   function handlePauseResume() { setRunning((r) => !r) }
   function handleReset() { setRunning(false); setElapsed(0) }
 
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={palette.ringBg} strokeWidth={8} />
+  function renderCircle(sz: number) {
+    const radius = (sz - 20) / 2
+    const circumference = 2 * Math.PI * radius
+    const dashOffset = circumference * (1 - (durationSeconds > 0 ? elapsed / durationSeconds : 0))
+    return (
+      <div className="relative flex items-center justify-center" style={{ width: sz, height: sz }}>
+        <svg width={sz} height={sz} className="-rotate-90">
+          <circle cx={sz / 2} cy={sz / 2} r={radius} fill="none" stroke={palette.ringBg} strokeWidth={8} />
           <circle
-            cx={size / 2} cy={size / 2} r={radius} fill="none"
+            cx={sz / 2} cy={sz / 2} r={radius} fill="none"
             stroke={palette.ring} strokeWidth={8} strokeLinecap="round"
             strokeDasharray={circumference} strokeDashoffset={dashOffset}
             style={{ transition: 'stroke-dashoffset 1s linear' }}
@@ -75,19 +82,23 @@ export function BreathingTimer({
         <div
           className="absolute inset-0 m-auto rounded-full flex flex-col items-center justify-center"
           style={{
-            width: size * 0.62,
-            height: size * 0.62,
+            width: sz * 0.62,
+            height: sz * 0.62,
             background: `radial-gradient(circle, ${palette.glow}, transparent 70%)`,
             transform: `scale(${elapsed > 0 ? targetScale : 1})`,
             transition: `transform ${PHASE_SECONDS}s ease-in-out`,
           }}
         >
-          <span className={`text-3xl font-bold tabular-nums ${palette.text}`}>{mm}:{ss}</span>
-          {running && <span className="text-xs text-gray-400 mt-1 uppercase tracking-wider">{phaseLabel}</span>}
+          <span className={`font-bold tabular-nums ${palette.text}`} style={{ fontSize: sz * 0.14 }}>{mm}:{ss}</span>
+          {running && <span className="text-xs text-gray-400 mt-1 uppercase tracking-wider" style={{ fontSize: sz * 0.045 }}>{phaseLabel}</span>}
           {done && <span className="text-xs text-green-400 mt-1">Completado 🧘</span>}
         </div>
       </div>
+    )
+  }
 
+  function renderControls() {
+    return (
       <div className="flex gap-2">
         {!running && elapsed === 0 && (
           <button onClick={handleStart} className="btn-primary text-sm px-6">Comenzar</button>
@@ -104,6 +115,47 @@ export function BreathingTimer({
           <button onClick={handleStart} className="btn-secondary text-sm">Repetir</button>
         )}
       </div>
+    )
+  }
+
+  if (expanded) {
+    return (
+      <div
+        className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center gap-8"
+        onClick={() => setExpanded(false)}
+      >
+        <button
+          onClick={() => setExpanded(false)}
+          className="absolute top-6 right-6 text-white/60 hover:text-white transition-colors"
+          title="Salir de pantalla completa"
+        >
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <div className="flex flex-col items-center gap-8" onClick={(e) => e.stopPropagation()}>
+          {renderCircle(FULLSCREEN_SIZE)}
+          {renderControls()}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative">
+        {renderCircle(size)}
+        <button
+          onClick={() => setExpanded(true)}
+          className="absolute top-1 right-1 text-gray-500 hover:text-gray-300 transition-colors p-1.5 rounded-full hover:bg-white/5"
+          title="Ver en pantalla completa"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
+      </div>
+      <div className="mt-1">{renderControls()}</div>
     </div>
   )
 }
