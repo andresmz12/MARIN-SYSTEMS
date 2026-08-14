@@ -14,6 +14,12 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       notes: { orderBy: { createdAt: 'desc' } },
       teamMembers: true,
       links: true,
+      corporateTasks: {
+        where: { status: { not: 'completed' } },
+        orderBy: { dueDate: 'asc' },
+        select: { id: true, title: true, priority: true, status: true, dueDate: true },
+      },
+      ceoCompany: { select: { id: true } },
     },
   })
 

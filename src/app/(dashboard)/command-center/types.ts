@@ -13,6 +13,8 @@ export interface CEOCompany {
   updatedAt: string
   pendingIdeas?: number
   pendingBlocks?: number
+  companyId?: string | null
+  company?: { id: string; name: string } | null
 }
 
 export interface MarketingIdea {

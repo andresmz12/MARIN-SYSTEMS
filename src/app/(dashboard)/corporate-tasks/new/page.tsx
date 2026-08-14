@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/Toast'
 
-interface Company { id: string; name: string; emoji: string }
+interface TeamMember { id: string; name: string; email: string | null }
+interface Company { id: string; name: string; emoji: string; teamMembers: TeamMember[] }
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: '🟢 Baja' },
@@ -54,6 +55,16 @@ export default function NewCorporateTaskPage() {
   function set<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
     setForm((p) => ({ ...p, [key]: val }))
   }
+
+  function toggleEmail(email: string) {
+    const current = form.employeeEmails.split('\n').map((e) => e.trim()).filter(Boolean)
+    const next = current.includes(email) ? current.filter((e) => e !== email) : [...current, email]
+    set('employeeEmails', next.join('\n'))
+  }
+
+  const selectedCompany = companies.find((c) => c.id === form.companyId)
+  const teamEmails = (selectedCompany?.teamMembers ?? []).filter((m) => m.email)
+  const currentEmails = form.employeeEmails.split('\n').map((e) => e.trim()).filter(Boolean)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -165,6 +176,27 @@ export default function NewCorporateTaskPage() {
         {/* Destinatarios */}
         <div className="card space-y-4">
           <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Destinatarios</h2>
+          {teamEmails.length > 0 && (
+            <div>
+              <p className="label">Equipo de {selectedCompany?.name} — clic para agregar/quitar</p>
+              <div className="flex flex-wrap gap-1.5">
+                {teamEmails.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleEmail(m.email!)}
+                    className={`text-xs py-1 px-2.5 rounded-full border transition-colors ${
+                      currentEmails.includes(m.email!)
+                        ? 'bg-blue-600/20 text-blue-400 border-blue-600/30'
+                        : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300'
+                    }`}
+                  >
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <label className="label">Emails de empleados (uno por línea)</label>
             <textarea

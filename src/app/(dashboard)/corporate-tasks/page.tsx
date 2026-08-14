@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useToast } from '@/components/ui/Toast'
 import jsPDF from 'jspdf'
@@ -93,10 +94,19 @@ function OverlayModal({ onClose, children }: { onClose: () => void; children: Re
 }
 
 export default function CorporateTasksPage() {
+  return (
+    <Suspense fallback={null}>
+      <CorporateTasksPageInner />
+    </Suspense>
+  )
+}
+
+function CorporateTasksPageInner() {
   const { showToast } = useToast()
+  const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<CorporateTask[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
-  const [selectedCompany, setSelectedCompany] = useState('')
+  const [selectedCompany, setSelectedCompany] = useState(() => searchParams.get('companyId') ?? '')
   const [selectedStatus, setSelectedStatus] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)

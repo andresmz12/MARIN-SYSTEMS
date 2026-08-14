@@ -13,6 +13,7 @@ export async function GET() {
       where: { userId: session.user.id },
       include: {
         tasks: { where: { status: { not: 'completada' } }, select: { id: true, status: true, priority: true, dueDate: true } },
+        teamMembers: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: 'asc' },
     })

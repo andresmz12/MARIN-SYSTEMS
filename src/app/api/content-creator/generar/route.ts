@@ -176,22 +176,6 @@ JSON exacto (sin nada más):
     return NextResponse.json({ error: `Error guardando sesión: ${msg}` }, { status: 500 })
   }
 
-  // Save content history (non-fatal)
-  try {
-    await prisma.contentCreatorHistory.create({
-      data: {
-        userId: session.user.id,
-        tema: tema.slice(0, 200),
-        redSocial,
-        duracion,
-        mapaJson,
-        guion: guionCompleto,
-        titulo: '',
-        hashtags: [],
-      },
-    })
-  } catch { /* ignore */ }
-
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
   return NextResponse.json({ url: `${base}/studio/${studioToken}`, token: studioToken, guionCompleto, mapaJson })
 }
@@ -200,12 +184,14 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // El historial real de generaciones vive en StudioSession (ver /mis-mapas);
+  // este endpoint queda como alias de conveniencia sobre esa misma fuente.
   try {
-    const history = await prisma.contentCreatorHistory.findMany({
+    const history = await prisma.studioSession.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       take: 20,
-      select: { id: true, tema: true, redSocial: true, duracion: true, titulo: true, createdAt: true },
+      select: { id: true, token: true, tema: true, redSocial: true, duracion: true, createdAt: true },
     })
     return NextResponse.json(history)
   } catch {

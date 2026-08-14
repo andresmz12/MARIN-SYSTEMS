@@ -55,8 +55,17 @@ export function CompanyManager({ companies, onChanged }: Props) {
               <ColorDot color={c.color} onPick={(color) => update(c.id, { color })} />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{c.emoji} {c.name}</p>
-                <p className="text-[11px] text-zinc-500">
-                  {c.country.length ? c.country.map(flag).join(' ') : 'Sin país'}
+                <p className="text-[11px] text-zinc-500 flex items-center gap-1.5 flex-wrap">
+                  <span>{c.country.length ? c.country.map(flag).join(' ') : 'Sin país'}</span>
+                  {c.company && (
+                    <a
+                      href={`/empresas/${c.company.id}`}
+                      className="text-indigo-400 hover:text-indigo-300"
+                      title="Vinculada con Empresas"
+                    >
+                      · 🔗 {c.company.name}
+                    </a>
+                  )}
                 </p>
               </div>
             </div>
@@ -337,6 +346,24 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [color, setColor] = useState(CEO_COLORS[0])
   const [strategicWeight, setStrategicWeight] = useState(3)
   const [saving, setSaving] = useState(false)
+  const [linkOptions, setLinkOptions] = useState<{ id: string; name: string; emoji: string }[]>([])
+  const [linkedCompanyId, setLinkedCompanyId] = useState('')
+
+  useEffect(() => {
+    fetch('/api/companies')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((companies: { id: string; name: string; emoji: string }[]) => setLinkOptions(companies))
+      .catch(() => setLinkOptions([]))
+  }, [])
+
+  function pickLinked(id: string) {
+    setLinkedCompanyId(id)
+    const picked = linkOptions.find((c) => c.id === id)
+    if (picked && !name.trim()) {
+      setName(picked.name)
+      setEmoji(picked.emoji)
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -346,7 +373,7 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await fetch('/api/ceo/companies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, emoji, color, strategicWeight }),
+        body: JSON.stringify({ name, emoji, color, strategicWeight, companyId: linkedCompanyId || undefined }),
       })
       if (!res.ok) throw new Error()
       showToast('Empresa creada', 'success')
@@ -401,6 +428,26 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <input type="range" min={1} max={5} step={1} value={strategicWeight}
               onChange={(e) => setStrategicWeight(Number(e.target.value))} className="w-full accent-indigo-500" />
           </div>
+          {linkOptions.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-zinc-400 block mb-1">
+                Vincular con empresa de Empresas (opcional)
+              </label>
+              <select
+                value={linkedCompanyId}
+                onChange={(e) => pickLinked(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">— Ninguna (independiente) —</option>
+                {linkOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-zinc-600 mt-1">
+                Si ya la tienes en Empresas, vincúlala para no duplicarla.
+              </p>
+            </div>
+          )}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-zinc-800 text-zinc-300 hover:bg-zinc-700">Cancelar</button>
             <button type="submit" disabled={saving || !name.trim()} className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40">

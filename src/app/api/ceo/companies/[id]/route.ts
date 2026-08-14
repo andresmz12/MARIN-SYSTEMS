@@ -20,6 +20,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     if (!existing) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
+    if (parsed.data.companyId) {
+      const owned = await prisma.company.findFirst({ where: { id: parsed.data.companyId, userId: session.user.id } })
+      if (!owned) return NextResponse.json({ error: 'Empresa a vincular no encontrada' }, { status: 404 })
+    }
+
     const company = await prisma.cEOCompany.update({
       where: { id: params.id },
       data: parsed.data,

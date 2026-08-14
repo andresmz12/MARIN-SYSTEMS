@@ -45,6 +45,7 @@ interface UrgentTask {
   priority: string
   status: string
   dueDate?: string | null
+  source: 'interna' | 'corp'
   company: {
     id: string
     name: string
@@ -82,6 +83,7 @@ export default function DashboardPage() {
   const [completions, setCompletions] = useState<HabitCompletion[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
   const [urgentTasks, setUrgentTasks] = useState<UrgentTask[]>([])
+  const [dailyGoals, setDailyGoals] = useState<{ id: string; todayDone: boolean }[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState(false)
@@ -99,14 +101,16 @@ export default function DashboardPage() {
     setLoadError(false)
     setLoading(true)
     try {
-      const [stateRes, tradesRes, habitsRes, completionsRes, eventsRes, companiesRes, statsRes] = await Promise.all([
+      const [stateRes, tradesRes, habitsRes, completionsRes, eventsRes, companiesRes, corpTasksRes, statsRes, goalsRes] = await Promise.all([
         fetch(`/api/daily-state?date=${today}`),
         fetch(`/api/trades?date=${today}`),
         fetch('/api/habits'),
         fetch(`/api/habits/complete?date=${today}`),
         fetch(`/api/events?from=${today}`),
         fetch('/api/companies'),
+        fetch('/api/corporate-tasks'),
         fetch('/api/stats'),
+        fetch('/api/goals'),
       ])
 
       if (stateRes.ok) {
@@ -121,18 +125,30 @@ export default function DashboardPage() {
         setUpcomingEvents(events.slice(0, 5))
       }
       if (statsRes.ok) setStats(await statsRes.json())
+      const urgent: UrgentTask[] = []
       if (companiesRes.ok) {
         const companies: Array<{ id: string; name: string; color: string; emoji: string; tasks: Array<{ id: string; title: string; priority: string; status: string; dueDate?: string | null }> }> = await companiesRes.json()
-        const urgent: UrgentTask[] = []
-        const todayDate = new Date(today)
         for (const c of companies) {
           for (const t of c.tasks) {
             if (t.priority === 'alta' && t.status !== 'completada') {
-              urgent.push({ id: t.id, title: t.title, priority: t.priority, status: t.status, dueDate: t.dueDate, company: { id: c.id, name: c.name, color: c.color, emoji: c.emoji } })
+              urgent.push({ id: t.id, title: t.title, priority: t.priority, status: t.status, dueDate: t.dueDate, source: 'interna', company: { id: c.id, name: c.name, color: c.color, emoji: c.emoji } })
             }
           }
         }
-        setUrgentTasks(urgent.slice(0, 6))
+      }
+      if (corpTasksRes.ok) {
+        const corpTasks: Array<{ id: string; title: string; priority: string; status: string; dueDate?: string | null; company: { id: string; name: string; color: string; emoji: string } }> = await corpTasksRes.json()
+        for (const t of corpTasks) {
+          if ((t.priority === 'high' || t.priority === 'urgent') && t.status !== 'completed') {
+            urgent.push({ id: t.id, title: t.title, priority: t.priority, status: t.status, dueDate: t.dueDate, source: 'corp', company: t.company })
+          }
+        }
+      }
+      urgent.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
+      setUrgentTasks(urgent.slice(0, 6))
+      if (goalsRes.ok) {
+        const goals: Array<{ subGoals: Array<{ id: string; daily: boolean; todayDone: boolean }> }> = await goalsRes.json()
+        setDailyGoals(goals.flatMap((g) => g.subGoals.filter((s) => s.daily).map((s) => ({ id: s.id, todayDone: s.todayDone }))))
       }
     } catch {
       setLoadError(true)
@@ -236,7 +252,12 @@ export default function DashboardPage() {
           </p>
           <div className="space-y-3">
             <div>
-              <label className="label">Estado mental ({MOOD_LABELS[dailyState.mentalState]})</label>
+              <div className="flex items-center justify-between">
+                <label className="label">Estado mental ({MOOD_LABELS[dailyState.mentalState]})</label>
+                <Link href="/journal" className="text-[11px] text-gray-600 hover:text-blue-400">
+                  Journal de hoy →
+                </Link>
+              </div>
               <div className="flex gap-1.5">
                 {[1, 2, 3, 4, 5].map((v) => (
                   <button
@@ -297,6 +318,11 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-600 mt-1">
             completados{stats && stats.habitStreak > 0 ? ` · 🔥 ${stats.habitStreak}d racha` : ''}
           </p>
+          {dailyGoals.length > 0 && (
+            <Link href="/metas" className="text-xs text-gray-600 hover:text-blue-400 mt-0.5 block">
+              🎯 {dailyGoals.filter((g) => g.todayDone).length}/{dailyGoals.length} metas diarias
+            </Link>
+          )}
         </div>
         <div className="card">
           <p className="text-xs text-gray-500 uppercase tracking-wider">Pre-mercado</p>
@@ -349,8 +375,8 @@ export default function DashboardPage() {
           <div className="space-y-2">
             {urgentTasks.map((task) => (
               <Link
-                key={task.id}
-                href={`/empresas/${task.company.id}`}
+                key={`${task.source}-${task.id}`}
+                href={task.source === 'corp' ? `/corporate-tasks/${task.id}` : `/empresas/${task.company.id}`}
                 className="flex items-center gap-3 py-1.5 hover:bg-[#1a1a1a] rounded-lg px-1 transition-colors group"
               >
                 <div
@@ -361,6 +387,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-200 truncate">{task.title}</p>
                   <p className="text-xs text-gray-600">
                     {task.company.emoji} {task.company.name}
+                    {task.source === 'corp' && <span className="ml-1.5 text-purple-400">· Corp</span>}
                   </p>
                 </div>
                 {task.dueDate && new Date(task.dueDate) < new Date(today) ? (
@@ -369,7 +396,7 @@ export default function DashboardPage() {
                   </span>
                 ) : (
                   <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 flex-shrink-0">
-                    {task.status === 'en-progreso' ? 'En progreso' : 'Pendiente'}
+                    {task.status === 'en-progreso' || task.status === 'sent' ? 'En progreso' : 'Pendiente'}
                   </span>
                 )}
               </Link>

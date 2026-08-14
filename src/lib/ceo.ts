@@ -206,6 +206,7 @@ export const CEOCompanyCreateSchema = z.object({
   country: z.array(z.string().max(8)).optional().default([]),
   strategicWeight: z.number().int().min(1).max(5).optional(),
   isActive: z.boolean().optional(),
+  companyId: z.string().nullable().optional(),
 })
 
 export const CEOCompanyUpdateSchema = z.object({
@@ -215,6 +216,7 @@ export const CEOCompanyUpdateSchema = z.object({
   country: z.array(z.string().max(8)).optional(),
   strategicWeight: z.number().int().min(1).max(5).optional(),
   isActive: z.boolean().optional(),
+  companyId: z.string().nullable().optional(),
 })
 
 export const MarketingIdeaCreateSchema = z.object({

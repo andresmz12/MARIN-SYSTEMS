@@ -21,6 +21,7 @@ export async function GET() {
           where: { status: 'pending' },
           select: { id: true },
         },
+        company: { select: { id: true, name: true } },
       },
     })
 
@@ -47,7 +48,12 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
     }
-    const { name, color, emoji, country, strategicWeight, isActive } = parsed.data
+    const { name, color, emoji, country, strategicWeight, isActive, companyId } = parsed.data
+
+    if (companyId) {
+      const owned = await prisma.company.findFirst({ where: { id: companyId, userId: session.user.id } })
+      if (!owned) return NextResponse.json({ error: 'Empresa a vincular no encontrada' }, { status: 404 })
+    }
 
     const company = await prisma.cEOCompany.create({
       data: {
@@ -58,6 +64,7 @@ export async function POST(req: NextRequest) {
         country: country ?? [],
         strategicWeight: strategicWeight ?? 3,
         isActive: isActive ?? true,
+        companyId: companyId ?? null,
       },
     })
 

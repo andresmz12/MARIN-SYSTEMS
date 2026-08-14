@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 /* ────────────────────── Types ────────────────────── */
 
-interface TeamMember { id: string; name: string; role: string }
+interface TeamMember { id: string; name: string; role: string; email: string | null }
 interface CompanyLink { id: string; name: string; url: string; type: string; description: string | null }
 interface Task {
   id: string; title: string; description: string | null
@@ -16,12 +16,17 @@ interface Task {
 interface Note {
   id: string; title: string; content: string; createdAt: string; updatedAt: string
 }
+interface CorporateTaskSummary {
+  id: string; title: string; priority: string; status: string; dueDate: string | null
+}
 interface Company {
   id: string; name: string; description: string | null; longDesc: string | null
   emoji: string; color: string; status: string; industry: string | null
   website: string | null; foundedAt: string | null; tools: string[]
   privateNotes: string | null; teamMembers: TeamMember[]; links: CompanyLink[]
   tasks: Task[]; notes: Note[]
+  corporateTasks: CorporateTaskSummary[]
+  ceoCompany: { id: string } | null
 }
 
 /* ────────────────────── Constants ────────────────────── */
@@ -148,6 +153,14 @@ export default function CompanyPage() {
                       {company.industry}
                     </span>
                   )}
+                  {company.ceoCompany && (
+                    <Link
+                      href="/command-center"
+                      className="text-xs px-2 py-0.5 rounded-full border border-indigo-500/30 text-indigo-400 hover:text-indigo-300"
+                    >
+                      🔗 En Command Center
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
@@ -191,8 +204,24 @@ export default function CompanyPage() {
       <AnimatePresence mode="wait">
         <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
           {activeTab === 'tareas' && (
-            <TasksTab companyId={id} tasks={company.tasks} color={company.color}
-              onUpdate={(tasks) => setCompany((p) => p ? { ...p, tasks } : p)} />
+            <div className="space-y-4">
+              {company.corporateTasks.length > 0 && (
+                <Link
+                  href={`/corporate-tasks?companyId=${id}`}
+                  className="card flex items-center justify-between hover:border-purple-500/30 transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-200">
+                      📨 {company.corporateTasks.length} tarea{company.corporateTasks.length > 1 ? 's' : ''} corporativa{company.corporateTasks.length > 1 ? 's' : ''} pendiente{company.corporateTasks.length > 1 ? 's' : ''}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">Con recordatorios por email — distinto de las tareas internas de abajo</p>
+                  </div>
+                  <span className="text-purple-400 text-sm flex-shrink-0">Ver →</span>
+                </Link>
+              )}
+              <TasksTab companyId={id} tasks={company.tasks} color={company.color}
+                onUpdate={(tasks) => setCompany((p) => p ? { ...p, tasks } : p)} />
+            </div>
           )}
           {activeTab === 'notas' && (
             <NotesTab companyId={id} notes={company.notes}
@@ -700,7 +729,7 @@ function InfoTab({ company, onUpdate }: { company: Company; onUpdate: (d: Partia
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="label mb-0">Equipo</label>
-          <button onClick={() => setForm({ ...form, teamMembers: [...form.teamMembers, { id: '', name: '', role: '' }] })} className="text-xs text-blue-400 hover:text-blue-300">+ Agregar</button>
+          <button onClick={() => setForm({ ...form, teamMembers: [...form.teamMembers, { id: '', name: '', role: '', email: '' }] })} className="text-xs text-blue-400 hover:text-blue-300">+ Agregar</button>
         </div>
         <div className="space-y-2">
           {form.teamMembers.map((member, i) => (
@@ -709,6 +738,8 @@ function InfoTab({ company, onUpdate }: { company: Company; onUpdate: (d: Partia
                 onChange={(e) => { const u = [...form.teamMembers]; u[i] = { ...u[i], name: e.target.value }; setForm({ ...form, teamMembers: u }) }} />
               <input className="input flex-1 text-sm" placeholder="Rol" value={member.role}
                 onChange={(e) => { const u = [...form.teamMembers]; u[i] = { ...u[i], role: e.target.value }; setForm({ ...form, teamMembers: u }) }} />
+              <input className="input flex-1 text-sm" placeholder="Email (opcional)" type="email" value={member.email ?? ''}
+                onChange={(e) => { const u = [...form.teamMembers]; u[i] = { ...u[i], email: e.target.value }; setForm({ ...form, teamMembers: u }) }} />
               <button onClick={() => setForm({ ...form, teamMembers: form.teamMembers.filter((_, j) => j !== i) })} className="text-gray-600 hover:text-red-400 px-2 text-lg">×</button>
             </div>
           ))}

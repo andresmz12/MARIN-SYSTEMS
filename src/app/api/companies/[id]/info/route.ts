@@ -38,10 +38,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       await tx.companyTeamMember.deleteMany({ where: { companyId: params.id } })
       if (teamMembers.length > 0) {
         await tx.companyTeamMember.createMany({
-          data: teamMembers.map((m: { name: string; role: string }) => ({
+          data: teamMembers.map((m: { name: string; role: string; email?: string }) => ({
             companyId: params.id,
             name: m.name,
             role: m.role,
+            email: m.email || null,
           })),
         })
       }
