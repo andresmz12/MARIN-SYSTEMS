@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { getDailyQuote, computeTrafficLight } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
+import { Sparkline } from '@/components/ui/Sparkline'
 
 interface DailyState {
   id?: string
@@ -30,6 +31,11 @@ interface HabitCompletion {
   habitId: string
 }
 
+interface HabitHistoryEntry {
+  habitId: string
+  date: string
+}
+
 interface Event {
   id: string
   title: string
@@ -54,6 +60,11 @@ interface UrgentTask {
   }
 }
 
+interface CorpTaskLite {
+  status: string
+  completedAt: string | null
+}
+
 interface CeoStats {
   totalBlocks: number
   doneBlocks: number
@@ -66,6 +77,7 @@ interface Stats {
   last10WinRate: number
   habitStreak: number
   ceo: CeoStats | null
+  equityCurve: { date: string; cumPips: number }[]
 }
 
 interface FinanceSummary {
@@ -84,46 +96,74 @@ interface IrsNewsLite {
 
 const MOOD_LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente']
 
-// ── Section wrapper: agrupa tarjetas bajo un mismo "mundo" (Trading, Vida
-// Personal, Negocios, Contenido), reflejando los mismos grupos del sidebar ──
+const ACCENT = {
+  blue: { text: 'text-blue-400', border: 'border-blue-500/30 hover:border-blue-500/50', badge: 'bg-blue-500/15 border-blue-500/30 text-blue-400', wash: 'from-blue-500/[0.08]', hex: '#3b82f6' },
+  purple: { text: 'text-purple-400', border: 'border-purple-500/30 hover:border-purple-500/50', badge: 'bg-purple-500/15 border-purple-500/30 text-purple-400', wash: 'from-purple-500/[0.08]', hex: '#a855f7' },
+  emerald: { text: 'text-emerald-400', border: 'border-emerald-500/30 hover:border-emerald-500/50', badge: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400', wash: 'from-emerald-500/[0.08]', hex: '#10b981' },
+  amber: { text: 'text-amber-400', border: 'border-amber-500/30 hover:border-amber-500/50', badge: 'bg-amber-500/15 border-amber-500/30 text-amber-400', wash: 'from-amber-500/[0.08]', hex: '#f59e0b' },
+} as const
+
+type Accent = keyof typeof ACCENT
+
+// ── Section: agrupa tarjetas bajo un mismo "mundo" (Trading, Vida Personal,
+// Negocios, Contenido), reflejando los mismos grupos del sidebar ──
 function Section({
   icon, title, accent, href, hrefLabel, children,
 }: {
   icon: ReactNode
   title: string
-  accent: 'blue' | 'purple' | 'emerald' | 'amber'
+  accent: Accent
   href?: string
   hrefLabel?: string
   children: ReactNode
 }) {
-  const borderClasses: Record<string, string> = {
-    blue: 'border-blue-500/30',
-    purple: 'border-purple-500/30',
-    emerald: 'border-emerald-500/30',
-    amber: 'border-amber-500/30',
-  }
-  const textClasses: Record<string, string> = {
-    blue: 'text-blue-400',
-    purple: 'text-purple-400',
-    emerald: 'text-emerald-400',
-    amber: 'text-amber-400',
-  }
+  const a = ACCENT[accent]
   return (
-    <section className={`rounded-2xl border-2 p-4 space-y-4 bg-[var(--bg-elevated)] ${borderClasses[accent]}`}>
-      <div className="flex items-center justify-between">
-        <div className={`flex items-center gap-2 font-bold text-sm uppercase tracking-wider ${textClasses[accent]}`}>
-          {icon}
-          {title}
+    <section className={`relative overflow-hidden rounded-2xl border p-5 space-y-4 bg-[var(--bg-elevated)] transition-colors ${a.border}`}>
+      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${a.wash} to-transparent`} />
+      <div className="relative flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${a.badge}`}>
+            {icon}
+          </div>
+          <h2 className="font-bold text-[15px] text-white tracking-tight">{title}</h2>
         </div>
         {href && (
-          <Link href={href} className={`text-xs hover:underline ${textClasses[accent]}`}>
+          <Link href={href} className={`text-xs font-medium hover:underline ${a.text}`}>
             {hrefLabel ?? 'Ver todo'} →
           </Link>
         )}
       </div>
-      {children}
+      <div className="relative space-y-4">{children}</div>
     </section>
   )
+}
+
+function StatBlock({ label, value, valueClass, caption }: { label: string; value: ReactNode; valueClass?: string; caption?: string }) {
+  return (
+    <div>
+      <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium">{label}</p>
+      <p className={`text-3xl font-extrabold mt-0.5 tracking-tight ${valueClass ?? 'text-white'}`}>{value}</p>
+      {caption && <p className="text-xs text-gray-600 mt-0.5">{caption}</p>}
+    </div>
+  )
+}
+
+function last14Dates(): string[] {
+  const days: string[] = []
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    days.push(d.toISOString().split('T')[0])
+  }
+  return days
+}
+
+function countByDay(dates: string[], itemDates: string[]): { x: string; y: number }[] {
+  return dates.map((d) => ({
+    x: `${d.slice(8, 10)}/${d.slice(5, 7)}`,
+    y: itemDates.filter((it) => it === d).length,
+  }))
 }
 
 export default function DashboardPage() {
@@ -136,8 +176,10 @@ export default function DashboardPage() {
   const [todayTrades, setTodayTrades] = useState<Trade[]>([])
   const [habits, setHabits] = useState<Habit[]>([])
   const [completions, setCompletions] = useState<HabitCompletion[]>([])
+  const [habitHistory, setHabitHistory] = useState<HabitHistoryEntry[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
   const [urgentTasks, setUrgentTasks] = useState<UrgentTask[]>([])
+  const [corpTasksAll, setCorpTasksAll] = useState<CorpTaskLite[]>([])
   const [dailyGoals, setDailyGoals] = useState<{ id: string; todayDone: boolean }[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [finance, setFinance] = useState<FinanceSummary | null>(null)
@@ -160,7 +202,7 @@ export default function DashboardPage() {
     setLoading(true)
     try {
       const [
-        stateRes, tradesRes, habitsRes, completionsRes, eventsRes,
+        stateRes, tradesRes, habitsRes, completionsRes, habitHistoryRes, eventsRes,
         companiesRes, corpTasksRes, statsRes, goalsRes,
         financeRes, studioRes, irsNewsRes,
       ] = await Promise.all([
@@ -168,6 +210,7 @@ export default function DashboardPage() {
         fetch(`/api/trades?date=${today}`),
         fetch('/api/habits'),
         fetch(`/api/habits/complete?date=${today}`),
+        fetch('/api/habits/history'),
         fetch(`/api/events?from=${today}`),
         fetch('/api/companies'),
         fetch('/api/corporate-tasks'),
@@ -185,6 +228,7 @@ export default function DashboardPage() {
       if (tradesRes.ok) setTodayTrades(await tradesRes.json())
       if (habitsRes.ok) setHabits(await habitsRes.json())
       if (completionsRes.ok) setCompletions(await completionsRes.json())
+      if (habitHistoryRes.ok) setHabitHistory(await habitHistoryRes.json())
       if (eventsRes.ok) {
         const events = await eventsRes.json()
         setUpcomingEvents(events.slice(0, 5))
@@ -205,7 +249,8 @@ export default function DashboardPage() {
         }
       }
       if (corpTasksRes.ok) {
-        const corpTasks: Array<{ id: string; title: string; priority: string; status: string; dueDate?: string | null; company: { id: string; name: string; color: string; emoji: string } }> = await corpTasksRes.json()
+        const corpTasks: Array<{ id: string; title: string; priority: string; status: string; dueDate?: string | null; completedAt: string | null; company: { id: string; name: string; color: string; emoji: string } }> = await corpTasksRes.json()
+        setCorpTasksAll(corpTasks.map((t) => ({ status: t.status, completedAt: t.completedAt })))
         for (const t of corpTasks) {
           if ((t.priority === 'high' || t.priority === 'urgent') && t.status !== 'completed') {
             urgent.push({ id: t.id, title: t.title, priority: t.priority, status: t.status, dueDate: t.dueDate, source: 'corp', company: t.company })
@@ -255,10 +300,16 @@ export default function DashboardPage() {
     completions.some((c) => c.habitId === h.id)
   ).length
 
+  const dates14 = last14Dates()
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const contentThisWeek = studioSessions.filter((s) => new Date(s.createdAt) >= sevenDaysAgo).length
   const irsNewsPending = irsNews.filter((n) => !n.used).length
+
+  const equitySpark = (stats?.equityCurve ?? []).slice(-14).map((p, i) => ({ x: `${i + 1}`, y: p.cumPips }))
+  const habitsSpark = countByDay(dates14, habitHistory.map((h) => h.date.split('T')[0]))
+  const contentSpark = countByDay(dates14, studioSessions.map((s) => s.createdAt.split('T')[0]))
+  const negociosSpark = countByDay(dates14, corpTasksAll.filter((t) => t.completedAt).map((t) => t.completedAt!.split('T')[0]))
 
   const lightConfig = {
     verde: { label: 'Condición ÓPTIMA', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30', dot: 'bg-green-400' },
@@ -275,7 +326,7 @@ export default function DashboardPage() {
           <div className="card h-24 bg-[#1a1a1a] animate-pulse" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-40 bg-[#1a1a1a] animate-pulse rounded-2xl" />)}
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-56 bg-[#1a1a1a] animate-pulse rounded-2xl" />)}
         </div>
       </div>
     )
@@ -390,18 +441,17 @@ export default function DashboardPage() {
           }
         >
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Trades hoy</p>
-              <p className="text-2xl font-bold text-white mt-0.5">{todayTrades.length}</p>
-              <p className="text-xs text-gray-600">{wins}W · {losses}L</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Win Rate</p>
-              <p className={`text-2xl font-bold mt-0.5 ${winRate >= 60 ? 'text-green-400' : winRate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                {winRate}%
-              </p>
-              <p className="text-xs text-gray-600">últ. 10: {stats?.last10WinRate ?? '—'}%</p>
-            </div>
+            <StatBlock label="Trades hoy" value={todayTrades.length} caption={`${wins}W · ${losses}L`} />
+            <StatBlock
+              label="Win Rate"
+              value={`${winRate}%`}
+              valueClass={winRate >= 60 ? 'text-green-400' : winRate >= 40 ? 'text-yellow-400' : 'text-red-400'}
+              caption={`últ. 10: ${stats?.last10WinRate ?? '—'}%`}
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-600 mb-1">Curva de equity · últimos 14 trades</p>
+            <Sparkline data={equitySpark} color={ACCENT.blue.hex} valueSuffix=" pips" />
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
             <Link href="/trading/diario" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5">
@@ -426,20 +476,21 @@ export default function DashboardPage() {
           }
         >
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Hábitos</p>
-              <p className="text-2xl font-bold text-white mt-0.5">{completedCount}/{habits.length}</p>
-              <p className="text-xs text-gray-600">
-                {stats && stats.habitStreak > 0 ? `🔥 ${stats.habitStreak}d racha` : 'completados hoy'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Pre-mercado</p>
-              <p className={`text-2xl font-bold mt-0.5 ${completedPreMarket === preMarketHabits.length && preMarketHabits.length > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
-                {completedPreMarket}/{preMarketHabits.length}
-              </p>
-              <p className="text-xs text-gray-600">rutina</p>
-            </div>
+            <StatBlock
+              label="Hábitos"
+              value={`${completedCount}/${habits.length}`}
+              caption={stats && stats.habitStreak > 0 ? `🔥 ${stats.habitStreak}d racha` : 'completados hoy'}
+            />
+            <StatBlock
+              label="Pre-mercado"
+              value={`${completedPreMarket}/${preMarketHabits.length}`}
+              valueClass={completedPreMarket === preMarketHabits.length && preMarketHabits.length > 0 ? 'text-green-400' : 'text-yellow-400'}
+              caption="rutina"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-600 mb-1">Hábitos completados · últimos 14 días</p>
+            <Sparkline data={habitsSpark} color={ACCENT.purple.hex} />
           </div>
           <div className="flex items-center justify-between text-xs pt-1 border-t border-[#2a2a2a]">
             {dailyGoals.length > 0 ? (
@@ -453,19 +504,6 @@ export default function DashboardPage() {
               </Link>
             )}
           </div>
-          {upcomingEvents.length > 0 ? (
-            <div className="space-y-1.5 pt-1 border-t border-[#2a2a2a]">
-              {upcomingEvents.slice(0, 3).map((event) => (
-                <div key={event.id} className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${event.isForexNews ? 'bg-red-400' : 'bg-purple-400'}`} />
-                  <p className="text-xs text-gray-300 flex-1 truncate">{event.title}</p>
-                  <p className="text-[11px] text-gray-600">{event.time || '—'}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-600 pt-1 border-t border-[#2a2a2a]">Sin eventos próximos</p>
-          )}
         </Section>
 
         {/* Negocios */}
@@ -479,25 +517,23 @@ export default function DashboardPage() {
             </svg>
           }
         >
-          {stats?.ceo && (
-            <div>
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>🎯 Plan del día — Command Center</span>
-                <span className={`font-bold ${stats.ceo.pct >= 75 ? 'text-emerald-400' : stats.ceo.pct >= 40 ? 'text-yellow-400' : 'text-zinc-400'}`}>
-                  {stats.ceo.pct}%
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all"
-                  style={{ width: `${stats.ceo.pct}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-600">
-                {stats.ceo.doneBlocks} de {stats.ceo.totalBlocks} bloques · {stats.ceo.workedHours}h trabajadas
-              </p>
+          {stats?.ceo ? (
+            <div className="grid grid-cols-2 gap-3">
+              <StatBlock
+                label="Plan del día"
+                value={`${stats.ceo.pct}%`}
+                valueClass={stats.ceo.pct >= 75 ? 'text-emerald-400' : stats.ceo.pct >= 40 ? 'text-yellow-400' : 'text-zinc-400'}
+                caption={`${stats.ceo.doneBlocks}/${stats.ceo.totalBlocks} bloques`}
+              />
+              <StatBlock label="Horas trabajadas" value={`${stats.ceo.workedHours}h`} caption="Command Center" />
             </div>
+          ) : (
+            <StatBlock label="Tareas urgentes" value={urgentTasks.length} caption="empresas + corporativas" />
           )}
+          <div>
+            <p className="text-[11px] text-gray-600 mb-1">Tareas corporativas completadas · últimos 14 días</p>
+            <Sparkline data={negociosSpark} color={ACCENT.emerald.hex} />
+          </div>
           {urgentTasks.length > 0 ? (
             <div className="space-y-1.5 pt-1 border-t border-[#2a2a2a]">
               <p className="text-xs text-gray-500 flex items-center gap-1.5">
@@ -536,18 +572,17 @@ export default function DashboardPage() {
           }
         >
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Guiones esta semana</p>
-              <p className="text-2xl font-bold text-white mt-0.5">{contentThisWeek}</p>
-              <p className="text-xs text-gray-600">sesiones de estudio</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">IRS News</p>
-              <p className={`text-2xl font-bold mt-0.5 ${irsNewsPending > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
-                {irsNewsPending}
-              </p>
-              <p className="text-xs text-gray-600">pendientes de usar</p>
-            </div>
+            <StatBlock label="Guiones esta semana" value={contentThisWeek} caption="sesiones de estudio" />
+            <StatBlock
+              label="IRS News"
+              value={irsNewsPending}
+              valueClass={irsNewsPending > 0 ? 'text-amber-400' : 'text-gray-500'}
+              caption="pendientes de usar"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-600 mb-1">Guiones generados · últimos 14 días</p>
+            <Sparkline data={contentSpark} color={ACCENT.amber.hex} />
           </div>
           <div className="flex flex-wrap gap-2 pt-1 border-t border-[#2a2a2a]">
             <Link href="/content-creator" className="btn-secondary text-xs py-1.5 px-3">Content Creator</Link>
