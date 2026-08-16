@@ -28,11 +28,11 @@ interface HabitHistory {
 }
 
 const CATEGORIES = ['trading', 'salud', 'personal', 'aprendizaje']
-const CATEGORY_COLORS: Record<string, string> = {
-  trading: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  salud: 'bg-green-500/20 text-green-400 border-green-500/30',
-  personal: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  aprendizaje: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+const CATEGORY_DOT: Record<string, string> = {
+  trading: 'bg-blue-400',
+  salud: 'bg-green-400',
+  personal: 'bg-purple-400',
+  aprendizaje: 'bg-yellow-400',
 }
 
 const MONTH_NAMES = [
@@ -42,11 +42,11 @@ const MONTH_NAMES = [
 const WEEKDAY_ABBR = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 
 const WEEK_PALETTE = [
-  { bg: 'bg-pink-500/10', border: 'border-pink-500/20', text: 'text-pink-400', bar: 'bg-pink-500', check: 'bg-pink-500 border-pink-500' },
-  { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-400', bar: 'bg-purple-500', check: 'bg-purple-500 border-purple-500' },
-  { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400', bar: 'bg-blue-500', check: 'bg-blue-500 border-blue-500' },
-  { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400', bar: 'bg-cyan-500', check: 'bg-cyan-500 border-cyan-500' },
-  { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', bar: 'bg-emerald-500', check: 'bg-emerald-500 border-emerald-500' },
+  { bg: 'bg-pink-500/10', text: 'text-pink-400', bar: 'bg-pink-500', check: 'bg-pink-500 border-pink-500' },
+  { bg: 'bg-purple-500/10', text: 'text-purple-400', bar: 'bg-purple-500', check: 'bg-purple-500 border-purple-500' },
+  { bg: 'bg-blue-500/10', text: 'text-blue-400', bar: 'bg-blue-500', check: 'bg-blue-500 border-blue-500' },
+  { bg: 'bg-cyan-500/10', text: 'text-cyan-400', bar: 'bg-cyan-500', check: 'bg-cyan-500 border-cyan-500' },
+  { bg: 'bg-emerald-500/10', text: 'text-emerald-400', bar: 'bg-emerald-500', check: 'bg-emerald-500 border-emerald-500' },
 ]
 
 const emptyForm = {
@@ -64,16 +64,6 @@ function pad2(n: number) {
 function currentMonthStr(): string {
   const d = new Date()
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
-}
-
-function generateLast84Days(): string[] {
-  const days: string[] = []
-  for (let i = 83; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    days.push(d.toISOString().split('T')[0])
-  }
-  return days
 }
 
 function shiftMonth(monthStr: string, delta: number): string {
@@ -114,13 +104,10 @@ export default function HabitosPage() {
   const [loading, setLoading] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [viewMode, setViewMode] = useState<'mensual' | 'lista'>('mensual')
   const [currentMonth, setCurrentMonth] = useState(currentMonthStr())
   const [monthHistory, setMonthHistory] = useState<HabitHistory[]>([])
   const [monthLoading, setMonthLoading] = useState(false)
   const today = new Date().toISOString().split('T')[0]
-  const days84 = generateLast84Days()
 
   useEffect(() => {
     loadData()
@@ -162,7 +149,7 @@ export default function HabitosPage() {
   }
 
   async function toggleHabit(habitId: string) {
-    // Optimistic update
+    // Hábitos semanales — toggle de "hoy"
     const isDone = completions.some((c) => c.habitId === habitId)
     if (isDone) {
       setCompletions((prev) => prev.filter((c) => c.habitId !== habitId))
@@ -175,9 +162,7 @@ export default function HabitosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ habitId, date: today }),
       })
-      if (currentMonth === currentMonthStr()) loadMonthHistory(currentMonth)
     } catch {
-      // Revert on error
       if (isDone) {
         setCompletions((prev) => [...prev, { id: `temp-${habitId}`, habitId, date: today }])
       } else {
@@ -191,7 +176,6 @@ export default function HabitosPage() {
     if (dateStr > today) return // no se pueden marcar días futuros
 
     const isDone = monthHistory.some((h) => h.habitId === habitId && h.date.startsWith(dateStr))
-    // Optimistic update
     if (isDone) {
       setMonthHistory((prev) => prev.filter((h) => !(h.habitId === habitId && h.date.startsWith(dateStr))))
     } else {
@@ -209,7 +193,6 @@ export default function HabitosPage() {
         body: JSON.stringify({ habitId, date: dateStr }),
       })
     } catch {
-      // Revert on error
       if (isDone) setMonthHistory((prev) => [...prev, { habitId, date: dateStr }])
       else setMonthHistory((prev) => prev.filter((h) => !(h.habitId === habitId && h.date.startsWith(dateStr))))
       if (dateStr === today) {
@@ -307,12 +290,12 @@ export default function HabitosPage() {
     return streak
   }
 
-  const filtered = selectedCategory === 'all' ? habits : habits.filter((h) => h.category === selectedCategory)
-  const completedCount = completions.length
-  const totalHabits = habits.filter((h) => h.frequency === 'diario').length
+  const dailyHabits = habits.filter((h) => h.frequency === 'diario')
+  const weeklyHabits = habits.filter((h) => h.frequency === 'semanal')
+  const completedCount = completions.filter((c) => dailyHabits.some((h) => h.id === c.habitId)).length
+  const totalHabits = dailyHabits.length
 
   // ── Datos de la vista mensual ──
-  const dailyHabits = habits.filter((h) => h.frequency === 'diario')
   const monthDays = getMonthDays(currentMonth)
   const weeks = chunkWeeks(monthDays, 7)
   const isCurrentCalendarMonth = currentMonth === currentMonthStr()
@@ -326,25 +309,20 @@ export default function HabitosPage() {
 
   const dailyHabitIds = new Set(dailyHabits.map((h) => h.id))
   const totalCompletedThisMonth = monthHistory.filter((h) => dailyHabitIds.has(h.habitId)).length
-  const daysElapsedInMonth = isCurrentCalendarMonth
-    ? monthDays.filter((d) => d.dateStr <= today).length
-    : monthDays.length
-  const totalPossibleSoFar = dailyHabits.length * daysElapsedInMonth
-  const remainingThisMonth = Math.max(0, dailyHabits.length * monthDays.length - totalCompletedThisMonth)
+  const totalSlotsThisMonth = dailyHabits.length * monthDays.length
+  const remainingThisMonth = Math.max(0, totalSlotsThisMonth - totalCompletedThisMonth)
 
   const trendData = monthDays.map((d) => ({
     day: d.day,
-    completados: dailyHabits.length > 0 ? (monthCompletedByDate[d.dateStr]?.size ?? 0) : 0,
+    completados: monthCompletedByDate[d.dateStr]?.size ?? 0,
   }))
 
   if (pageLoading) {
     return (
       <div className="space-y-6">
         <div className="h-8 w-40 bg-[#1a1a1a] animate-pulse rounded" />
-        <div className="card h-12 bg-[#1a1a1a] animate-pulse" />
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="card h-16 bg-[#1a1a1a] animate-pulse" />)}
-        </div>
+        <div className="card h-24 bg-[#1a1a1a] animate-pulse" />
+        <div className="card h-64 bg-[#1a1a1a] animate-pulse" />
       </div>
     )
   }
@@ -367,35 +345,19 @@ export default function HabitosPage() {
             {completedCount}/{totalHabits} completados hoy
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-[#2a2a2a] p-0.5">
-            <button
-              onClick={() => setViewMode('mensual')}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                viewMode === 'mensual' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              Mensual
-            </button>
-            <button
-              onClick={() => setViewMode('lista')}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                viewMode === 'lista' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              Lista
-            </button>
-          </div>
-          <button onClick={openCreate} className="btn-primary flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nuevo hábito
-          </button>
-        </div>
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Nuevo hábito
+        </button>
       </div>
 
-      {viewMode === 'mensual' ? (
+      {habits.length === 0 ? (
+        <div className="card text-center py-10">
+          <p className="text-gray-600 text-sm">No hay hábitos todavía. ¡Crea el primero!</p>
+        </div>
+      ) : (
         <>
           {/* Month navigator */}
           <div className="flex items-center justify-between">
@@ -423,7 +385,7 @@ export default function HabitosPage() {
 
           {dailyHabits.length === 0 ? (
             <div className="card text-center py-8">
-              <p className="text-gray-600 text-sm">No hay hábitos diarios. ¡Crea el primero!</p>
+              <p className="text-gray-600 text-sm">No hay hábitos diarios este mes. Crea uno con frecuencia &quot;Diario&quot;.</p>
             </div>
           ) : (
             <>
@@ -442,13 +404,13 @@ export default function HabitosPage() {
                     <p className="text-xs text-blue-400 uppercase tracking-wider font-semibold">Días del mes</p>
                     <p className="text-2xl font-bold text-white">{monthDays.length}</p>
                   </div>
-                  {totalPossibleSoFar > 0 && (
+                  {totalSlotsThisMonth > 0 && (
                     <div className="pt-1 border-t border-[#2a2a2a]">
                       <p className="text-xs text-gray-500">Progreso global</p>
                       <p className="text-sm font-semibold text-white">
-                        {totalCompletedThisMonth}/{dailyHabits.length * monthDays.length}{' '}
+                        {totalCompletedThisMonth}/{totalSlotsThisMonth}{' '}
                         <span className="text-gray-500 font-normal">
-                          ({Math.round((totalCompletedThisMonth / (dailyHabits.length * monthDays.length)) * 100)}%)
+                          ({Math.round((totalCompletedThisMonth / totalSlotsThisMonth) * 100)}%)
                         </span>
                       </p>
                     </div>
@@ -503,7 +465,7 @@ export default function HabitosPage() {
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <span className="text-xs text-gray-500 w-20 flex-shrink-0 text-right">
+                        <span className="text-xs text-gray-500 w-24 flex-shrink-0 text-right">
                           {terminado}/{total} · {pct}%
                         </span>
                       </div>
@@ -522,7 +484,7 @@ export default function HabitosPage() {
                   <table className="border-separate" style={{ borderSpacing: '2px' }}>
                     <thead>
                       <tr>
-                        <th className="sticky left-0 z-10 bg-[color:var(--bg-elevated)] text-left text-xs text-gray-500 font-medium px-2 pb-2 min-w-[180px]">
+                        <th className="sticky left-0 z-10 bg-[color:var(--bg-elevated)] text-left text-xs text-gray-500 font-medium px-2 pb-2 min-w-[190px]">
                           Hábito
                         </th>
                         {weeks.map((week, wIdx) => {
@@ -538,9 +500,25 @@ export default function HabitosPage() {
                     </thead>
                     <tbody>
                       {dailyHabits.map((habit) => (
-                        <tr key={habit.id}>
+                        <tr key={habit.id} className="group">
                           <td className="sticky left-0 z-10 bg-[color:var(--bg-elevated)] px-2 py-1 text-sm text-white whitespace-nowrap">
-                            <span className="mr-1.5">{habit.emoji}</span>{habit.name}
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${CATEGORY_DOT[habit.category]}`} />
+                              <span>{habit.emoji}</span>
+                              <span className="truncate max-w-[110px]">{habit.name}</span>
+                              <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => openEdit(habit)} className="text-gray-600 hover:text-gray-300">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button onClick={() => deleteHabit(habit.id)} className="text-gray-600 hover:text-red-400">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </span>
+                            </div>
                           </td>
                           {weeks.map((week, wIdx) => {
                             const palette = WEEK_PALETTE[wIdx % WEEK_PALETTE.length]
@@ -588,185 +566,48 @@ export default function HabitosPage() {
               </div>
             </>
           )}
-        </>
-      ) : (
-        <>
-          {/* Progress bar */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Progreso de hoy</span>
-              <span className="text-sm font-semibold text-white">
-                {totalHabits > 0 ? Math.round((completedCount / totalHabits) * 100) : 0}%
-              </span>
-            </div>
-            <div className="w-full bg-[#111] rounded-full h-2.5">
-              <div
-                className="h-2.5 rounded-full bg-blue-600 transition-all duration-500"
-                style={{ width: `${totalHabits > 0 ? (completedCount / totalHabits) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
 
-          {/* Category filter */}
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                selectedCategory === 'all'
-                  ? 'bg-gray-500/20 text-gray-300 border-gray-500/40'
-                  : 'text-gray-600 border-[#2a2a2a] hover:text-gray-400'
-              }`}
-            >
-              Todos
-            </button>
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors capitalize ${
-                  selectedCategory === cat
-                    ? CATEGORY_COLORS[cat]
-                    : 'text-gray-600 border-[#2a2a2a] hover:text-gray-400'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Habits List */}
-          {filtered.length === 0 ? (
-            <div className="card text-center py-8">
-              <p className="text-gray-600 text-sm">No hay hábitos. ¡Crea el primero!</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map((habit) => {
-                const isDone = completions.some((c) => c.habitId === habit.id)
-                const streak = computeStreak(habit.id)
-                const habitHistory = history.filter((h) => h.habitId === habit.id).map((h) => h.date.split('T')[0])
-
-                return (
-                  <div key={habit.id} className="card flex items-start gap-4">
-                    {/* Toggle */}
-                    <button
-                      onClick={() => toggleHabit(habit.id)}
-                      className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                        isDone
-                          ? 'bg-green-500 border-green-500'
-                          : 'border-[#3a3a3a] hover:border-green-500'
-                      }`}
-                    >
-                      {isDone && (
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-lg">{habit.emoji}</span>
-                        <span className={`font-medium text-sm ${isDone ? 'text-gray-500 line-through' : 'text-white'}`}>
-                          {habit.name}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[habit.category]}`}>
-                          {habit.category}
-                        </span>
-                        {habit.isPreMarket && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                            pre-mercado
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Contribution mini-graph */}
-                      <div className="mt-2 flex gap-0.5 flex-wrap" style={{ maxWidth: '420px' }}>
-                        {days84.slice(-28).map((day) => {
-                          const done = habitHistory.includes(day) || (day === today && isDone)
-                          return (
-                            <div
-                              key={day}
-                              title={day}
-                              className={`w-3 h-3 rounded-sm ${done ? 'bg-green-500' : 'bg-[#222]'}`}
-                            />
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Streak + Actions */}
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {streak > 0 && (
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-orange-400">{streak}</p>
-                          <p className="text-[10px] text-gray-600">racha</p>
-                        </div>
-                      )}
+          {/* Hábitos semanales (no aplican a la grilla diaria) */}
+          {weeklyHabits.length > 0 && (
+            <div className="card">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Hábitos semanales</p>
+              <div className="space-y-2">
+                {weeklyHabits.map((habit) => {
+                  const isDone = completions.some((c) => c.habitId === habit.id)
+                  const streak = computeStreak(habit.id)
+                  return (
+                    <div key={habit.id} className="flex items-center gap-3 py-1.5">
                       <button
-                        onClick={() => openEdit(habit)}
-                        className="text-gray-600 hover:text-gray-400 transition-colors"
+                        onClick={() => toggleHabit(habit.id)}
+                        className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                          isDone ? 'bg-green-500 border-green-500' : 'border-[#3a3a3a] hover:border-green-500'
+                        }`}
                       >
+                        {isDone && (
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${CATEGORY_DOT[habit.category]}`} />
+                      <span className="text-lg">{habit.emoji}</span>
+                      <span className={`flex-1 text-sm font-medium ${isDone ? 'text-gray-500 line-through' : 'text-white'}`}>
+                        {habit.name}
+                      </span>
+                      {streak > 0 && <span className="text-xs font-bold text-orange-400">{streak}🔥</span>}
+                      <button onClick={() => openEdit(habit)} className="text-gray-600 hover:text-gray-300">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                      <button
-                        onClick={() => deleteHabit(habit.id)}
-                        className="text-gray-600 hover:text-red-400 transition-colors"
-                      >
+                      <button onClick={() => deleteHabit(habit.id)} className="text-gray-600 hover:text-red-400">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* 12-Week Contribution Graph */}
-          {habits.length > 0 && (
-            <div className="card">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-4">Historial de completados — últimas 12 semanas</p>
-              <div className="overflow-x-auto">
-                <div className="flex gap-1">
-                  {Array.from({ length: 12 }, (_, weekIdx) => (
-                    <div key={weekIdx} className="flex flex-col gap-1">
-                      {Array.from({ length: 7 }, (_, dayIdx) => {
-                        const dayOffset = (11 - weekIdx) * 7 + (6 - dayIdx)
-                        const d = new Date()
-                        d.setDate(d.getDate() - dayOffset)
-                        const dateStr = d.toISOString().split('T')[0]
-                        const completedHabits = habits.filter((h) =>
-                          history.some((hist) => hist.habitId === h.id && hist.date.startsWith(dateStr))
-                        ).length
-                        const pct = habits.length > 0 ? completedHabits / habits.length : 0
-                        const bg = pct === 0 ? 'bg-[#1f1f1f]'
-                          : pct < 0.33 ? 'bg-green-900'
-                          : pct < 0.66 ? 'bg-green-700'
-                          : pct < 1 ? 'bg-green-500'
-                          : 'bg-green-400'
-                        return (
-                          <div
-                            key={dayIdx}
-                            className={`w-3.5 h-3.5 rounded-sm ${bg}`}
-                            title={`${dateStr}: ${completedHabits}/${habits.length} hábitos`}
-                          />
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-3">
-                <span className="text-xs text-gray-600">Menos</span>
-                {['bg-[#1f1f1f]', 'bg-green-900', 'bg-green-700', 'bg-green-500', 'bg-green-400'].map((c, i) => (
-                  <div key={i} className={`w-3 h-3 rounded-sm ${c}`} />
-                ))}
-                <span className="text-xs text-gray-600">Más</span>
+                  )
+                })}
               </div>
             </div>
           )}
