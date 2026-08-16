@@ -11,4 +11,4 @@ cmds = [
 ]
 
 [start]
-cmd = "npx prisma db push --accept-data-loss --skip-generate & npx next start -p $PORT"
+cmd = "npx prisma migrate deploy && npx next start -p $PORT"
