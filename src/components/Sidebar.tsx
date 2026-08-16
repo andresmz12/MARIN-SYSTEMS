@@ -14,6 +14,26 @@ const tradingItems = [
   { label: 'Resumen Semanal', href: '/trading/resumen' },
 ]
 
+const personalItems = [
+  { label: 'Hábitos', href: '/habitos' },
+  { label: 'Agenda', href: '/agenda' },
+  { label: 'Metas', href: '/metas' },
+  { label: 'Finanzas', href: '/finanzas' },
+]
+
+const negociosItems = [
+  { label: 'Empresas', href: '/empresas' },
+  { label: 'Corp. Tasks', href: '/corporate-tasks' },
+  { label: 'Command Center', href: '/command-center' },
+]
+
+const contenidoItems = [
+  { label: 'Content Creator', href: '/content-creator' },
+  { label: 'Mis Mapas', href: '/mis-mapas' },
+  { label: 'IRS News', href: '/irs-news' },
+  { label: 'IRS Video', href: '/irs-video' },
+]
+
 // Iconos de la navegación principal, indexados por ruta (no por posición) para que
 // agregar/quitar entradas no rompa las que ya estaban.
 const navIcons: Record<string, React.ReactNode> = {
@@ -108,6 +128,9 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname()
   const [tradingOpen, setTradingOpen] = useState(pathname.startsWith('/trading'))
+  const [personalOpen, setPersonalOpen] = useState(personalItems.some((i) => pathname.startsWith(i.href)))
+  const [negociosOpen, setNegociosOpen] = useState(negociosItems.some((i) => pathname.startsWith(i.href)))
+  const [contenidoOpen, setContenidoOpen] = useState(contenidoItems.some((i) => pathname.startsWith(i.href)))
   const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
@@ -129,6 +152,61 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       {icon}
       {!collapsed && <span>{label}</span>}
     </Link>
+  )
+
+  const navGroup = (
+    icon: React.ReactNode,
+    label: string,
+    items: { label: string; href: string }[],
+    open: boolean,
+    setOpen: (fn: (o: boolean) => boolean) => void,
+  ) => {
+    const groupActive = items.some((i) => pathname.startsWith(i.href))
+    return (
+      <div key={label}>
+        <button
+          onClick={() => !collapsed && setOpen((o) => !o)}
+          className={`w-full ${linkClass(groupActive)}`}
+        >
+          {icon}
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">{label}</span>
+              <svg
+                className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </>
+          )}
+        </button>
+
+        {open && !collapsed && (
+          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-[var(--bg-border)] pl-3">
+            {items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`block px-2 py-2 rounded-lg text-xs transition-colors ${
+                  pathname.startsWith(item.href)
+                    ? 'text-blue-400 bg-blue-600/10'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-[var(--bg-hover)]'
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const groupIcon = (path: string) => (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={path} />
+    </svg>
   )
 
   return (
@@ -254,16 +332,27 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             )}
           </div>
 
-          {navLink('/habitos', 'Hábitos', navIcons['/habitos'])}
-          {navLink('/agenda', 'Agenda', navIcons['/agenda'])}
-          {navLink('/metas', 'Metas', navIcons['/metas'])}
-          {navLink('/finanzas', 'Finanzas', navIcons['/finanzas'])}
-          {navLink('/irs-news', 'IRS News', navIcons['/irs-news'])}
-          {navLink('/irs-video', 'IRS Video', navIcons['/irs-video'])}
-          {navLink('/content-creator', 'Content Creator', navIcons['/content-creator'])}
-          {navLink('/mis-mapas', 'Mis Mapas', navIcons['/mis-mapas'])}
-          {navLink('/command-center', 'Command Center', navIcons['/command-center'])}
-          {navLink('/corporate-tasks', 'Corp. Tasks', navIcons['/corporate-tasks'])}
+          {navGroup(
+            groupIcon('M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'),
+            'Vida Personal',
+            personalItems,
+            personalOpen,
+            setPersonalOpen,
+          )}
+          {navGroup(
+            navIcons['/empresas'],
+            'Negocios',
+            negociosItems,
+            negociosOpen,
+            setNegociosOpen,
+          )}
+          {navGroup(
+            navIcons['/content-creator'],
+            'Contenido',
+            contenidoItems,
+            contenidoOpen,
+            setContenidoOpen,
+          )}
         </nav>
 
         {/* Bottom */}
