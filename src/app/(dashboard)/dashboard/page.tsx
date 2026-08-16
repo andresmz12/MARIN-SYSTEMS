@@ -312,19 +312,16 @@ export default function DashboardPage() {
   const negociosSpark = countByDay(dates14, corpTasksAll.filter((t) => t.completedAt).map((t) => t.completedAt!.split('T')[0]))
 
   const lightConfig = {
-    verde: { label: 'Condición ÓPTIMA', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30', dot: 'bg-green-400' },
-    amarillo: { label: 'Condición MODERADA', color: 'text-yellow-400', bg: 'bg-yellow-500/20 border-yellow-500/30', dot: 'bg-yellow-400' },
-    rojo: { label: 'Condición BAJA — cuidado', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30', dot: 'bg-red-400' },
+    verde: { label: 'Condición óptima', color: 'text-green-400', border: 'border-green-500/30', badge: 'bg-green-500/15 border-green-500/30', dot: 'bg-green-400' },
+    amarillo: { label: 'Condición moderada', color: 'text-yellow-400', border: 'border-yellow-500/30', badge: 'bg-yellow-500/15 border-yellow-500/30', dot: 'bg-yellow-400' },
+    rojo: { label: 'Condición baja — cuidado', color: 'text-red-400', border: 'border-red-500/30', badge: 'bg-red-500/15 border-red-500/30', dot: 'bg-red-400' },
   }[light]
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="h-8 w-48 bg-[#1a1a1a] animate-pulse rounded" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card h-24 bg-[#1a1a1a] animate-pulse" />
-          <div className="card h-24 bg-[#1a1a1a] animate-pulse" />
-        </div>
+        <div className="h-32 bg-[#1a1a1a] animate-pulse rounded-2xl" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-56 bg-[#1a1a1a] animate-pulse rounded-2xl" />)}
         </div>
@@ -351,71 +348,79 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Traffic Light + Daily State — estado general del día, no pertenece a un solo mundo */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className={`card border ${lightConfig.bg}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-full ${lightConfig.dot} shadow-lg flex-shrink-0 animate-pulse`} />
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Semáforo del día</p>
-              <p className={`text-lg font-bold mt-0.5 ${lightConfig.color}`}>{lightConfig.label}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Estado mental: {MOOD_LABELS[dailyState.mentalState]} •{' '}
-                Rutina: {dailyState.rutinaCompleted ? '✓' : '✗'} •{' '}
-                Noticias: {dailyState.hasNews ? '⚠️ Sí' : 'No'}
-              </p>
+      {/* Estado del día — semáforo + inputs unificados en una sola tarjeta */}
+      <div className={`relative overflow-hidden rounded-2xl border p-5 space-y-4 bg-[var(--bg-elevated)] ${lightConfig.border}`}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${lightConfig.badge}`}>
+              <span className={`w-2.5 h-2.5 rounded-full ${lightConfig.dot}`} />
             </div>
+            <div>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium">Estado del día</p>
+              <p className={`text-base font-bold leading-tight ${lightConfig.color}`}>{lightConfig.label}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#111] border border-[#2a2a2a] text-gray-400">
+              Ánimo: {MOOD_LABELS[dailyState.mentalState]}
+            </span>
+            <span className={`text-[11px] px-2.5 py-1 rounded-full border ${dailyState.rutinaCompleted ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-[#111] border-[#2a2a2a] text-gray-500'}`}>
+              Rutina {dailyState.rutinaCompleted ? '✓' : '✗'}
+            </span>
+            <span className={`text-[11px] px-2.5 py-1 rounded-full border ${dailyState.hasNews ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-[#111] border-[#2a2a2a] text-gray-500'}`}>
+              Noticias {dailyState.hasNews ? '⚠️ Sí' : 'No'}
+            </span>
           </div>
         </div>
 
-        <div className="card">
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-3">
-            Actualizar estado {saving && <span className="text-blue-400">• guardando...</span>}
-          </p>
-          <div className="space-y-3">
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="label">Estado mental ({MOOD_LABELS[dailyState.mentalState]})</label>
-                <Link href="/journal" className="text-[11px] text-gray-600 hover:text-blue-400">
-                  Journal de hoy →
-                </Link>
-              </div>
-              <div className="flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => saveDailyState({ mentalState: v })}
-                    className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${
-                      dailyState.mentalState === v
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={dailyState.rutinaCompleted}
-                  onChange={(e) => saveDailyState({ rutinaCompleted: e.target.checked })}
-                  className="w-4 h-4 rounded accent-blue-600"
-                />
-                <span className="text-sm text-gray-300">Rutina completada</span>
+        <div className="pt-4 border-t border-[#2a2a2a] grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-500">
+                Actualizar estado mental {saving && <span className="text-blue-400">• guardando...</span>}
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={dailyState.hasNews}
-                  onChange={(e) => saveDailyState({ hasNews: e.target.checked })}
-                  className="w-4 h-4 rounded accent-yellow-500"
-                />
-                <span className="text-sm text-gray-300">Noticias de alto impacto</span>
-              </label>
+              <Link href="/journal" className="text-[11px] text-gray-600 hover:text-blue-400">
+                Journal de hoy →
+              </Link>
             </div>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => saveDailyState({ mentalState: v })}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    dailyState.mentalState === v
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 md:pt-5">
+            <button
+              onClick={() => saveDailyState({ rutinaCompleted: !dailyState.rutinaCompleted })}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
+                dailyState.rutinaCompleted
+                  ? 'bg-green-500/15 border-green-500/30 text-green-400'
+                  : 'bg-[#111] border-[#2a2a2a] text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Rutina completada
+            </button>
+            <button
+              onClick={() => saveDailyState({ hasNews: !dailyState.hasNews })}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
+                dailyState.hasNews
+                  ? 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400'
+                  : 'bg-[#111] border-[#2a2a2a] text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Noticias alto impacto
+            </button>
           </div>
         </div>
       </div>
