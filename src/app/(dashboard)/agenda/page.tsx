@@ -20,7 +20,7 @@ interface Event {
 const EVENT_TYPES = ['personal', 'trading', 'aprendizaje', 'otro']
 const TYPE_COLORS: Record<string, string> = {
   personal: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  trading: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  trading: 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30',
   aprendizaje: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   otro: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
 }
@@ -246,7 +246,7 @@ export default function AgendaPage() {
             <button
               onClick={() => setView('semana')}
               className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-                view === 'semana' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
+                view === 'semana' ? 'bg-cyan-500 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               Semana
@@ -254,7 +254,7 @@ export default function AgendaPage() {
             <button
               onClick={() => setView('mes')}
               className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-                view === 'mes' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
+                view === 'mes' ? 'bg-cyan-500 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               Mes
@@ -262,7 +262,7 @@ export default function AgendaPage() {
             <button
               onClick={() => setView('lista')}
               className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-                view === 'lista' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'
+                view === 'lista' ? 'bg-cyan-500 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               Lista
@@ -272,7 +272,7 @@ export default function AgendaPage() {
             onClick={() => setHideCompleted(h => !h)}
             className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${
               hideCompleted
-                ? 'bg-blue-600/20 text-blue-400 border-blue-600/30'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                 : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300 hover:border-[#3a3a3a]'
             }`}
           >
@@ -341,17 +341,17 @@ export default function AgendaPage() {
                     className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
                       calendarCopied
                         ? 'bg-green-600/20 text-green-400 border-green-600/30'
-                        : 'bg-[#1a1a1a] text-gray-300 border-[#2a2a2a] hover:border-blue-600/40 hover:text-blue-400'
+                        : 'bg-[#1a1a1a] text-gray-300 border-[#2a2a2a] hover:border-cyan-500/40 hover:text-cyan-300'
                     }`}
                   >
                     {calendarCopied ? '✓ Copiado' : 'Copiar'}
                   </button>
                 </div>
                 <ol className="space-y-1.5 text-xs text-gray-500">
-                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">1.</span>Abre Google Calendar en tu celular</li>
-                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">2.</span>Ve a Ajustes → Agregar calendario → Desde URL</li>
-                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">3.</span>Pega la URL copiada y presiona &quot;Agregar calendario&quot;</li>
-                  <li className="flex gap-2"><span className="text-blue-400 font-bold flex-shrink-0">4.</span>Los eventos con hora incluyen recordatorio automático de 30 min</li>
+                  <li className="flex gap-2"><span className="text-cyan-300 font-bold flex-shrink-0">1.</span>Abre Google Calendar en tu celular</li>
+                  <li className="flex gap-2"><span className="text-cyan-300 font-bold flex-shrink-0">2.</span>Ve a Ajustes → Agregar calendario → Desde URL</li>
+                  <li className="flex gap-2"><span className="text-cyan-300 font-bold flex-shrink-0">3.</span>Pega la URL copiada y presiona &quot;Agregar calendario&quot;</li>
+                  <li className="flex gap-2"><span className="text-cyan-300 font-bold flex-shrink-0">4.</span>Los eventos con hora incluyen recordatorio automático de 30 min</li>
                 </ol>
                 <button onClick={regenerateToken} className="text-[11px] text-gray-600 hover:text-red-400 transition-colors">
                   Regenerar URL (invalida la anterior)
@@ -401,9 +401,9 @@ export default function AgendaPage() {
                   const isToday = str === today
                   return (
                     <div key={str} className="min-h-28">
-                      <div className={`p-2 border-b border-[#2a2a2a] text-center ${isToday ? 'bg-blue-600/10' : ''}`}>
+                      <div className={`p-2 border-b border-[#2a2a2a] text-center ${isToday ? 'bg-cyan-500/10' : ''}`}>
                         <p className="text-[10px] text-gray-500">{DAYS_ES[date.getDay()]}</p>
-                        <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-blue-400' : 'text-gray-300'}`}>
+                        <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-cyan-300' : 'text-gray-300'}`}>
                           {date.getDate()}
                         </p>
                       </div>
@@ -459,7 +459,7 @@ export default function AgendaPage() {
             <div className="flex items-center gap-2">
               <p className="text-xs text-gray-400">{monthLabel}</p>
               {monthOffset !== 0 && (
-                <button onClick={() => setMonthOffset(0)} className="text-[10px] text-blue-400 hover:text-blue-300">
+                <button onClick={() => setMonthOffset(0)} className="text-[10px] text-cyan-300 hover:text-blue-300">
                   Hoy
                 </button>
               )}
@@ -491,9 +491,9 @@ export default function AgendaPage() {
                     return (
                       <div
                         key={str}
-                        className={`min-h-24 p-1 ${!inMonth ? 'opacity-40' : ''} ${isToday ? 'bg-blue-600/10' : ''}`}
+                        className={`min-h-24 p-1 ${!inMonth ? 'opacity-40' : ''} ${isToday ? 'bg-cyan-500/10' : ''}`}
                       >
-                        <p className={`text-[11px] px-1 pt-0.5 font-semibold ${isToday ? 'text-blue-400' : 'text-gray-400'}`}>
+                        <p className={`text-[11px] px-1 pt-0.5 font-semibold ${isToday ? 'text-cyan-300' : 'text-gray-400'}`}>
                           {date.getDate()}
                         </p>
                         <div className="space-y-0.5 mt-0.5">

@@ -38,7 +38,7 @@ const STATUS_LABELS: Record<string, string> = { activa: 'Activa', pausa: 'En pau
 const STATUS_COLORS: Record<string, string> = {
   activa: 'bg-green-500/20 text-green-400 border-green-500/30',
   pausa: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  idea: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  idea: 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30',
 }
 const NOTE_COLORS = [
   { bg: '#1a1500', border: '#ca8a04', text: '#fde68a' },
@@ -358,7 +358,7 @@ export default function EmpresasPage() {
                 onClick={toggleConnectMode}
                 className={`text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all ${
                   connectMode
-                    ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_12px_#2563eb40]'
+                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_#2563eb40]'
                     : 'bg-[#1a1a1a] border-[#2a2a2a] text-gray-400 hover:text-gray-200 hover:border-[#444]'
                 }`}
               >
@@ -638,7 +638,7 @@ export default function EmpresasPage() {
       {companies.length > 0 && (
         <div className="fixed bottom-8 right-8 z-40">
           <button onClick={() => setShowModal(true)}
-            className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/30 flex items-center justify-center transition-all hover:scale-110">
+            className="w-14 h-14 rounded-full bg-cyan-500 hover:bg-cyan-400 shadow-lg shadow-cyan-500/30 flex items-center justify-center transition-all hover:scale-110">
             <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -675,7 +675,7 @@ export default function EmpresasPage() {
                   <div className="flex flex-wrap gap-2">
                     {EMOJIS.map((em) => (
                       <button key={em} type="button" onClick={() => setForm({ ...form, emoji: em })}
-                        className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${form.emoji === em ? 'bg-blue-600/30 border border-blue-500 scale-110' : 'bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#444]'}`}>
+                        className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${form.emoji === em ? 'bg-cyan-500/30 border border-cyan-400 scale-110' : 'bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#444]'}`}>
                         {em}
                       </button>
                     ))}
@@ -787,7 +787,7 @@ function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom,
             : { boxShadow: ['0 0 0 0px #2563eb40', '0 0 0 14px #2563eb00'] }
         }
         transition={isDragging || isConnectFrom ? {} : { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        className="w-full h-full rounded-full bg-[#0a1628] border-2 border-blue-600 flex flex-col items-center justify-center select-none relative overflow-hidden"
+        className="w-full h-full rounded-full bg-[#0a1628] border-2 border-cyan-500 flex flex-col items-center justify-center select-none relative overflow-hidden"
       >
         {editing ? (
           <input
@@ -798,14 +798,14 @@ function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom,
               if (e.key === 'Enter') handleSave(e.currentTarget.value)
               if (e.key === 'Escape') setEditing(false)
             }}
-            className="w-[88px] text-center bg-transparent border-b border-blue-400/60 text-blue-300 text-[10px] font-bold outline-none tracking-wider px-1"
+            className="w-[88px] text-center bg-transparent border-b border-cyan-300/60 text-blue-300 text-[10px] font-bold outline-none tracking-wider px-1"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
           <>
-            <span className="text-2xl font-black text-blue-400 leading-none">{firstChar}</span>
-            <span className="text-[8px] text-blue-400/60 font-bold tracking-widest">{line1}</span>
-            {line2 && <span className="text-[7px] text-blue-400/40 tracking-widest">{line2}</span>}
+            <span className="text-2xl font-black text-cyan-300 leading-none">{firstChar}</span>
+            <span className="text-[8px] text-cyan-300/60 font-bold tracking-widest">{line1}</span>
+            {line2 && <span className="text-[7px] text-cyan-300/40 tracking-widest">{line2}</span>}
           </>
         )}
       </motion.div>
@@ -819,7 +819,7 @@ function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom,
             exit={{ opacity: 0, scale: 0.7 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => { e.stopPropagation(); setEditing(true) }}
-            className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center shadow-lg z-20"
+            className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-cyan-500 hover:bg-cyan-400 flex items-center justify-center shadow-lg z-20"
             title="Editar nombre"
           >
             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

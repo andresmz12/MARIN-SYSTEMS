@@ -85,7 +85,7 @@ export default function MisMopas() {
               <button key={f} onClick={() => setRedFilter(f)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                   redFilter === f
-                    ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40'
                     : 'border-[var(--bg-border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                 }`}>
                 {f}
@@ -97,7 +97,7 @@ export default function MisMopas() {
         {/* List */}
         {loading ? (
           <div className="flex justify-center py-16">
-            <svg className="w-8 h-8 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 animate-spin text-cyan-300" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
@@ -152,7 +152,7 @@ export default function MisMopas() {
                         onClick={() => setEditToken(editing ? null : s.token)}
                         className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
                           editing
-                            ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40'
                             : 'btn-secondary'
                         }`}>
                         ✏️ Editar

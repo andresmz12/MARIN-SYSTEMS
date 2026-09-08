@@ -35,7 +35,7 @@ const STATUS_LABELS: Record<string, string> = { activa: 'Activa', pausa: 'En pau
 const STATUS_COLORS: Record<string, string> = {
   activa: 'bg-green-500/20 text-green-400 border-green-500/30',
   pausa: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  idea: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  idea: 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30',
 }
 const PRIORITY_COLORS: Record<string, string> = {
   alta: 'text-red-400 bg-red-500/10 border-red-500/30',
@@ -44,7 +44,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 }
 const TASK_STATUS_COLORS: Record<string, string> = {
   pendiente: 'text-gray-200',
-  'en-progreso': 'text-blue-400',
+  'en-progreso': 'text-cyan-300',
   completada: 'text-gray-500 line-through',
 }
 const LINK_ICONS: Record<string, string> = {
@@ -189,7 +189,7 @@ export default function CompanyPage() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
-              activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'
+              activeTab === tab ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
             {tab === 'tareas' ? 'Tareas' : tab === 'notas' ? 'Notas' : tab === 'info' ? 'Info' : 'Archivos'}
@@ -360,7 +360,7 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
 
   const KANBAN_COLUMNS = [
     { status: 'pendiente', label: 'Pendiente', headerCls: 'border-zinc-600 text-zinc-300', dotCls: 'bg-zinc-500' },
-    { status: 'en-progreso', label: 'En Progreso', headerCls: 'border-blue-500/50 text-blue-400', dotCls: 'bg-blue-500' },
+    { status: 'en-progreso', label: 'En Progreso', headerCls: 'border-cyan-400/50 text-cyan-300', dotCls: 'bg-cyan-400' },
     { status: 'completada', label: 'Completada', headerCls: 'border-green-500/50 text-green-400', dotCls: 'bg-green-500' },
   ] as const
 
@@ -383,7 +383,7 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
         <div className="flex gap-1 flex-wrap">
           {[{ k: 'todas', l: 'Todas' }, { k: 'pendiente', l: 'Pendientes' }, { k: 'en-progreso', l: 'En progreso' }, { k: 'completada', l: 'Completadas' }].map((f) => (
             <button key={f.k} onClick={() => setFilter(f.k)}
-              className={`px-3 py-1 rounded-lg text-xs transition-colors ${filter === f.k ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30' : 'text-gray-500 hover:text-gray-300'}`}>
+              className={`px-3 py-1 rounded-lg text-xs transition-colors ${filter === f.k ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-gray-500 hover:text-gray-300'}`}>
               {f.l}
             </button>
           ))}
@@ -428,11 +428,11 @@ function TasksTab({ companyId, tasks, onUpdate, color }: { companyId: string; ta
                       updateTask(task.id, { ...task, status: next })
                     }}
                     className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                      task.status === 'completada' ? 'bg-green-500 border-green-500' : task.status === 'en-progreso' ? 'border-blue-500' : 'border-[#444]'
+                      task.status === 'completada' ? 'bg-green-500 border-green-500' : task.status === 'en-progreso' ? 'border-cyan-400' : 'border-[#444]'
                     }`}
                   >
                     {task.status === 'completada' && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                    {task.status === 'en-progreso' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                    {task.status === 'en-progreso' && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -729,7 +729,7 @@ function InfoTab({ company, onUpdate }: { company: Company; onUpdate: (d: Partia
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="label mb-0">Equipo</label>
-          <button onClick={() => setForm({ ...form, teamMembers: [...form.teamMembers, { id: '', name: '', role: '', email: '' }] })} className="text-xs text-blue-400 hover:text-blue-300">+ Agregar</button>
+          <button onClick={() => setForm({ ...form, teamMembers: [...form.teamMembers, { id: '', name: '', role: '', email: '' }] })} className="text-xs text-cyan-300 hover:text-blue-300">+ Agregar</button>
         </div>
         <div className="space-y-2">
           {form.teamMembers.map((member, i) => (
@@ -847,14 +847,14 @@ function LinksTab({ companyId, links, onUpdate }: { companyId: string; links: Co
             <div key={link.id} className="card flex items-center gap-3 group">
               <span className="text-2xl flex-shrink-0">{LINK_ICONS[link.type] ?? '🔗'}</span>
               <div className="flex-1 min-w-0">
-                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-white text-sm font-medium hover:text-blue-400 transition-colors">{link.name}</a>
+                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-white text-sm font-medium hover:text-cyan-300 transition-colors">{link.name}</a>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-xs text-gray-600">{link.type}</span>
                   {link.description && <span className="text-xs text-gray-600">· {link.description}</span>}
                 </div>
               </div>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-400 p-1">
+                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-cyan-300 p-1">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                 </a>
                 <button onClick={() => deleteLink(link.id)} className="text-gray-600 hover:text-red-400 p-1">

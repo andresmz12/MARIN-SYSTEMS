@@ -45,7 +45,7 @@ const PRIORITY_BADGE: Record<string, string> = {
 }
 const PRIORITY_LABEL: Record<string, string> = { urgent: 'Urgente', high: 'Alta', medium: 'Media', low: 'Baja' }
 const STATUS_BADGE: Record<string, string> = {
-  pending: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  pending: 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30',
   sent: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   completed: 'bg-green-500/20 text-green-400 border-green-500/30',
 }
@@ -394,11 +394,11 @@ function CorporateTasksPageInner() {
               <div
                 key={i}
                 onClick={() => day && setSelectedDay(isSelected ? null : day)}
-                className={`min-h-[72px] p-1.5 border-b border-r border-[#111] transition-colors ${day ? 'cursor-pointer hover:bg-[var(--bg-hover)]' : 'bg-[var(--bg-base)]'} ${isSelected ? 'bg-blue-500/5 ring-inset ring-1 ring-blue-500/30' : ''}`}
+                className={`min-h-[72px] p-1.5 border-b border-r border-[#111] transition-colors ${day ? 'cursor-pointer hover:bg-[var(--bg-hover)]' : 'bg-[var(--bg-base)]'} ${isSelected ? 'bg-cyan-400/5 ring-inset ring-1 ring-cyan-400/30' : ''}`}
               >
                 {day && (
                   <>
-                    <p className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-blue-600 text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{day}</p>
+                    <p className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-cyan-500 text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{day}</p>
                     <div className="space-y-0.5">
                       {dayTasks.slice(0, 2).map((t) => (
                         <div
@@ -420,7 +420,7 @@ function CorporateTasksPageInner() {
         {selectedDay && (
           <div className="px-4 py-2 border-t border-[var(--bg-border)] flex items-center justify-between">
             <p className="text-xs text-[var(--text-secondary)]">Día {selectedDay} — {tasksByDay[selectedDay]?.length ?? 0} tarea(s)</p>
-            <button onClick={() => setSelectedDay(null)} className="text-xs text-blue-400 hover:text-blue-300">Ver todas</button>
+            <button onClick={() => setSelectedDay(null)} className="text-xs text-cyan-300 hover:text-blue-300">Ver todas</button>
           </div>
         )}
       </div>
@@ -436,7 +436,7 @@ function CorporateTasksPageInner() {
         ) : displayedTasks.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-[var(--text-muted)]">Sin tareas en este período</p>
-            <Link href="/corporate-tasks/new" className="text-sm text-blue-400 hover:text-blue-300 mt-2 inline-block">+ Crear primera tarea</Link>
+            <Link href="/corporate-tasks/new" className="text-sm text-cyan-300 hover:text-blue-300 mt-2 inline-block">+ Crear primera tarea</Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -481,7 +481,7 @@ function CorporateTasksPageInner() {
                     </td>
                     <td className="py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setDetailTask(task)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Ver">
+                        <button onClick={() => setDetailTask(task)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-cyan-300 hover:bg-cyan-400/10 transition-colors" title="Ver">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                         </button>
                         {task.status === 'pending' && (

@@ -221,7 +221,7 @@ export default function CorporateTaskDetailPage() {
     return (
       <div className="text-center py-20">
         <p className="text-[var(--text-secondary)]">Tarea no encontrada</p>
-        <Link href="/corporate-tasks" className="text-blue-400 hover:text-blue-300 text-sm mt-2 inline-block">← Volver</Link>
+        <Link href="/corporate-tasks" className="text-cyan-300 hover:text-blue-300 text-sm mt-2 inline-block">← Volver</Link>
       </div>
     )
   }
@@ -239,7 +239,7 @@ export default function CorporateTaskDetailPage() {
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             {task.isRecurring && <span className="text-purple-400">🔄</span>}
             <span className={`text-xs px-2 py-0.5 rounded border ${PRIORITY_BADGE[task.priority] ?? ''}`}>{PRIORITY_LABEL[task.priority] ?? task.priority}</span>
-            <span className={`text-xs px-2 py-0.5 rounded border ${task.status === 'pending' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : task.status === 'sent' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
+            <span className={`text-xs px-2 py-0.5 rounded border ${task.status === 'pending' ? 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30' : task.status === 'sent' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
               {task.status === 'pending' ? 'Pendiente' : task.status === 'sent' ? 'Enviado' : 'Completado'}
             </span>
           </div>
@@ -293,7 +293,7 @@ export default function CorporateTaskDetailPage() {
         {task.attachmentUrl && (
           <div>
             <p className="label mb-1">Adjunto</p>
-            <a href={task.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1.5">
+            <a href={task.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:text-blue-300 text-sm flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
               Ver adjunto
             </a>
@@ -363,7 +363,7 @@ export default function CorporateTaskDetailPage() {
                 <div className="flex items-center gap-2">
                   {inst.morningReminderSentAt && <span className="text-[10px] text-green-400" title="Recordatorio mañana enviado">🌅</span>}
                   {inst.eveningReminderSentAt && <span className="text-[10px] text-orange-400" title="Recordatorio noche enviado">🌙</span>}
-                  <span className={`text-xs px-1.5 py-0.5 rounded border ${inst.status === 'sent' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : inst.status === 'completed' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded border ${inst.status === 'sent' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : inst.status === 'completed' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30'}`}>
                     {inst.status === 'sent' ? 'Enviado' : inst.status === 'completed' ? 'Completado' : 'Pendiente'}
                   </span>
                 </div>

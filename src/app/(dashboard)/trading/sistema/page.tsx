@@ -50,13 +50,13 @@ export default function MiSistemaPage() {
       </div>
 
       {/* Identidad y Objetivo */}
-      <div className="card border border-blue-500/20 bg-blue-500/5">
-        <p className="text-xs text-blue-400 uppercase tracking-wider font-semibold mb-2">Identidad</p>
+      <div className="card border border-cyan-400/20 bg-cyan-400/5">
+        <p className="text-xs text-cyan-300 uppercase tracking-wider font-semibold mb-2">Identidad</p>
         <p className="text-sm text-gray-200 leading-relaxed">
           Soy un trader disciplinado y rentable. Mi trabajo es ejecutar mi sistema, no tener la razón.
           Una operación exitosa es la que cumple todas mis reglas, incluso si termina en stop loss.
         </p>
-        <p className="text-xs text-blue-400 uppercase tracking-wider font-semibold mt-4 mb-2">Objetivo</p>
+        <p className="text-xs text-cyan-300 uppercase tracking-wider font-semibold mt-4 mb-2">Objetivo</p>
         <p className="text-sm text-gray-200 leading-relaxed">
           Construir consistencia antes que rentabilidad. La rentabilidad será consecuencia del proceso.
         </p>
@@ -160,13 +160,13 @@ export default function MiSistemaPage() {
 
       {/* Quick links */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Link href="/trading/diario" className="card hover:border-blue-500/30 transition-colors text-center py-4">
+        <Link href="/trading/diario" className="card hover:border-cyan-400/30 transition-colors text-center py-4">
           <p className="text-sm font-medium text-gray-200">Diario</p>
         </Link>
-        <Link href="/trading/calculadora" className="card hover:border-blue-500/30 transition-colors text-center py-4">
+        <Link href="/trading/calculadora" className="card hover:border-cyan-400/30 transition-colors text-center py-4">
           <p className="text-sm font-medium text-gray-200">Calculadora</p>
         </Link>
-        <Link href="/trading/estadisticas" className="card hover:border-blue-500/30 transition-colors text-center py-4">
+        <Link href="/trading/estadisticas" className="card hover:border-cyan-400/30 transition-colors text-center py-4">
           <p className="text-sm font-medium text-gray-200">Estadísticas</p>
         </Link>
       </div>

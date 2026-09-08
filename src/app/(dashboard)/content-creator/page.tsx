@@ -95,7 +95,7 @@ export default function ContentCreatorPage() {
             <span className="text-2xl">🎬</span>
             <h1 className="text-xl font-bold text-[var(--text-primary)]">Content Creator</h1>
           </div>
-          <Link href="/mis-mapas" className="text-xs text-blue-400 hover:underline">📋 Mis Mapas</Link>
+          <Link href="/mis-mapas" className="text-xs text-cyan-300 hover:underline">📋 Mis Mapas</Link>
         </div>
 
         {/* FORM */}
@@ -115,7 +115,7 @@ export default function ContentCreatorPage() {
                 {SOCIAL_OPTIONS.map(s => (
                   <button key={s} onClick={() => setRedSocial(s)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      redSocial === s ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                      redSocial === s ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40'
                         : 'border-[var(--bg-border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}`}>
                     {s}</button>
                 ))}
@@ -128,7 +128,7 @@ export default function ContentCreatorPage() {
                 {DURATION_OPTIONS.map(d => (
                   <button key={d} onClick={() => setDuracion(d)}
                     className={`flex-1 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      duracion === d ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                      duracion === d ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40'
                         : 'border-[var(--bg-border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}`}>
                     {d}</button>
                 ))}
@@ -145,7 +145,7 @@ export default function ContentCreatorPage() {
         {/* LOADING */}
         {pageState === 'loading' && (
           <div className="flex flex-col items-center justify-center gap-6 py-16">
-            <svg className="w-10 h-10 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+            <svg className="w-10 h-10 animate-spin text-cyan-300" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
@@ -226,7 +226,7 @@ export default function ContentCreatorPage() {
 
             <div className="space-y-3">
               <p className="text-sm font-semibold text-[var(--text-primary)]">PASO 3 — Abre el mapa en iPad</p>
-              <p className="text-xs text-blue-400 break-all font-mono bg-[var(--bg-sidebar)] rounded-lg px-3 py-2 border border-[var(--bg-border)]">
+              <p className="text-xs text-cyan-300 break-all font-mono bg-[var(--bg-sidebar)] rounded-lg px-3 py-2 border border-[var(--bg-border)]">
                 {studioUrl}
               </p>
               <div className="flex gap-2">

@@ -140,7 +140,7 @@ export default function PlaybookPage() {
             const colors = ['blue', 'purple', 'green', 'orange', 'red', 'yellow']
             const colorKey = colors[idx % colors.length]
             const colorMap: Record<string, string> = {
-              blue: 'bg-blue-600/10 border-blue-600/30 text-blue-400',
+              blue: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300',
               purple: 'bg-purple-600/10 border-purple-600/30 text-purple-400',
               green: 'bg-green-600/10 border-green-600/30 text-green-400',
               orange: 'bg-orange-600/10 border-orange-600/30 text-orange-400',

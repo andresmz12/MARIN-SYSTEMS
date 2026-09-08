@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './Sidebar'
 import { SearchModal } from './ui/SearchModal'
 import { DayNotifier } from './ui/DayNotifier'
+import { HudStatusBar } from './ui/HudStatusBar'
 import { JarvisWidget } from './assistant/JarvisWidget'
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           ${collapsed ? 'lg:ml-16' : 'lg:ml-60'}
         `}
       >
+        <HudStatusBar />
         <div className="max-w-6xl mx-auto p-4 lg:p-6">{children}</div>
       </main>
 

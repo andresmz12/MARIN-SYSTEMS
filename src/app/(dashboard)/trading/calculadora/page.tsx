@@ -123,7 +123,7 @@ export default function CalculadoraPage() {
                   onClick={() => updateRiskPct(v)}
                   className={`flex-1 text-xs py-1 rounded transition-colors ${
                     riskPct === v
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-cyan-500 text-white'
                       : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
                   }`}
                 >
@@ -144,7 +144,7 @@ export default function CalculadoraPage() {
                 title={isFav ? 'Quitar de favoritos' : 'Guardar como favorito'}
                 className={`px-3 rounded text-sm transition-colors ${
                   isFav
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-cyan-500 text-white'
                     : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
                 }`}
               >
@@ -159,7 +159,7 @@ export default function CalculadoraPage() {
                     onClick={() => updatePar(p)}
                     className={`text-xs py-1 px-2 rounded transition-colors ${
                       par === p
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-cyan-500 text-white'
                         : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
                     }`}
                   >
@@ -291,7 +291,7 @@ function ResultCard({
   success?: boolean
 }) {
   const textColor = highlight
-    ? 'text-blue-400'
+    ? 'text-cyan-300'
     : danger
     ? 'text-red-400'
     : success

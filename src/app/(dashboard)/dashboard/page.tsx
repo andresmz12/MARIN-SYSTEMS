@@ -161,19 +161,6 @@ function StatBlock({ label, value, valueClass, caption }: { label: string; value
   )
 }
 
-// Live HUD clock — ticks client-side only, avoids hydration mismatch by rendering
-// nothing until mounted.
-function HudClock() {
-  const [now, setNow] = useState<Date | null>(null)
-  useEffect(() => {
-    setNow(new Date())
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
-  if (!now) return <span className="tabular-nums opacity-0">00:00:00</span>
-  return <span className="tabular-nums">{now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-}
-
 function last14Dates(): string[] {
   const days: string[] = []
   for (let i = 13; i >= 0; i--) {
@@ -365,20 +352,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* HUD status bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5 capitalize">
-            {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass hud-border">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-display text-sm text-cyan-200">
-            <HudClock />
-          </span>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">Dashboard</h1>
+        <p className="text-gray-500 text-sm mt-0.5 capitalize">
+          {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
       </div>
 
       {/* Estado del día — semáforo + inputs unificados en una sola tarjeta */}

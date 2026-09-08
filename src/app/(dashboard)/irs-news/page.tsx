@@ -22,7 +22,7 @@ interface GeneratedContent {
 const PLATFORM_CONFIG: Record<Platform, { label: string; color: string; icon: string }> = {
   tiktok: { label: 'TikTok / Reels', color: 'bg-pink-500/20 border-pink-500/30 text-pink-400 hover:bg-pink-500/30', icon: '🎵' },
   youtube: { label: 'YouTube', color: 'bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30', icon: '▶' },
-  facebook: { label: 'Facebook', color: 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/30', icon: 'f' },
+  facebook: { label: 'Facebook', color: 'bg-cyan-400/20 border-cyan-400/30 text-cyan-300 hover:bg-cyan-400/30', icon: 'f' },
 }
 
 function SkeletonCard() {
@@ -222,7 +222,7 @@ export default function IrsNewsPage() {
       <div className="space-y-4">
         <div><p className="label">Caption corto</p><p className="text-sm text-white font-medium bg-[#111] border border-[#2a2a2a] rounded-lg p-3">{String(c.captionCorto ?? '')}</p></div>
         <div><p className="label">Post largo</p><p className="text-sm text-gray-300 bg-[#111] border border-[#2a2a2a] rounded-lg p-3 leading-relaxed whitespace-pre-wrap">{String(c.postLargo ?? '')}</p></div>
-        <div><p className="label">Hashtags</p><p className="text-sm text-blue-400">{(c.hashtags as string[] ?? []).join(' ')}</p></div>
+        <div><p className="label">Hashtags</p><p className="text-sm text-cyan-300">{(c.hashtags as string[] ?? []).join(' ')}</p></div>
         <button onClick={() => copyToClipboard(fullText)} className="btn-secondary w-full">{copied ? '✓ Copiado' : 'Copiar todo'}</button>
       </div>
     )
@@ -265,18 +265,18 @@ export default function IrsNewsPage() {
 
       {/* Auto-enrich progress */}
       {autoEnriching && (
-        <div className="card border-blue-500/20 bg-blue-500/5 flex items-center gap-3">
-          <svg className="w-4 h-4 animate-spin text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+        <div className="card border-cyan-400/20 bg-cyan-400/5 flex items-center gap-3">
+          <svg className="w-4 h-4 animate-spin text-cyan-300 flex-shrink-0" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-blue-400 font-medium">
+            <p className="text-sm text-cyan-300 font-medium">
               Generando resúmenes en español… {enrichProgress.current}/{enrichProgress.total}
             </p>
             <div className="mt-1.5 h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                className="h-full bg-cyan-400 rounded-full transition-all duration-300"
                 style={{ width: `${(enrichProgress.current / enrichProgress.total) * 100}%` }}
               />
             </div>
@@ -287,7 +287,7 @@ export default function IrsNewsPage() {
       {/* Filter tabs */}
       <div className="flex gap-2">
         {(['all', 'unused', 'used'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30' : 'text-gray-500 hover:text-gray-300 bg-[#1a1a1a] border border-[#2a2a2a]'}`}>
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-gray-500 hover:text-gray-300 bg-[#1a1a1a] border border-[#2a2a2a]'}`}>
             {f === 'all' ? 'Todas' : f === 'unused' ? 'Sin usar' : 'Usadas'}
             <span className="ml-1.5 text-gray-600">{f === 'all' ? news.length : f === 'unused' ? news.filter(n => !n.used).length : news.filter(n => n.used).length}</span>
           </button>
@@ -360,11 +360,11 @@ export default function IrsNewsPage() {
             </div>
 
             {/* Spanish summary */}
-            <div className="px-5 py-4 border-b border-[#2a2a2a] bg-blue-500/5">
-              <p className="text-xs text-blue-400 font-medium uppercase tracking-wider mb-2">📰 Resumen en español</p>
+            <div className="px-5 py-4 border-b border-[#2a2a2a] bg-cyan-400/5">
+              <p className="text-xs text-cyan-300 font-medium uppercase tracking-wider mb-2">📰 Resumen en español</p>
               {enriching ? (
                 <div className="flex items-center gap-2 text-gray-500 text-sm">
-                  <svg className="w-4 h-4 animate-spin text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 animate-spin text-cyan-300 flex-shrink-0" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
@@ -396,7 +396,7 @@ export default function IrsNewsPage() {
             <div className="flex-1 overflow-y-auto p-5">
               {generating && !generated && (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-500 gap-3">
-                  <svg className="w-8 h-8 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 animate-spin text-cyan-300" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>

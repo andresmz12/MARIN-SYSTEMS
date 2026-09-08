@@ -66,7 +66,7 @@ export function PreMarketHabits() {
             {preMarket.length > 0 ? `${doneCount}/${preMarket.length} completados hoy` : 'Hábitos marcados como pre-mercado'}
           </p>
         </div>
-        <Link href="/habitos" className="text-xs text-blue-400 hover:text-blue-300">Gestionar hábitos →</Link>
+        <Link href="/habitos" className="text-xs text-cyan-300 hover:text-blue-300">Gestionar hábitos →</Link>
       </div>
 
       {loading ? (
@@ -76,7 +76,7 @@ export function PreMarketHabits() {
       ) : preMarket.length === 0 ? (
         <p className="text-sm text-gray-600">
           No tienes hábitos marcados como pre-mercado todavía.{' '}
-          <Link href="/habitos" className="text-blue-400 hover:text-blue-300">Crea uno →</Link>
+          <Link href="/habitos" className="text-cyan-300 hover:text-blue-300">Crea uno →</Link>
         </p>
       ) : (
         <div className="space-y-2">
@@ -90,8 +90,8 @@ export function PreMarketHabits() {
               >
                 <div className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
                   isDone
-                    ? 'bg-blue-600 border-blue-600'
-                    : 'border-[#3a3a3a] group-hover:border-blue-600/50'
+                    ? 'bg-cyan-500 border-cyan-500'
+                    : 'border-[#3a3a3a] group-hover:border-cyan-500/50'
                 }`}>
                   {isDone && (
                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

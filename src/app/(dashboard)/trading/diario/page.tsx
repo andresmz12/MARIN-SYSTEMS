@@ -405,7 +405,7 @@ export default function TradingDiarioPage() {
                                 }
                               } catch { /* ignore */ }
                             }}
-                            className="text-blue-500 hover:text-blue-300 transition-colors"
+                            className="text-cyan-400 hover:text-blue-300 transition-colors"
                             title="Ver captura de TradingView"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -499,7 +499,7 @@ export default function TradingDiarioPage() {
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.followedPlan}
                 onChange={(e) => setForm({ ...form, followedPlan: e.target.checked })}
-                className="w-4 h-4 rounded accent-blue-600" />
+                className="w-4 h-4 rounded accent-cyan-500" />
               <span className="text-sm text-gray-300">Seguí mi plan de trading</span>
             </label>
           </div>
@@ -533,7 +533,7 @@ export default function TradingDiarioPage() {
                 />
                 {scanning ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70 rounded-lg">
-                    <svg className="w-5 h-5 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 animate-spin text-cyan-300" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
@@ -543,7 +543,7 @@ export default function TradingDiarioPage() {
                   <button
                     type="button"
                     onClick={scanExistingScreenshot}
-                    className="absolute bottom-1 left-1 bg-blue-600/90 hover:bg-blue-500 text-white text-[10px] font-medium px-2 py-0.5 rounded transition-colors"
+                    className="absolute bottom-1 left-1 bg-cyan-500/90 hover:bg-cyan-400 text-white text-[10px] font-medium px-2 py-0.5 rounded transition-colors"
                     title="Analizar con IA para llenar el formulario"
                   >
                     ✦ Analizar

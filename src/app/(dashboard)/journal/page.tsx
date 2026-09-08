@@ -134,7 +134,7 @@ export default function JournalPage() {
                     onClick={() => setMood(v)}
                     className={`flex-1 flex flex-col items-center py-2 rounded-lg border transition-all ${
                       mood === v
-                        ? 'border-blue-500 bg-blue-600/10'
+                        ? 'border-cyan-400 bg-cyan-500/10'
                         : 'border-[#2a2a2a] hover:border-[#3a3a3a]'
                     }`}
                   >
@@ -288,7 +288,7 @@ export default function JournalPage() {
                   <div
                     key={day}
                     className={`aspect-square rounded-lg flex items-center justify-center text-[11px] font-medium transition-colors ${
-                      isToday ? 'ring-1 ring-blue-500' : ''
+                      isToday ? 'ring-1 ring-cyan-400' : ''
                     }`}
                     style={{
                       backgroundColor: mood ? `${MOOD_COLORS[mood]}22` : '#1a1a1a',
@@ -332,9 +332,9 @@ export default function JournalPage() {
               <Line
                 type="monotone"
                 dataKey="mood"
-                stroke="#2563eb"
+                stroke="#0891b2"
                 strokeWidth={2}
-                dot={{ fill: '#2563eb', r: 4 }}
+                dot={{ fill: '#0891b2', r: 4 }}
                 activeDot={{ r: 6 }}
               />
             </LineChart>
@@ -370,7 +370,7 @@ export default function JournalPage() {
                     onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
                     className={`text-xs px-3 py-1 rounded-full border transition-colors ${
                       selectedTag === tag
-                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/50'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50'
                         : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300 hover:border-[#3a3a3a]'
                     }`}
                   >

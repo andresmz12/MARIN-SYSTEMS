@@ -84,7 +84,7 @@ export function WeeklyReview({ week, weekStart }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="Bloques completados" value={`${completedBlocks}/${totalBlocks}`} sub={`${completionRate}% tasa`} color="text-indigo-400" />
         <KpiCard label="Horas trabajadas" value={`${totalHours.toFixed(1)}h`} sub="bloques no-fijos" color="text-emerald-400" />
-        <KpiCard label="Días con plan" value={`${daysWithPlan}/5`} sub="días laborables" color="text-blue-400" />
+        <KpiCard label="Días con plan" value={`${daysWithPlan}/5`} sub="días laborables" color="text-cyan-300" />
         <KpiCard label="Días 100%" value={`${daysCompleted}/5`} sub="todos los bloques ✓" color="text-amber-400" />
       </div>
 

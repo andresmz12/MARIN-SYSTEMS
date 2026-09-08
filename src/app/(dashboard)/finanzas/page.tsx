@@ -71,8 +71,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   )
 }
-const inputCls = 'w-full bg-[var(--bg-input)] border border-[var(--bg-border)] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500'
-const btnPrimary = 'w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors'
+const inputCls = 'w-full bg-[var(--bg-input)] border border-[var(--bg-border)] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400'
+const btnPrimary = 'w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-medium transition-colors'
 
 // ─── Accounts tab ────────────────────────────────────────────────────────────
 function AccountsTab() {
@@ -117,7 +117,7 @@ function AccountsTab() {
           <p className="text-sm text-gray-400">Balance total</p>
           <p className="text-2xl font-bold text-white">{fmt(totalBalance)}</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-sm text-white transition-colors">
           + Cuenta
         </button>
       </div>
@@ -201,7 +201,7 @@ function CardsTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-sm text-white transition-colors">
           + Tarjeta
         </button>
       </div>
@@ -307,7 +307,7 @@ function DebtsTab() {
           <p className="text-sm text-gray-400">Deuda total activa</p>
           <p className="text-2xl font-bold text-red-400">{fmt(totalRemaining)}</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-sm text-white transition-colors">
           + Deuda
         </button>
       </div>
@@ -425,7 +425,7 @@ function TransactionsTab({ month }: { month: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-sm text-white transition-colors">
           + Transacción
         </button>
       </div>
@@ -541,7 +541,7 @@ function BudgetTab({ month }: { month: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors">
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-sm text-white transition-colors">
           + Presupuesto
         </button>
       </div>
@@ -558,7 +558,7 @@ function BudgetTab({ month }: { month: string }) {
               </div>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                  className={`h-full rounded-full transition-all ${pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-cyan-400'}`}
                   style={{ width: `${Math.min(pct, 100)}%` }}
                 />
               </div>
@@ -617,7 +617,7 @@ function SummaryTab({ month }: { month: string }) {
           { label: 'Ingresos', value: summary.totalIncome, color: 'text-emerald-400' },
           { label: 'Gastos', value: summary.totalExpenses, color: 'text-red-400' },
           { label: 'Neto del mes', value: summary.netBalance, color: summary.netBalance >= 0 ? 'text-emerald-400' : 'text-red-400' },
-          { label: 'Balance en cuentas', value: summary.totalAccountBalance, color: 'text-blue-400' },
+          { label: 'Balance en cuentas', value: summary.totalAccountBalance, color: 'text-cyan-300' },
           { label: 'Deuda en tarjetas', value: summary.totalCardDebt, color: 'text-amber-400' },
           { label: 'Deudas activas', value: summary.totalDebtRemaining, color: 'text-red-400' },
         ].map(k => (
@@ -644,7 +644,7 @@ function SummaryTab({ month }: { month: string }) {
                       <span className="text-white">{fmt(cat.amount)}</span>
                     </div>
                     <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-cyan-400 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                   <span className="text-xs text-gray-500 w-10 text-right">{pct.toFixed(0)}%</span>
@@ -675,7 +675,7 @@ export default function FinanzasPage() {
           type="month"
           value={month}
           onChange={e => setMonth(e.target.value)}
-          className="bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+          className="bg-[var(--bg-card)] border border-[var(--bg-border)] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400"
         />
       </div>
 
@@ -687,7 +687,7 @@ export default function FinanzasPage() {
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === tab
-                ? 'bg-blue-600 text-white'
+                ? 'bg-cyan-500 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-[var(--bg-hover)]'
             }`}
           >

@@ -148,7 +148,7 @@ export default function MetasPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -174,8 +174,8 @@ export default function MetasPage() {
       {/* Empty state */}
       {goals.length === 0 && (
         <div className="card text-center py-16">
-          <div className="w-14 h-14 bg-blue-600/10 border border-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-14 h-14 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M3 21l1.9-5.7a8.5 8.5 0 113.8 3.8L3 21" />
             </svg>
@@ -252,7 +252,7 @@ export default function MetasPage() {
                       <div className="flex items-center gap-2 flex-1 min-w-[120px]">
                         <div className="flex-1 h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                            className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-cyan-400'}`}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
@@ -298,7 +298,7 @@ export default function MetasPage() {
                             )}
                           </button>
                           <span className="text-sm flex-1 text-gray-300">{sub.title}</span>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 flex-shrink-0">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-400/10 text-cyan-300 flex-shrink-0">
                             Diaria
                           </span>
                           <span className="text-xs text-gray-500 flex-shrink-0">
@@ -312,7 +312,7 @@ export default function MetasPage() {
                             className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
                               sub.completed
                                 ? 'bg-green-500 border-green-500'
-                                : 'border-gray-600 hover:border-blue-500'
+                                : 'border-gray-600 hover:border-cyan-400'
                             }`}
                           >
                             {sub.completed && (
@@ -349,11 +349,11 @@ export default function MetasPage() {
                       value={subInputs[goal.id] ?? ''}
                       onChange={e => setSubInputs(s => ({ ...s, [goal.id]: e.target.value }))}
                       onKeyDown={e => e.key === 'Enter' && addSubGoal(goal.id)}
-                      className="flex-1 bg-transparent text-sm text-gray-400 placeholder-gray-600 border-b border-[#2a2a2a] focus:border-blue-500 focus:outline-none py-1 transition-colors"
+                      className="flex-1 bg-transparent text-sm text-gray-400 placeholder-gray-600 border-b border-[#2a2a2a] focus:border-cyan-400 focus:outline-none py-1 transition-colors"
                     />
                     <button
                       onClick={() => addSubGoal(goal.id)}
-                      className="p-1 rounded text-gray-600 hover:text-blue-400 transition-colors"
+                      className="p-1 rounded text-gray-600 hover:text-cyan-300 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -365,7 +365,7 @@ export default function MetasPage() {
                       type="checkbox"
                       checked={subDailyFlags[goal.id] ?? false}
                       onChange={e => setSubDailyFlags(s => ({ ...s, [goal.id]: e.target.checked }))}
-                      className="w-3.5 h-3.5 accent-blue-500"
+                      className="w-3.5 h-3.5 accent-cyan-400"
                     />
                     <span className="text-xs text-gray-500">Diaria / Recurrente</span>
                   </label>

@@ -29,7 +29,7 @@ interface HabitHistory {
 
 const CATEGORIES = ['trading', 'salud', 'personal', 'aprendizaje']
 const CATEGORY_DOT: Record<string, string> = {
-  trading: 'bg-blue-400',
+  trading: 'bg-cyan-300',
   salud: 'bg-green-400',
   personal: 'bg-purple-400',
   aprendizaje: 'bg-yellow-400',
@@ -44,7 +44,7 @@ const WEEKDAY_ABBR = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 const WEEK_PALETTE = [
   { bg: 'bg-pink-500/10', text: 'text-pink-400', bar: 'bg-pink-500', check: 'bg-pink-500 border-pink-500' },
   { bg: 'bg-purple-500/10', text: 'text-purple-400', bar: 'bg-purple-500', check: 'bg-purple-500 border-purple-500' },
-  { bg: 'bg-blue-500/10', text: 'text-blue-400', bar: 'bg-blue-500', check: 'bg-blue-500 border-blue-500' },
+  { bg: 'bg-cyan-400/10', text: 'text-cyan-300', bar: 'bg-cyan-400', check: 'bg-cyan-400 border-cyan-400' },
   { bg: 'bg-cyan-500/10', text: 'text-cyan-400', bar: 'bg-cyan-500', check: 'bg-cyan-500 border-cyan-500' },
   { bg: 'bg-emerald-500/10', text: 'text-emerald-400', bar: 'bg-emerald-500', check: 'bg-emerald-500 border-emerald-500' },
 ]
@@ -401,7 +401,7 @@ export default function HabitosPage() {
                     <p className="text-2xl font-bold text-white">{remainingThisMonth}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-blue-400 uppercase tracking-wider font-semibold">Días del mes</p>
+                    <p className="text-xs text-cyan-300 uppercase tracking-wider font-semibold">Días del mes</p>
                     <p className="text-2xl font-bold text-white">{monthDays.length}</p>
                   </div>
                   {totalSlotsThisMonth > 0 && (

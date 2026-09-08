@@ -91,12 +91,23 @@ body {
 /* ── Component classes ── */
 @layer components {
   .card {
-    @apply rounded-xl p-4 transition-shadow duration-300;
+    @apply relative rounded-xl p-4 transition-all duration-300;
     background-color: var(--bg-elevated);
     border: 1px solid var(--bg-border);
+    isolation: isolate;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0 1rem auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0.35;
+    pointer-events: none;
   }
   .card:hover {
-    box-shadow: 0 0 0 1px var(--glow-ring), 0 8px 30px -12px rgba(34,211,238,0.18);
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px var(--glow-ring), 0 10px 34px -14px rgba(34,211,238,0.22);
   }
 
   .btn-primary {

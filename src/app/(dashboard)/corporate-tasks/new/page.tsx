@@ -160,8 +160,8 @@ export default function NewCorporateTaskPage() {
             </div>
           </div>
 
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
-            <p className="text-xs text-blue-400">📅 Se enviará un recordatorio <strong>cada día</strong> desde la fecha de inicio hasta el vencimiento</p>
+          <div className="bg-cyan-400/10 border border-cyan-400/20 rounded-lg px-3 py-2">
+            <p className="text-xs text-cyan-300">📅 Se enviará un recordatorio <strong>cada día</strong> desde la fecha de inicio hasta el vencimiento</p>
           </div>
 
           <div>
@@ -187,7 +187,7 @@ export default function NewCorporateTaskPage() {
                     onClick={() => toggleEmail(m.email!)}
                     className={`text-xs py-1 px-2.5 rounded-full border transition-colors ${
                       currentEmails.includes(m.email!)
-                        ? 'bg-blue-600/20 text-blue-400 border-blue-600/30'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                         : 'text-gray-500 border-[#2a2a2a] hover:text-gray-300'
                     }`}
                   >

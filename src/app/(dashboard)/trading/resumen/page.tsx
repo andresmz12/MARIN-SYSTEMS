@@ -128,7 +128,7 @@ export default function ResumenSemanalPage() {
             </button>
           )}
           {weekOffset !== 0 && (
-            <button onClick={() => setWeekOffset(0)} className="text-xs text-blue-400 hover:text-blue-300">
+            <button onClick={() => setWeekOffset(0)} className="text-xs text-cyan-300 hover:text-blue-300">
               Hoy
             </button>
           )}
@@ -163,7 +163,7 @@ export default function ResumenSemanalPage() {
                   <p className="text-3xl font-bold text-white mt-1">{stats.total}</p>
                   <p className="text-xs text-gray-600 mt-1">{stats.wins}W · {stats.losses}L · {stats.be}BE</p>
                 </div>
-                <div className="card border border-blue-500/20">
+                <div className="card border border-cyan-400/20">
                   <p className="text-xs text-gray-500 uppercase tracking-wider">Cumplimiento del sistema</p>
                   <p className={`text-3xl font-bold mt-1 ${stats.complianceRate === null ? 'text-gray-600' : stats.complianceRate >= 80 ? 'text-green-400' : stats.complianceRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                     {stats.complianceRate !== null ? `${stats.complianceRate}%` : '—'}
@@ -217,7 +217,7 @@ export default function ResumenSemanalPage() {
                   )}
                   {stats.topPair && (
                     <div className="flex items-center gap-2">
-                      <span className="text-blue-400">📊</span>
+                      <span className="text-cyan-300">📊</span>
                       <div>
                         <p className="text-xs text-gray-500">Par más operado</p>
                         <p className="text-sm text-gray-200">{stats.topPair}</p>

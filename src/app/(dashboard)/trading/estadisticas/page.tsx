@@ -197,7 +197,7 @@ export default function EstadisticasPage() {
       </div>
 
       {/* AI Analysis */}
-      <div className="card border border-blue-600/20 bg-blue-600/5">
+      <div className="card border border-cyan-500/20 bg-cyan-500/5">
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-semibold text-white">Análisis IA — Trading Coach</p>
@@ -387,7 +387,7 @@ export default function EstadisticasPage() {
               />
               <Scatter
                 data={stats.moodCorrelation}
-                fill="#3b82f6"
+                fill="#22d3ee"
                 fillOpacity={0.7}
               />
             </ScatterChart>
@@ -410,7 +410,7 @@ export default function EstadisticasPage() {
                 itemStyle={{ color: '#e5e7eb' }}
                 formatter={(value: number) => [`${value}%`, 'Win Rate']}
               />
-              <Bar dataKey="winRate" name="Win Rate %" radius={[4, 4, 0, 0]} fill="#2563eb">
+              <Bar dataKey="winRate" name="Win Rate %" radius={[4, 4, 0, 0]} fill="#0891b2">
                 {stats.byEmotion.map((entry, i) => (
                   <Cell
                     key={i}
@@ -450,10 +450,10 @@ export default function EstadisticasPage() {
                 type="monotone"
                 dataKey="cumPips"
                 name="Pips acumulados"
-                stroke="#3b82f6"
+                stroke="#22d3ee"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#3b82f6' }}
+                activeDot={{ r: 4, fill: '#22d3ee' }}
               />
             </LineChart>
           </ResponsiveContainer>
