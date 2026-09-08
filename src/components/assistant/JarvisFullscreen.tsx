@@ -19,7 +19,12 @@ interface JarvisFullscreenProps {
   audioEl: HTMLAudioElement
 }
 
-const BARGE_IN_MIN_CHARS = 3 // ignore stray noise picked up as a 1-2 char interim result
+// A short/noisy interim result (echo, a stray "ah", background sound) used to
+// cut Jarvis off after a single 3-character fragment. Barge-in now needs a
+// real word-or-more AND two consecutive interim results confirming it, so
+// Jarvis only gets interrupted by sustained speech, not a blip.
+const BARGE_IN_MIN_CHARS = 8
+const BARGE_IN_STREAK_NEEDED = 2
 
 function computeRms(data: Uint8Array): number {
   let sum = 0
@@ -44,6 +49,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   const micAnalyserRef = useRef<AnalyserNode | null>(null)
   const chatAbortRef = useRef<AbortController | null>(null)
   const meterRafRef = useRef<number>(0)
+  const bargeInStreakRef = useRef(0)
 
   function setJarvisState(next: JarvisState) {
     stateRef.current = next
@@ -77,6 +83,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
 
   function bargeIn() {
     if (stateRef.current !== 'speaking' && stateRef.current !== 'thinking') return
+    bargeInStreakRef.current = 0
     chatAbortRef.current?.abort()
     stopPlayback()
     setJarvisState('listening')
@@ -192,10 +199,16 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
         const transcript = result[0]?.transcript ?? ''
         if (!result.isFinal) {
           if (stateRef.current === 'speaking' || stateRef.current === 'thinking') {
-            if (transcript.trim().length >= BARGE_IN_MIN_CHARS) bargeIn()
+            if (transcript.trim().length >= BARGE_IN_MIN_CHARS) {
+              bargeInStreakRef.current += 1
+              if (bargeInStreakRef.current >= BARGE_IN_STREAK_NEEDED) bargeIn()
+            } else {
+              bargeInStreakRef.current = 0
+            }
           }
           return
         }
+        bargeInStreakRef.current = 0
         if (stateRef.current !== 'thinking') handleUserUtterance(transcript)
       }
       recognition.onend = () => {

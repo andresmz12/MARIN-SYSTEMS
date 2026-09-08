@@ -43,10 +43,11 @@ export async function streamJarvisVoice(text: string): Promise<ReadableStream<Ui
     body: JSON.stringify({
       text: trimmed,
       model_id: 'eleven_multilingual_v2',
-      voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true },
-      // Skips ElevenLabs' internal chunk-buffering — the client is fed full
-      // sentences already, so no quality loss, but it starts sending sooner.
-      optimize_streaming_latency: 3,
+      // Lower stability = more natural pitch/pace variation instead of a flat
+      // "reading a script" cadence; optimize_streaming_latency is gone entirely —
+      // that setting explicitly trades prosody quality for a small speed win,
+      // which is exactly what made it sound choppy/robotic.
+      voice_settings: { stability: 0.32, similarity_boost: 0.75, style: 0.55, use_speaker_boost: true },
     }),
     signal: AbortSignal.timeout(30_000),
   })

@@ -45,27 +45,27 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
 
   useEffect(() => {
     function tick() {
-      phaseRef.current += 0.016
+      phaseRef.current += 0.03
       const t = phaseRef.current
       const level = levelRef.current
 
       // Smoothly ease the RGB color toward the target state color (no instant flat swap).
       const target = STATE_RGB[state]
       const cur = colorRef.current
-      cur[0] = lerp(cur[0], target[0], 0.06)
-      cur[1] = lerp(cur[1], target[1], 0.06)
-      cur[2] = lerp(cur[2], target[2], 0.06)
+      cur[0] = lerp(cur[0], target[0], 0.12)
+      cur[1] = lerp(cur[1], target[1], 0.12)
+      cur[2] = lerp(cur[2], target[2], 0.12)
       const [r, g, b] = cur
       const rgb = `rgb(${r.toFixed(0)},${g.toFixed(0)},${b.toFixed(0)})`
       const rgbSoft = `rgba(${r.toFixed(0)},${g.toFixed(0)},${b.toFixed(0)},0.5)`
 
-      const idleBreath = (Math.sin(t * 0.9) + 1) / 2
-      const alarmBlink = (Math.sin(t * 3.2) + 1) / 2
+      const idleBreath = (Math.sin(t * 1.6) + 1) / 2
+      const alarmBlink = (Math.sin(t * 5) + 1) / 2
       // Speaking has no real audio-level feed (see JarvisFullscreen — TTS plays as a
       // plain <audio> element, not routed through an analyser, for Safari reliability)
       // so it gets a synthetic "talking cadence" pulse instead: two layered waves so
       // it doesn't read as a flat metronome.
-      const talkPulse = (Math.sin(t * 4.2) * 0.5 + Math.sin(t * 9.1) * 0.3 + 0.8) / 1.6
+      const talkPulse = (Math.sin(t * 7) * 0.5 + Math.sin(t * 15) * 0.3 + 0.8) / 1.6
       const boost =
         state === 'idle' ? idleBreath * 0.12
         : state === 'thinking' ? idleBreath * 0.3 + 0.28
@@ -95,39 +95,39 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
         const frac = state === 'idle' ? 0 : 0.12 + boost * 0.88
         levelArcRef.current.setAttribute('stroke', rgb)
         levelArcRef.current.setAttribute('stroke-dasharray', `${circumference * frac} ${circumference}`)
-        levelArcRef.current.setAttribute('transform', `rotate(${-90 + t * (state === 'thinking' ? 30 : 6)} 120 120)`)
+        levelArcRef.current.setAttribute('transform', `rotate(${-90 + t * (state === 'thinking' ? 55 : 16)} 120 120)`)
       }
       if (energyRing1Ref.current) {
         energyRing1Ref.current.setAttribute('stroke', rgbSoft)
         energyRing1Ref.current.setAttribute(
           'transform',
-          `rotate(${(t * (state === 'thinking' ? 26 : 9)) % 360} 120 120)`
+          `rotate(${(t * (state === 'thinking' ? 50 : 22)) % 360} 120 120)`
         )
       }
       if (energyRing2Ref.current) {
         energyRing2Ref.current.setAttribute('stroke', rgbSoft)
         energyRing2Ref.current.setAttribute(
           'transform',
-          `rotate(${(-t * (state === 'thinking' ? 34 : 6)) % 360} 120 120)`
+          `rotate(${(-t * (state === 'thinking' ? 62 : 16)) % 360} 120 120)`
         )
       }
       if (dialRef.current) {
-        dialRef.current.setAttribute('transform', `rotate(${(t * 3) % 360} 120 120)`)
+        dialRef.current.setAttribute('transform', `rotate(${(t * 9) % 360} 120 120)`)
       }
       tickRefs.current.forEach((el, i) => {
         if (!el) return
         const major = i % 4 === 0
         const flicker = major ? 0.55 : 0.22
         el.setAttribute('stroke', rgb)
-        el.setAttribute('opacity', String(flicker + boost * 0.35 * Math.sin(t * 2 + i)))
+        el.setAttribute('opacity', String(flicker + boost * 0.35 * Math.sin(t * 3.5 + i)))
       })
       if (particleRingRef.current) {
-        particleRingRef.current.setAttribute('transform', `rotate(${(t * 14) % 360} 120 120)`)
+        particleRingRef.current.setAttribute('transform', `rotate(${(t * 30) % 360} 120 120)`)
       }
       particleRefs.current.forEach((el, i) => {
         if (!el) return
         el.setAttribute('fill', rgb)
-        el.setAttribute('opacity', String(0.25 + 0.55 * ((Math.sin(t * 1.6 + i * 1.3) + 1) / 2) + boost * 0.2))
+        el.setAttribute('opacity', String(0.25 + 0.55 * ((Math.sin(t * 3 + i * 1.3) + 1) / 2) + boost * 0.2))
       })
 
       rafRef.current = requestAnimationFrame(tick)
