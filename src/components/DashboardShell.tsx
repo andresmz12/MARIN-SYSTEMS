@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './Sidebar'
 import { SearchModal } from './ui/SearchModal'
 import { DayNotifier } from './ui/DayNotifier'
+import { JarvisWidget } from './assistant/JarvisWidget'
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -40,6 +41,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       <SearchModal open={searchOpen} onClose={closeSearch} />
       <DayNotifier />
+      <JarvisWidget />
     </div>
   )
 }
