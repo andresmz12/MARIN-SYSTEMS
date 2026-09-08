@@ -10,13 +10,13 @@ interface ChatMessage {
 
 interface JarvisFullscreenProps {
   onClose: () => void
-  /** Created synchronously inside the launcher's click handler so iOS/Safari treats
-   * later programmatic playback (after an async fetch) as part of that user gesture.
-   * Persisted in the parent (not here) because an <audio> element can only ever be
-   * attached to a MediaElementSourceNode once — this component unmounts on close. */
+  /** AudioContext used only for the microphone level meter (the "listening" pulse).
+   * Created synchronously in the launcher's click handler and persisted there (not
+   * here) so it survives this component's unmount/remount on close/reopen. */
   audioCtx: AudioContext
+  /** Plays TTS audio natively (no Web Audio routing — see speak() for why). Primed
+   * with a silent play() in that same click so Safari/iOS allows it later. */
   audioEl: HTMLAudioElement
-  outputAnalyser: AnalyserNode
 }
 
 const BARGE_IN_MIN_CHARS = 3 // ignore stray noise picked up as a 1-2 char interim result
@@ -31,7 +31,7 @@ function computeRms(data: Uint8Array): number {
   return Math.min(1, rms * 4) // empirical gain so normal speech reads ~0.3-0.8
 }
 
-export function JarvisFullscreen({ onClose, audioCtx, audioEl, outputAnalyser }: JarvisFullscreenProps) {
+export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscreenProps) {
   const [state, setState] = useState<JarvisState>('idle')
 
   const stateRef = useRef<JarvisState>('idle')
@@ -62,19 +62,6 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl, outputAnalyser }:
         levelRef.current = computeRms(data)
       }
       meterRafRef.current = requestAnimationFrame(loop)
-    }
-    loop()
-  }
-
-  function meterFromOutput() {
-    const data = new Uint8Array(outputAnalyser.fftSize)
-    const loop = () => {
-      if (closedRef.current) return
-      if (stateRef.current === 'speaking') {
-        outputAnalyser.getByteTimeDomainData(data)
-        levelRef.current = computeRms(data)
-        requestAnimationFrame(loop)
-      }
     }
     loop()
   }
@@ -115,9 +102,9 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl, outputAnalyser }:
       const url = URL.createObjectURL(blob)
       currentObjectUrlRef.current = url
       audioEl.src = url
+      audioEl.muted = false
+      audioEl.volume = 1
 
-      if (audioCtx.state === 'suspended') await audioCtx.resume()
-      meterFromOutput()
       audioEl.onended = () => {
         if (stateRef.current === 'speaking') setJarvisState('listening')
       }

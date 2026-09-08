@@ -61,10 +61,16 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
 
       const idleBreath = (Math.sin(t * 0.9) + 1) / 2
       const alarmBlink = (Math.sin(t * 3.2) + 1) / 2
+      // Speaking has no real audio-level feed (see JarvisFullscreen — TTS plays as a
+      // plain <audio> element, not routed through an analyser, for Safari reliability)
+      // so it gets a synthetic "talking cadence" pulse instead: two layered waves so
+      // it doesn't read as a flat metronome.
+      const talkPulse = (Math.sin(t * 4.2) * 0.5 + Math.sin(t * 9.1) * 0.3 + 0.8) / 1.6
       const boost =
         state === 'idle' ? idleBreath * 0.12
         : state === 'thinking' ? idleBreath * 0.3 + 0.28
         : state === 'error' ? alarmBlink * 0.4 + 0.15
+        : state === 'speaking' ? talkPulse * 0.5 + 0.25
         : level
 
       if (coreRef.current) {

@@ -7,31 +7,29 @@ export function JarvisWidget() {
   const [immersive, setImmersive] = useState(false)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const audioElRef = useRef<HTMLAudioElement | null>(null)
-  const outputAnalyserRef = useRef<AnalyserNode | null>(null)
 
   function openJarvis() {
     // Must happen synchronously inside this click handler — creating/resuming the
-    // AudioContext and doing a silent play() here is what lets Safari/iOS allow
-    // audio playback later, even after the async fetch to ElevenLabs completes.
-    // The <audio> element and its MediaElementSource are created ONCE here (not
-    // inside JarvisFullscreen, which unmounts/remounts every open/close) because
-    // an element can only ever be attached to a source node a single time.
+    // AudioContext and priming the <audio> element here is what lets Safari/iOS
+    // allow playback later, even after the async round-trip to Claude + ElevenLabs.
+    //
+    // The TTS audio plays as a PLAIN <audio> element (no Web Audio routing) —
+    // routing it through an AnalyserNode for the reactor's visuals used to make
+    // Safari silently suspend the AudioContext after a period of inactivity,
+    // which cuts the element's native output too (createMediaElementSource
+    // permanently redirects an element's audio through the graph), producing
+    // total silence with no error. Direct playback has none of that risk; the
+    // AudioContext here is only used for the microphone's level metering.
     if (!audioCtxRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const Ctx = window.AudioContext || (window as any).webkitAudioContext
-      const ctx = new Ctx() as AudioContext
-      audioCtxRef.current = ctx
-      const audioEl = new Audio()
-      audioElRef.current = audioEl
-      const source = ctx.createMediaElementSource(audioEl)
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      analyser.connect(ctx.destination)
-      outputAnalyserRef.current = analyser
+      audioCtxRef.current = new Ctx() as AudioContext
+    }
+    if (!audioElRef.current) {
+      audioElRef.current = new Audio()
     }
     const ctx = audioCtxRef.current
-    const audioEl = audioElRef.current!
+    const audioEl = audioElRef.current
     ctx.resume().catch(() => {})
     audioEl.muted = true
     audioEl
@@ -70,12 +68,11 @@ export function JarvisWidget() {
         <span className="font-display text-sm font-semibold tracking-[0.15em] gradient-text">JARVIS</span>
       </button>
 
-      {immersive && audioCtxRef.current && audioElRef.current && outputAnalyserRef.current && (
+      {immersive && audioCtxRef.current && audioElRef.current && (
         <JarvisFullscreen
           onClose={() => setImmersive(false)}
           audioCtx={audioCtxRef.current}
           audioEl={audioElRef.current}
-          outputAnalyser={outputAnalyserRef.current}
         />
       )}
     </>
