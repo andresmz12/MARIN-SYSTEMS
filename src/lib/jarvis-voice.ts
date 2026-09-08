@@ -1,8 +1,8 @@
-// Voz de Jarvis vía ElevenLabs — "Daniel" (grave, calmada, tono mayordomo).
-// La probamos con otra voz más cálida pero se trababa/mal-pronunciaba en
-// español, así que se volvió a esta. Si deja de existir en la cuenta,
-// cámbiala aquí por otra de elevenlabs.io/app/voice-library.
-const JARVIS_VOICE_ID = 'onwK4e9ZLuTAKqWW03F9'
+// Voz de Jarvis vía ElevenLabs. Historial: "Daniel" (onwK4e9ZLuTAKqWW03F9) fue la
+// base; se probó otra más cálida que se trababa en español y se revirtió. Ahora
+// en voz elegida por el usuario desde su biblioteca de ElevenLabs. Si deja de
+// existir en la cuenta, cámbiala aquí por otra de elevenlabs.io/app/voice-library.
+const JARVIS_VOICE_ID = 'LcMajEnHqf3tUTha5ppa'
 
 const MAX_CHARS = 600 // mantiene las respuestas cortas -> menor costo y latencia
 
