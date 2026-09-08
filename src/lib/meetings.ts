@@ -40,9 +40,14 @@ export async function extractMeetingNotes(imageBase64: string): Promise<MeetingE
           {
             type: 'text',
             text: `Esta imagen son notas manuscritas de una reunión de negocios (en español). Lee la escritura a mano lo mejor que puedas.
+
 Genera:
-1. Un resumen elaborado y bien redactado de lo discutido (varios párrafos si hace falta, en prosa clara, no solo una lista de lo que ves escrito).
-2. Una lista de tareas/acciones concretas mencionadas o implícitas en las notas (asigna un verbo de acción a cada una).
+1. Un resumen elaborado y bien redactado de TODO lo escrito (varios párrafos si hace falta, en prosa clara) — esto incluye tanto las notas normales como las tareas, todo integrado en el relato de la reunión.
+2. Una lista de tareas — pero SOLO cuenta como tarea lo que el usuario marcó explícitamente como tal. Señales de que algo es una tarea:
+   - Está numerado o etiquetado como tarea: "Tarea 1)", "Tarea:", "TO DO", "Pendiente:", "Acción:".
+   - Tiene una casilla dibujada al lado (☐, un cuadrado vacío, un círculo vacío) — es una lista de chequeo.
+   - Empieza con un verbo en infinitivo o imperativo claro de acción a realizar ("Llamar a...", "Enviar...", "Revisar...").
+   No conviertas en tarea una nota informativa, una idea, un dato o una observación solo porque suena importante — la mayoría de lo escrito en una reunión son notas, NO tareas. Ante la duda, no la incluyas como tarea (mejor que quede solo en el resumen).
 
 Si la letra es ilegible en partes, ignora esas partes en vez de inventar contenido.
 
