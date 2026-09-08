@@ -97,13 +97,17 @@ interface IrsNewsLite {
 const MOOD_LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente']
 
 const ACCENT = {
-  blue: { text: 'text-blue-400', border: 'border-blue-500/30 hover:border-blue-500/50', badge: 'bg-blue-500/15 border-blue-500/30 text-blue-400', wash: 'from-blue-500/[0.08]', hex: '#3b82f6' },
-  purple: { text: 'text-purple-400', border: 'border-purple-500/30 hover:border-purple-500/50', badge: 'bg-purple-500/15 border-purple-500/30 text-purple-400', wash: 'from-purple-500/[0.08]', hex: '#a855f7' },
-  emerald: { text: 'text-emerald-400', border: 'border-emerald-500/30 hover:border-emerald-500/50', badge: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400', wash: 'from-emerald-500/[0.08]', hex: '#10b981' },
-  amber: { text: 'text-amber-400', border: 'border-amber-500/30 hover:border-amber-500/50', badge: 'bg-amber-500/15 border-amber-500/30 text-amber-400', wash: 'from-amber-500/[0.08]', hex: '#f59e0b' },
+  blue: { text: 'text-cyan-300', border: 'border-cyan-500/25 hover:border-cyan-400/50', badge: 'bg-cyan-500/10 border-cyan-400/30 text-cyan-300', wash: 'from-cyan-500/[0.07]', hex: '#22d3ee', glow: 'rgba(34,211,238,0.16)' },
+  purple: { text: 'text-violet-300', border: 'border-violet-500/25 hover:border-violet-400/50', badge: 'bg-violet-500/10 border-violet-400/30 text-violet-300', wash: 'from-violet-500/[0.07]', hex: '#a78bfa', glow: 'rgba(167,139,250,0.16)' },
+  emerald: { text: 'text-emerald-300', border: 'border-emerald-500/25 hover:border-emerald-400/50', badge: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300', wash: 'from-emerald-500/[0.07]', hex: '#34d399', glow: 'rgba(52,211,153,0.16)' },
+  amber: { text: 'text-amber-300', border: 'border-amber-500/25 hover:border-amber-400/50', badge: 'bg-amber-500/10 border-amber-400/30 text-amber-300', wash: 'from-amber-500/[0.07]', hex: '#fbbf24', glow: 'rgba(251,191,36,0.16)' },
 } as const
 
 type Accent = keyof typeof ACCENT
+
+// Clipped corner (top-right + bottom-left notch) for the HUD-panel look — a single
+// clip-path shared by every panel so the app reads as one system, not per-page CSS.
+const HUD_CLIP = 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))'
 
 // ── Section: agrupa tarjetas bajo un mismo "mundo" (Trading, Vida Personal,
 // Negocios, Contenido), reflejando los mismos grupos del sidebar ──
@@ -119,14 +123,22 @@ function Section({
 }) {
   const a = ACCENT[accent]
   return (
-    <section className={`relative overflow-hidden rounded-2xl border p-5 space-y-4 bg-[var(--bg-elevated)] transition-colors ${a.border}`}>
+    <section
+      className={`group relative overflow-hidden border p-5 space-y-4 bg-[var(--bg-elevated)] transition-all duration-300 hover:-translate-y-0.5 ${a.border}`}
+      style={{ clipPath: HUD_CLIP, boxShadow: `0 0 0 1px rgba(255,255,255,0.02)` }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ boxShadow: `0 0 32px -6px ${a.glow}` }}
+      />
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${a.wash} to-transparent`} />
+      <div className="pointer-events-none absolute top-0 left-0 right-4 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-40" style={{ color: a.hex }} />
       <div className="relative flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${a.badge}`}>
+          <div className={`w-9 h-9 border flex items-center justify-center flex-shrink-0 ${a.badge}`} style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)' }}>
             {icon}
           </div>
-          <h2 className="font-bold text-[15px] text-white tracking-tight">{title}</h2>
+          <h2 className="font-display font-bold text-[15px] text-white tracking-tight">{title}</h2>
         </div>
         {href && (
           <Link href={href} className={`text-xs font-medium hover:underline ${a.text}`}>
@@ -143,10 +155,23 @@ function StatBlock({ label, value, valueClass, caption }: { label: string; value
   return (
     <div>
       <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium">{label}</p>
-      <p className={`text-3xl font-extrabold mt-0.5 tracking-tight ${valueClass ?? 'text-white'}`}>{value}</p>
+      <p className={`font-display text-3xl font-extrabold mt-0.5 tracking-tight ${valueClass ?? 'text-white'}`}>{value}</p>
       {caption && <p className="text-xs text-gray-600 mt-0.5">{caption}</p>}
     </div>
   )
+}
+
+// Live HUD clock — ticks client-side only, avoids hydration mismatch by rendering
+// nothing until mounted.
+function HudClock() {
+  const [now, setNow] = useState<Date | null>(null)
+  useEffect(() => {
+    setNow(new Date())
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  if (!now) return <span className="tabular-nums opacity-0">00:00:00</span>
+  return <span className="tabular-nums">{now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
 }
 
 function last14Dates(): string[] {
@@ -340,16 +365,27 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-0.5">
-          {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      {/* HUD status bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-0.5 capitalize">
+            {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass hud-border">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-display text-sm text-cyan-200">
+            <HudClock />
+          </span>
+        </div>
       </div>
 
       {/* Estado del día — semáforo + inputs unificados en una sola tarjeta */}
-      <div className={`relative overflow-hidden rounded-2xl border p-5 space-y-4 bg-[var(--bg-elevated)] ${lightConfig.border}`}>
+      <div
+        className={`relative overflow-hidden border p-5 space-y-4 bg-[var(--bg-elevated)] ${lightConfig.border}`}
+        style={{ clipPath: HUD_CLIP }}
+      >
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${lightConfig.badge}`}>
@@ -377,9 +413,9 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs text-gray-500">
-                Actualizar estado mental {saving && <span className="text-blue-400">• guardando...</span>}
+                Actualizar estado mental {saving && <span className="text-cyan-300">• guardando...</span>}
               </label>
-              <Link href="/journal" className="text-[11px] text-gray-600 hover:text-blue-400">
+              <Link href="/journal" className="text-[11px] text-gray-600 hover:text-cyan-300">
                 Journal de hoy →
               </Link>
             </div>
@@ -390,7 +426,7 @@ export default function DashboardPage() {
                   onClick={() => saveDailyState({ mentalState: v })}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     dailyState.mentalState === v
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-gradient-to-r from-cyan-500 to-violet-600 text-white shadow-glow'
                       : 'bg-[#111] text-gray-500 hover:text-gray-300 border border-[#2a2a2a]'
                   }`}
                 >
@@ -426,7 +462,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Cita del día */}
-      <div className="card border-l-2 border-blue-600">
+      <div className="card border-l-2 border-cyan-500/60 glass">
         <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-2">Cita del día</p>
         <p className="text-gray-300 text-sm italic leading-relaxed">&quot;{quote}&quot;</p>
       </div>
