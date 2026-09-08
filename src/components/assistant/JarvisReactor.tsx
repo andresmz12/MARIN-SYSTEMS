@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 
-export type JarvisState = 'idle' | 'listening' | 'thinking' | 'speaking'
+export type JarvisState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 
 interface JarvisReactorProps {
   state: JarvisState
@@ -15,6 +15,7 @@ const STATE_RGB: Record<JarvisState, [number, number, number]> = {
   listening: [34, 211, 238],
   thinking: [167, 139, 250],
   speaking: [232, 236, 245],
+  error: [239, 68, 68],
 }
 
 function lerp(a: number, b: number, t: number) {
@@ -59,8 +60,12 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
       const rgbSoft = `rgba(${r.toFixed(0)},${g.toFixed(0)},${b.toFixed(0)},0.5)`
 
       const idleBreath = (Math.sin(t * 0.9) + 1) / 2
+      const alarmBlink = (Math.sin(t * 3.2) + 1) / 2
       const boost =
-        state === 'idle' ? idleBreath * 0.12 : state === 'thinking' ? idleBreath * 0.3 + 0.28 : level
+        state === 'idle' ? idleBreath * 0.12
+        : state === 'thinking' ? idleBreath * 0.3 + 0.28
+        : state === 'error' ? alarmBlink * 0.4 + 0.15
+        : level
 
       if (coreRef.current) {
         coreRef.current.setAttribute('r', String(30 + boost * 9))

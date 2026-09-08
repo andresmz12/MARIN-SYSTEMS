@@ -10,6 +10,13 @@ interface ChatMessage {
 
 interface JarvisFullscreenProps {
   onClose: () => void
+  /** Created synchronously inside the launcher's click handler so iOS/Safari treats
+   * later programmatic playback (after an async fetch) as part of that user gesture.
+   * Persisted in the parent (not here) because an <audio> element can only ever be
+   * attached to a MediaElementSourceNode once — this component unmounts on close. */
+  audioCtx: AudioContext
+  audioEl: HTMLAudioElement
+  outputAnalyser: AnalyserNode
 }
 
 const BARGE_IN_MIN_CHARS = 3 // ignore stray noise picked up as a 1-2 char interim result
@@ -24,10 +31,8 @@ function computeRms(data: Uint8Array): number {
   return Math.min(1, rms * 4) // empirical gain so normal speech reads ~0.3-0.8
 }
 
-export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
+export function JarvisFullscreen({ onClose, audioCtx, audioEl, outputAnalyser }: JarvisFullscreenProps) {
   const [state, setState] = useState<JarvisState>('idle')
-  const [supported, setSupported] = useState(true)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const stateRef = useRef<JarvisState>('idle')
   const levelRef = useRef(0)
@@ -35,10 +40,8 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
   const closedRef = useRef(false)
 
   const recognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null)
-  const audioCtxRef = useRef<AudioContext | null>(null)
   const micStreamRef = useRef<MediaStream | null>(null)
   const micAnalyserRef = useRef<AnalyserNode | null>(null)
-  const audioElRef = useRef<HTMLAudioElement | null>(null)
   const chatAbortRef = useRef<AbortController | null>(null)
   const meterRafRef = useRef<number>(0)
   const currentObjectUrlRef = useRef<string | null>(null)
@@ -63,11 +66,22 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
     loop()
   }
 
-  function stopPlayback() {
-    if (audioElRef.current) {
-      audioElRef.current.pause()
-      audioElRef.current.currentTime = 0
+  function meterFromOutput() {
+    const data = new Uint8Array(outputAnalyser.fftSize)
+    const loop = () => {
+      if (closedRef.current) return
+      if (stateRef.current === 'speaking') {
+        outputAnalyser.getByteTimeDomainData(data)
+        levelRef.current = computeRms(data)
+        requestAnimationFrame(loop)
+      }
     }
+    loop()
+  }
+
+  function stopPlayback() {
+    audioEl.pause()
+    audioEl.currentTime = 0
     if (currentObjectUrlRef.current) {
       URL.revokeObjectURL(currentObjectUrlRef.current)
       currentObjectUrlRef.current = null
@@ -91,30 +105,13 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
       })
       if (!res.ok || stateRef.current !== 'speaking') return
       const blob = await res.blob()
+      if (stateRef.current !== 'speaking') return
       const url = URL.createObjectURL(blob)
       currentObjectUrlRef.current = url
-
-      const ctx = audioCtxRef.current
-      const audioEl = audioElRef.current
-      if (!ctx || !audioEl) return
       audioEl.src = url
 
-      if (ctx.state === 'suspended') await ctx.resume()
-      const source = ctx.createMediaElementSource(audioEl)
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      analyser.connect(ctx.destination)
-      const data = new Uint8Array(analyser.fftSize)
-
-      const meterOutput = () => {
-        if (closedRef.current || stateRef.current !== 'speaking') return
-        analyser.getByteTimeDomainData(data)
-        levelRef.current = computeRms(data)
-        requestAnimationFrame(meterOutput)
-      }
-      meterOutput()
-
+      if (audioCtx.state === 'suspended') await audioCtx.resume()
+      meterFromOutput()
       audioEl.onended = () => {
         if (stateRef.current === 'speaking') setJarvisState('listening')
       }
@@ -153,10 +150,11 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
 
   useEffect(() => {
     closedRef.current = false
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognition) {
-      setSupported(false)
+      setJarvisState('error')
       return
     }
 
@@ -172,16 +170,14 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
           return
         }
         micStreamRef.current = stream
-        const ctx = new AudioContext()
-        audioCtxRef.current = ctx
-        const source = ctx.createMediaStreamSource(stream)
-        const analyser = ctx.createAnalyser()
-        analyser.fftSize = 256
-        source.connect(analyser)
-        micAnalyserRef.current = analyser
+        const micSource = audioCtx.createMediaStreamSource(stream)
+        const micAnalyser = audioCtx.createAnalyser()
+        micAnalyser.fftSize = 256
+        micSource.connect(micAnalyser)
+        micAnalyserRef.current = micAnalyser
         meterFromMic()
       } catch {
-        setErrorMsg('No pude acceder al micrófono. Revisa los permisos del navegador.')
+        setJarvisState('error')
         return
       }
 
@@ -212,7 +208,7 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
       }
       recognition.onerror = (e: { error: string }) => {
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          setErrorMsg('Permiso de micrófono denegado.')
+          setJarvisState('error')
         }
       }
       recognitionRef.current = recognition
@@ -229,23 +225,9 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
       recognitionRef.current?.stop()
       stopPlayback()
       micStreamRef.current?.getTracks().forEach((t) => t.stop())
-      audioCtxRef.current?.close().catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const STATE_LABEL: Record<JarvisState, string> = {
-    idle: 'Iniciando…',
-    listening: 'Escuchando',
-    thinking: 'Pensando…',
-    speaking: 'Hablando',
-  }
-  const STATE_GLOW: Record<JarvisState, string> = {
-    idle: 'rgba(80,96,130,0.10)',
-    listening: 'rgba(34,211,238,0.16)',
-    thinking: 'rgba(167,139,250,0.20)',
-    speaking: 'rgba(232,236,245,0.14)',
-  }
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#05060a] flex flex-col items-center justify-center overflow-hidden">
@@ -253,7 +235,9 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
       <div
         className="absolute inset-0 transition-[background] duration-700 ease-out"
         style={{
-          backgroundImage: `radial-gradient(circle at 50% 45%, ${STATE_GLOW[state]}, transparent 58%)`,
+          backgroundImage: `radial-gradient(circle at 50% 45%, ${
+            state === 'error' ? 'rgba(239,68,68,0.14)' : 'rgba(34,211,238,0.10)'
+          }, transparent 58%)`,
         }}
       />
       <div
@@ -269,7 +253,7 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
         style={{
           top: 0,
           bottom: 0,
-          backgroundImage: `linear-gradient(180deg, transparent, ${STATE_GLOW[state]}, transparent)`,
+          backgroundImage: 'linear-gradient(180deg, transparent, rgba(34,211,238,0.14), transparent)',
           backgroundSize: '100% 50%',
         }}
       />
@@ -289,7 +273,7 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
       <button
         type="button"
         onClick={onClose}
-        aria-label="Cerrar Jarvis"
+        aria-label="Cerrar"
         className="absolute top-5 right-5 z-10 w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -297,26 +281,9 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
         </svg>
       </button>
 
-      <div className="relative z-10 flex flex-col items-center gap-6">
-        {!supported ? (
-          <p className="text-slate-400 text-sm max-w-xs text-center">
-            Tu navegador no soporta reconocimiento de voz. Prueba en Chrome o Edge.
-          </p>
-        ) : errorMsg ? (
-          <p className="text-red-400 text-sm max-w-xs text-center">{errorMsg}</p>
-        ) : (
-          <>
-            <div className="w-[78vw] h-[78vw] max-w-[480px] max-h-[480px]">
-              <JarvisReactor state={state} levelRef={levelRef} />
-            </div>
-            <p className="font-display text-xs tracking-[0.4em] uppercase text-slate-400" style={{ textShadow: '0 0 20px rgba(34,211,238,0.35)' }}>
-              {STATE_LABEL[state]}
-            </p>
-          </>
-        )}
+      <div className="relative z-10 w-[78vw] h-[78vw] max-w-[480px] max-h-[480px]">
+        <JarvisReactor state={state} levelRef={levelRef} />
       </div>
-
-      <audio ref={audioElRef} className="hidden" />
     </div>
   )
 }
