@@ -23,6 +23,7 @@ const personalItems = [
 
 const negociosItems = [
   { label: 'Empresas', href: '/empresas' },
+  { label: 'Reuniones', href: '/reuniones' },
   { label: 'Corp. Tasks', href: '/corporate-tasks' },
   { label: 'Command Center', href: '/command-center' },
 ]

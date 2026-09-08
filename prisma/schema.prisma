@@ -41,6 +41,7 @@ model User {
   financeCategories    FinanceCategory[]
   financeTransactions  FinanceTransaction[]
   budgets              Budget[]
+  meetings             Meeting[]
 }
 
 model Trade {
@@ -201,6 +202,7 @@ model Company {
   links           CompanyLink[]
   corporateTasks  CorporateTask[]
   ceoCompany      CEOCompany?
+  meetings        Meeting[]
 }
 
 model CompanyTask {
@@ -729,4 +731,33 @@ model AgentHealthLog {
   checkedAt         DateTime     @default(now())
 
   @@index([appId, checkedAt])
+}
+
+// ─── Reuniones (notas manuscritas estilo GoodNotes) ─────────────
+model Meeting {
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  date       DateTime      @default(now())
+  companyId  String?
+  company    Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  // Trazos vectoriales (array de {points:[{x,y}], color, width}) — permite
+  // reabrir y seguir editando la nota, y renderizarla a PNG para IA/PDF.
+  strokes    Json          @default("[]")
+  summary    String?       @db.Text
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  tasks      MeetingTask[]
+
+  @@index([userId])
+}
+
+model MeetingTask {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  title     String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
