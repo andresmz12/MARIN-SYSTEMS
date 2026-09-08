@@ -240,18 +240,51 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
     thinking: 'Pensando…',
     speaking: 'Hablando',
   }
+  const STATE_GLOW: Record<JarvisState, string> = {
+    idle: 'rgba(80,96,130,0.10)',
+    listening: 'rgba(34,211,238,0.16)',
+    thinking: 'rgba(167,139,250,0.20)',
+    speaking: 'rgba(232,236,245,0.14)',
+  }
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#05060a] flex flex-col items-center justify-center overflow-hidden">
-      {/* Ambient grid backdrop */}
+      {/* Ambient grid + moving scan sweep */}
       <div
-        className="absolute inset-0 opacity-40"
+        className="absolute inset-0 transition-[background] duration-700 ease-out"
         style={{
-          backgroundImage:
-            'radial-gradient(circle at 50% 40%, rgba(34,211,238,0.08), transparent 55%), linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-          backgroundSize: 'auto, 48px 48px, 48px 48px',
+          backgroundImage: `radial-gradient(circle at 50% 45%, ${STATE_GLOW[state]}, transparent 58%)`,
         }}
       />
+      <div
+        className="absolute inset-0 opacity-30"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)',
+          backgroundSize: '44px 44px, 44px 44px',
+        }}
+      />
+      <div
+        className="absolute inset-x-0 h-40 opacity-20 animate-scan pointer-events-none"
+        style={{
+          top: 0,
+          bottom: 0,
+          backgroundImage: `linear-gradient(180deg, transparent, ${STATE_GLOW[state]}, transparent)`,
+          backgroundSize: '100% 50%',
+        }}
+      />
+      {/* Corner HUD brackets */}
+      {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
+        <div
+          key={corner}
+          className={`absolute w-10 h-10 border-cyan-400/25 ${
+            corner === 'tl' ? 'top-6 left-6 border-t border-l' :
+            corner === 'tr' ? 'top-6 right-6 border-t border-r' :
+            corner === 'bl' ? 'bottom-6 left-6 border-b border-l' :
+            'bottom-6 right-6 border-b border-r'
+          }`}
+        />
+      ))}
 
       <button
         type="button"
@@ -273,10 +306,10 @@ export function JarvisFullscreen({ onClose }: JarvisFullscreenProps) {
           <p className="text-red-400 text-sm max-w-xs text-center">{errorMsg}</p>
         ) : (
           <>
-            <div className="w-[70vw] h-[70vw] max-w-[420px] max-h-[420px]">
+            <div className="w-[78vw] h-[78vw] max-w-[480px] max-h-[480px]">
               <JarvisReactor state={state} levelRef={levelRef} />
             </div>
-            <p className="font-display text-xs tracking-[0.3em] uppercase text-slate-500">
+            <p className="font-display text-xs tracking-[0.4em] uppercase text-slate-400" style={{ textShadow: '0 0 20px rgba(34,211,238,0.35)' }}>
               {STATE_LABEL[state]}
             </p>
           </>
