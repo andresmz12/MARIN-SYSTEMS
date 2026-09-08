@@ -299,6 +299,13 @@ export function AgentCharacter({ id, name, agentName, role, color }: AgentCharac
         <span className="text-[10px] font-medium mt-0.5" style={{ color: statusColor }}>
           {STATUS_LABEL[status]}
         </span>
+        {(agentData?.latency != null || agentData?.uptime != null) && (
+          <span className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+            {agentData?.latency != null && <span>{agentData.latency}ms</span>}
+            {agentData?.latency != null && agentData?.uptime != null && <span>·</span>}
+            {agentData?.uptime != null && <span>{agentData.uptime.toFixed(0)}% uptime</span>}
+          </span>
+        )}
       </div>
 
       {showDetails && (

@@ -728,6 +728,7 @@ model AgentHealthLog {
   memoryUsage       Float?
   cpuUsage          Float?
   databaseConnected Boolean?
+  httpStatusCode    Int?
   checkedAt         DateTime     @default(now())
 
   @@index([appId, checkedAt])

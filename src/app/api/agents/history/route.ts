@@ -14,6 +14,7 @@ interface LogRow {
   memoryUsage: number | null;
   cpuUsage: number | null;
   databaseConnected: boolean | null;
+  httpStatusCode: number | null;
 }
 
 function computeStats(rangeLogs: LogRow[], todayLogs: LogRow[]) {
@@ -87,6 +88,7 @@ async function buildAppHistory(appId: string, since: Date, dayStart: Date, dayEn
       memoryUsage: l.memoryUsage,
       cpuUsage: l.cpuUsage,
       databaseConnected: l.databaseConnected,
+      httpStatusCode: l.httpStatusCode,
     })),
     transitions: computeTransitions(logs),
     stats: {

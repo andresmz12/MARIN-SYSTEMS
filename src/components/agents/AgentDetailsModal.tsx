@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -82,6 +82,26 @@ interface HistoryResponse {
   };
 }
 
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, Math.min(sorted.length - 1, idx))];
+}
+
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function dayHeatColor(uptime: number | null): string {
+  if (uptime == null) return 'bg-slate-800 border-slate-700';
+  if (uptime >= 99) return 'bg-green-500/80 border-green-400/50';
+  if (uptime >= 95) return 'bg-green-600/50 border-green-500/40';
+  if (uptime >= 80) return 'bg-yellow-500/60 border-yellow-400/50';
+  if (uptime > 0) return 'bg-red-500/70 border-red-400/50';
+  return 'bg-red-700/80 border-red-500/50';
+}
+
 export function AgentDetailsModal({ id, name, agentName, color, onClose }: AgentDetailsModalProps) {
   const agentData = useAgentStore((state) => state.agents[id]);
   const status = (agentData?.status || 'unknown') as HealthStatus;
@@ -89,6 +109,7 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
 
   const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [weeklyPoints, setWeeklyPoints] = useState<AgentHistoryPoint[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,11 +135,54 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
       }
     }
 
+    async function loadWeekly() {
+      try {
+        const res = await fetch(`/api/agents/history?appId=${id}&hours=168`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setWeeklyPoints(data.points ?? []);
+      } catch (error) {
+        console.error('Failed to load weekly agent history:', error);
+      }
+    }
+
     loadHistory();
+    loadWeekly();
     return () => {
       cancelled = true;
     };
   }, [id]);
+
+  // Últimos 7 días, hoy incluido, en orden cronológico — % de checks "healthy" por día.
+  const weeklyUptime = useMemo(() => {
+    const days: { key: string; label: string; uptime: number | null }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({ key: dayKey(d), label: d.toLocaleDateString('es-CO', { weekday: 'short' }), uptime: null });
+    }
+    const byDay = new Map<string, { total: number; healthy: number }>();
+    for (const p of weeklyPoints ?? []) {
+      const k = dayKey(new Date(p.checkedAt));
+      const bucket = byDay.get(k) ?? { total: 0, healthy: 0 };
+      bucket.total += 1;
+      if (p.status === 'healthy') bucket.healthy += 1;
+      byDay.set(k, bucket);
+    }
+    return days.map((d) => {
+      const bucket = byDay.get(d.key);
+      return { ...d, uptime: bucket && bucket.total > 0 ? (bucket.healthy / bucket.total) * 100 : null };
+    });
+  }, [weeklyPoints]);
+
+  const p95Latency = useMemo(() => {
+    const values = (history?.points ?? [])
+      .map((p) => p.latency)
+      .filter((v): v is number => v != null);
+    return percentile(values, 95);
+  }, [history]);
 
   const chartData =
     history?.points
@@ -187,6 +251,32 @@ export function AgentDetailsModal({ id, name, agentName, color, onClose }: Agent
             <div className="text-slate-100 font-semibold">
               {agentData?.lastStatusChange ? formatDateTime(agentData.lastStatusChange) : 'Sin cambios'}
             </div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3">
+            <div className="text-slate-400 mb-1">HTTP status</div>
+            <div className="text-slate-100 font-semibold">
+              {agentData?.httpStatusCode != null ? agentData.httpStatusCode : 'Sin respuesta'}
+            </div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3">
+            <div className="text-slate-400 mb-1">Latencia P95 (24h)</div>
+            <div className="text-slate-100 font-semibold">{p95Latency != null ? `${p95Latency}ms` : '—'}</div>
+          </div>
+        </div>
+
+        {/* Uptime últimos 7 días */}
+        <div>
+          <h4 className="text-xs font-semibold text-slate-300 mb-2">Uptime — últimos 7 días</h4>
+          <div className="bg-slate-800/50 rounded-lg p-3 flex items-center justify-between gap-1.5">
+            {weeklyUptime.map((d) => (
+              <div key={d.key} className="flex flex-col items-center gap-1 flex-1">
+                <div
+                  title={d.uptime != null ? `${d.uptime.toFixed(1)}%` : 'Sin datos'}
+                  className={`w-full aspect-square rounded-md border ${dayHeatColor(d.uptime)}`}
+                />
+                <span className="text-[10px] text-slate-500 capitalize">{d.label.replace('.', '')}</span>
+              </div>
+            ))}
           </div>
         </div>
 

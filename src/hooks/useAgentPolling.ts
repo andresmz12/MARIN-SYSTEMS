@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useAgentStore } from '@/stores/agentStore';
 import { HealthStatus } from '@/types/agents';
 
-const POLL_INTERVAL = 300000; // 5 minutos
+const POLL_INTERVAL = 900000; // 15 minutos — antes 5, bajado para no golpear tanto los health endpoints externos
 // Short debounce to avoid double-fetch on React strict-mode double-invoke,
 // but short enough that navigating away and back always gets fresh data.
 const INITIAL_FETCH_DEBOUNCE_MS = 10_000; // 10 segundos
@@ -48,6 +48,7 @@ async function poll() {
           databaseConnected: boolean;
           memoryUsage: number | null;
           cpuUsage: number | null;
+          httpStatusCode: number | null;
         }) => {
           const prevStatus = currentAgents[app.id]?.status;
           const statusChanged =
@@ -57,6 +58,7 @@ async function poll() {
             latency: app.latency,
             uptime: app.uptime,
             errorRate: app.errorRate,
+            httpStatusCode: app.httpStatusCode,
             consecutiveFailures: app.consecutiveFailures,
             databaseConnected: app.databaseConnected,
             memoryUsage: app.memoryUsage,

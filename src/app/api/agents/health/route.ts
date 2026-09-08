@@ -5,9 +5,9 @@ import { sendAgentAlertEmail } from '@/lib/sendgrid-client';
 export const dynamic = 'force-dynamic';
 
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas
-// Shorter than POLL_INTERVAL (5 min) so the cache expires before the next interval tick fires,
+// Shorter than POLL_INTERVAL (15 min) so the cache expires before the next interval tick fires,
 // ensuring every setInterval call reaches the server and runs a real health check.
-const CACHE_MAX_AGE = 240; // 4 minutos
+const CACHE_MAX_AGE = 840; // 14 minutos
 
 // Module-level state — works because Railway runs a persistent Node process, not serverless.
 // Resets on process restart; acceptable trade-off (cooldown is best-effort, not critical-path).
@@ -28,6 +28,7 @@ interface HealthCheckResult {
   databaseConnected: boolean;
   memoryUsage: number | null;
   cpuUsage: number | null;
+  httpStatusCode: number | null;
 }
 
 interface AppHealthFields {
@@ -39,6 +40,7 @@ interface AppHealthFields {
   databaseConnected: boolean;
   memoryUsage: number | null;
   cpuUsage: number | null;
+  httpStatusCode: number | null;
   errorDetail: string | null;
 }
 
@@ -138,12 +140,13 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
       return {
         status: reported === 'down' ? 'down' : 'degraded',
         ...fields,
+        httpStatusCode: response.status,
         errorDetail: `HTTP ${response.status} en ${healthUrl}`,
       };
     }
 
     // 2xx: honor the app's own status when it self-reports a problem, else healthy.
-    return { status: reported ?? 'healthy', ...fields, errorDetail: null };
+    return { status: reported ?? 'healthy', ...fields, httpStatusCode: response.status, errorDetail: null };
   } catch (err) {
     return {
       status: 'down',
@@ -154,6 +157,7 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
       databaseConnected: false,
       memoryUsage: null,
       cpuUsage: null,
+      httpStatusCode: null,
       errorDetail: describeFetchError(err, timeout),
     };
   }
@@ -230,6 +234,7 @@ export async function GET(_req: NextRequest) {
           memoryUsage: r.memoryUsage,
           cpuUsage: r.cpuUsage,
           databaseConnected: r.databaseConnected,
+          httpStatusCode: r.httpStatusCode,
         })),
       });
     } catch (logError) {

@@ -14,6 +14,7 @@ export interface AgentHealthData {
   databaseConnected: boolean;
   memoryUsage: number | null;    // %
   cpuUsage: number | null;       // %
+  httpStatusCode: number | null;
 }
 
 // Una app registrada en Prisma
@@ -54,6 +55,7 @@ export interface AgentHistoryPoint {
   memoryUsage: number | null;
   cpuUsage: number | null;
   databaseConnected: boolean | null;
+  httpStatusCode: number | null;
 }
 
 // Transición de estado detectada entre dos puntos consecutivos
