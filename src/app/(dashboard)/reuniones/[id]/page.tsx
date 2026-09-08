@@ -7,6 +7,12 @@ import jsPDF from 'jspdf'
 import { InkCanvas, InkCanvasHandle } from '@/components/meetings/InkCanvas'
 import { MindMapCanvas, MindMapCanvasHandle } from '@/components/meetings/MindMapCanvas'
 import { MeetingPage, newInkPage, newMindmapPage, mindmapToText } from '@/components/meetings/types'
+
+// Older meetings were saved before the `shapes` field existed on ink pages —
+// normalize on load so InkCanvas never sees `undefined` there.
+function normalizePages(pages: MeetingPage[]): MeetingPage[] {
+  return pages.map((p) => (p.type === 'ink' ? { ...p, shapes: p.shapes ?? [] } : p))
+}
 import { formatDateTime } from '@/lib/utils'
 
 interface CompanyLite { id: string; name: string; color: string; emoji: string }
@@ -50,7 +56,7 @@ export default function MeetingDetailPage() {
       if (res.ok) {
         const data: MeetingDetail = await res.json()
         setMeeting(data)
-        setPages(data.pages && data.pages.length > 0 ? data.pages : [newInkPage('Página 1')])
+        setPages(data.pages && data.pages.length > 0 ? normalizePages(data.pages) : [newInkPage('Página 1')])
         setTitle(data.title)
         setActivePageIdx(0)
       }
@@ -278,8 +284,10 @@ export default function MeetingDetailPage() {
           ref={inkRef}
           strokes={activePage.strokes}
           textBoxes={activePage.textBoxes}
+          shapes={activePage.shapes ?? []}
           onChangeStrokes={(strokes) => updatePage(activePageIdx, { ...activePage, strokes })}
           onChangeTextBoxes={(textBoxes) => updatePage(activePageIdx, { ...activePage, textBoxes })}
+          onChangeShapes={(shapes) => updatePage(activePageIdx, { ...activePage, shapes })}
         />
       )}
       {activePage?.type === 'mindmap' && (

@@ -1,6 +1,11 @@
 export interface StrokePoint { x: number; y: number }
-export interface Stroke { color: string; width: number; points: StrokePoint[] }
+// `highlighter` marks a semi-transparent marker stroke (rendered with lower
+// opacity + multiply blend) instead of a normal pen stroke.
+export interface Stroke { color: string; width: number; points: StrokePoint[]; highlighter?: boolean }
 export interface TextBox { id: string; x: number; y: number; text: string; color: string; fontSize: number }
+
+export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'arrow'
+export interface Shape { id: string; kind: ShapeKind; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
 
 export interface MindNode { id: string; text: string; color: string; x: number; y: number }
 export interface MindBranch extends MindNode { children: MindNode[] }
@@ -11,6 +16,7 @@ export interface InkPage {
   title: string
   strokes: Stroke[]
   textBoxes: TextBox[]
+  shapes: Shape[]
 }
 
 export interface MindmapPage {
@@ -30,7 +36,7 @@ export function newId(prefix: string): string {
 }
 
 export function newInkPage(title = 'Página'): InkPage {
-  return { id: newId('page'), type: 'ink', title, strokes: [], textBoxes: [] }
+  return { id: newId('page'), type: 'ink', title, strokes: [], textBoxes: [], shapes: [] }
 }
 
 export function newMindmapPage(title = 'Mapa mental'): MindmapPage {

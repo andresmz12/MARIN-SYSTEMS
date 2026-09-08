@@ -2,7 +2,7 @@
 
 import { useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { svgToPng } from '@/lib/svg-export'
-import { Stroke, StrokePoint, TextBox, newId } from './types'
+import { Shape, ShapeKind, Stroke, StrokePoint, TextBox, newId } from './types'
 
 export interface InkCanvasHandle {
   exportPng: () => Promise<string>
@@ -11,8 +11,10 @@ export interface InkCanvasHandle {
 interface InkCanvasProps {
   strokes: Stroke[]
   textBoxes: TextBox[]
+  shapes: Shape[]
   onChangeStrokes: (strokes: Stroke[]) => void
   onChangeTextBoxes: (textBoxes: TextBox[]) => void
+  onChangeShapes: (shapes: Shape[]) => void
 }
 
 // Fixed logical canvas size (roughly letter proportions) — the SVG scales to fit
@@ -28,10 +30,17 @@ const PEN_COLORS = [
   { label: 'Verde', value: '#16a34a' },
 ]
 const PEN_WIDTHS = [2, 4, 7]
+const HIGHLIGHT_WIDTH = 22
 const ERASER_RADIUS = 18
 const TEXT_FONT_SIZE = 28
+const SHAPE_KINDS: { kind: ShapeKind; label: string; icon: string }[] = [
+  { kind: 'rect', label: 'Rectángulo', icon: '▭' },
+  { kind: 'ellipse', label: 'Óvalo', icon: '◯' },
+  { kind: 'line', label: 'Línea', icon: '╱' },
+  { kind: 'arrow', label: 'Flecha', icon: '↗' },
+]
 
-type Tool = 'draw' | 'erase' | 'text'
+type Tool = 'draw' | 'highlight' | 'erase' | 'text' | 'shape'
 
 function smoothPath(points: StrokePoint[]): string {
   if (points.length === 0) return ''
@@ -88,6 +97,48 @@ function eraseAtPoint(strokes: Stroke[], p: StrokePoint, radius: number): Stroke
   return strokes.flatMap((s) => eraseStrokeAtPoint(s, p, radius))
 }
 
+// Shapes are simple geometric objects — erasing near their bounding box
+// deletes the whole shape rather than trying to cut a partial arc/segment.
+function shapeNearPoint(shape: Shape, p: StrokePoint, radius: number): boolean {
+  const minX = Math.min(shape.x1, shape.x2) - radius
+  const maxX = Math.max(shape.x1, shape.x2) + radius
+  const minY = Math.min(shape.y1, shape.y2) - radius
+  const maxY = Math.max(shape.y1, shape.y2) + radius
+  return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY
+}
+
+function eraseShapesAtPoint(shapes: Shape[], p: StrokePoint, radius: number): Shape[] {
+  return shapes.filter((s) => !shapeNearPoint(s, p, radius))
+}
+
+// One `d` string for every shape kind so the live preview and the committed
+// shape can share the exact same renderer (see shapePathD usages below).
+function shapePathD(kind: ShapeKind, x1: number, y1: number, x2: number, y2: number): string {
+  if (kind === 'rect') {
+    return `M${x1},${y1} H${x2} V${y2} H${x1} Z`
+  }
+  if (kind === 'ellipse') {
+    const cx = (x1 + x2) / 2
+    const cy = (y1 + y2) / 2
+    const rx = Math.abs(x2 - x1) / 2
+    const ry = Math.abs(y2 - y1) / 2
+    if (rx < 0.5 || ry < 0.5) return ''
+    return `M${cx - rx},${cy} A${rx},${ry} 0 1 0 ${cx + rx},${cy} A${rx},${ry} 0 1 0 ${cx - rx},${cy} Z`
+  }
+  if (kind === 'line') {
+    return `M${x1},${y1} L${x2},${y2}`
+  }
+  // arrow: shaft + two-line arrowhead at the end point
+  const angle = Math.atan2(y2 - y1, x2 - x1)
+  const headLen = 20
+  const headAngle = Math.PI / 7
+  const hx1 = x2 - headLen * Math.cos(angle - headAngle)
+  const hy1 = y2 - headLen * Math.sin(angle - headAngle)
+  const hx2 = x2 - headLen * Math.cos(angle + headAngle)
+  const hy2 = y2 - headLen * Math.sin(angle + headAngle)
+  return `M${x1},${y1} L${x2},${y2} M${hx1},${hy1} L${x2},${y2} L${hx2},${hy2}`
+}
+
 // Apple Pencil / high-frequency touch input reports faster than the browser
 // paints (up to 240Hz on iPad Pro vs ~60fps rendering) — a single pointermove
 // only carries the latest sample. getCoalescedEvents() returns every sample
@@ -100,18 +151,22 @@ function getPointerSamples(e: React.PointerEvent): PointerEvent[] {
   return coalesced && coalesced.length > 0 ? coalesced : [native]
 }
 
+interface UndoSnapshot { strokes: Stroke[]; shapes: Shape[] }
+
 export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function InkCanvas(
-  { strokes, textBoxes, onChangeStrokes, onChangeTextBoxes },
+  { strokes, textBoxes, shapes, onChangeStrokes, onChangeTextBoxes, onChangeShapes },
   ref
 ) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [tool, setTool] = useState<Tool>('draw')
   const [color, setColor] = useState(PEN_COLORS[0].value)
   const [width, setWidth] = useState(PEN_WIDTHS[1])
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('rect')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
   const draggingText = useRef<{ id: string; offsetX: number; offsetY: number; moved: boolean } | null>(null)
-  const strokeUndoStack = useRef<Stroke[][]>([])
+  const undoStack = useRef<UndoSnapshot[]>([])
+  const redoStack = useRef<UndoSnapshot[]>([])
   const drawing = useRef(false)
   // The in-progress stroke is tracked in a ref and painted by mutating the
   // <path> element's `d` attribute directly (see appendPoint) instead of
@@ -120,8 +175,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   // rate and dropped points — the strokes came out broken/discontinuous.
   const currentPointsRef = useRef<StrokePoint[]>([])
   const currentPathRef = useRef<SVGPathElement>(null)
+  const shapePreviewRef = useRef<SVGPathElement>(null)
+  const shapeStartRef = useRef<StrokePoint | null>(null)
   const latestStrokesRef = useRef<Stroke[]>(strokes)
+  const latestShapesRef = useRef<Shape[]>(shapes)
   latestStrokesRef.current = strokes
+  latestShapesRef.current = shapes
+  // Once a stylus has been seen on this device, ignore 'touch' pointer events
+  // entirely — otherwise the palm resting on the screen while writing with
+  // the Pencil draws its own stray strokes.
+  const penDetectedRef = useRef(false)
 
   function toCanvasPoint(e: { clientX: number; clientY: number }): StrokePoint {
     const svg = svgRef.current
@@ -133,9 +196,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
   }
 
-  function pushStrokeUndo() {
-    strokeUndoStack.current.push(strokes.map((s) => ({ ...s, points: [...s.points] })))
-    if (strokeUndoStack.current.length > 50) strokeUndoStack.current.shift()
+  function pushUndo() {
+    undoStack.current.push({
+      strokes: strokes.map((s) => ({ ...s, points: [...s.points] })),
+      shapes: shapes.map((s) => ({ ...s })),
+    })
+    if (undoStack.current.length > 50) undoStack.current.shift()
+    redoStack.current = []
   }
 
   function startEditingBox(tb: TextBox) {
@@ -163,6 +230,9 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   }
 
   function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    if (e.pointerType === 'pen') penDetectedRef.current = true
+    if (e.pointerType === 'touch' && penDetectedRef.current) return
+
     if (editingId) commitEditing()
     if (draggingText.current) return // handled by the handle's own pointer events
 
@@ -178,8 +248,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
 
     drawing.current = true
     if (tool === 'erase') {
-      pushStrokeUndo()
+      pushUndo()
       onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
+      onChangeShapes(eraseShapesAtPoint(latestShapesRef.current, p, ERASER_RADIUS))
+    } else if (tool === 'shape') {
+      pushUndo()
+      shapeStartRef.current = p
+      shapePreviewRef.current?.setAttribute('d', shapePathD(shapeKind, p.x, p.y, p.x, p.y))
     } else {
       currentPointsRef.current = [p]
       currentPathRef.current?.setAttribute('d', smoothPath(currentPointsRef.current))
@@ -192,6 +267,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   }
 
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (e.pointerType === 'touch' && penDetectedRef.current) return
+
     if (draggingText.current) {
       const p = toCanvasPoint(e)
       const d = draggingText.current
@@ -203,6 +280,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     if (tool === 'erase') {
       const p = toCanvasPoint(e)
       onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
+      onChangeShapes(eraseShapesAtPoint(latestShapesRef.current, p, ERASER_RADIUS))
+    } else if (tool === 'shape') {
+      if (!shapeStartRef.current) return
+      const p = toCanvasPoint(e)
+      const start = shapeStartRef.current
+      shapePreviewRef.current?.setAttribute('d', shapePathD(shapeKind, start.x, start.y, p.x, p.y))
     } else {
       // Replay every coalesced pencil sample since the last frame, not just the latest one.
       for (const sample of getPointerSamples(e)) {
@@ -211,30 +294,64 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
     if (draggingText.current) {
       draggingText.current = null
       return
     }
     drawing.current = false
-    if (tool === 'draw' && currentPointsRef.current.length > 0) {
-      pushStrokeUndo()
-      onChangeStrokes([...strokes, { color, width, points: currentPointsRef.current }])
+    if (tool === 'draw' || tool === 'highlight') {
+      if (currentPointsRef.current.length > 0) {
+        pushUndo()
+        onChangeStrokes([
+          ...strokes,
+          {
+            color,
+            width: tool === 'highlight' ? HIGHLIGHT_WIDTH : width,
+            points: currentPointsRef.current,
+            highlighter: tool === 'highlight',
+          },
+        ])
+      }
+      currentPointsRef.current = []
+      currentPathRef.current?.setAttribute('d', '')
+    } else if (tool === 'shape' && shapeStartRef.current) {
+      const start = shapeStartRef.current
+      const p = toCanvasPoint(e)
+      if (Math.hypot(p.x - start.x, p.y - start.y) >= 4) {
+        onChangeShapes([...shapes, { id: newId('shape'), kind: shapeKind, x1: start.x, y1: start.y, x2: p.x, y2: p.y, color, width }])
+      } else {
+        // Too small to be a real shape — the pushUndo() from pointerdown left
+        // a stray checkpoint with nothing changed; drop it so undo stays clean.
+        undoStack.current.pop()
+      }
+      shapeStartRef.current = null
+      shapePreviewRef.current?.setAttribute('d', '')
     }
-    currentPointsRef.current = []
-    currentPathRef.current?.setAttribute('d', '')
   }
 
   function undo() {
-    const prev = strokeUndoStack.current.pop()
-    if (prev) onChangeStrokes(prev)
+    const prev = undoStack.current.pop()
+    if (!prev) return
+    redoStack.current.push({ strokes, shapes })
+    onChangeStrokes(prev.strokes)
+    onChangeShapes(prev.shapes)
+  }
+
+  function redo() {
+    const next = redoStack.current.pop()
+    if (!next) return
+    undoStack.current.push({ strokes, shapes })
+    onChangeStrokes(next.strokes)
+    onChangeShapes(next.shapes)
   }
 
   function clearAll() {
-    if (strokes.length === 0 && textBoxes.length === 0) return
-    pushStrokeUndo()
+    if (strokes.length === 0 && textBoxes.length === 0 && shapes.length === 0) return
+    pushUndo()
     onChangeStrokes([])
     onChangeTextBoxes([])
+    onChangeShapes([])
   }
 
   useImperativeHandle(ref, () => ({
@@ -257,11 +374,41 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         </button>
         <button
           type="button"
+          onClick={() => setTool('highlight')}
+          className={`text-xs px-2.5 py-1.5 rounded-lg border ${tool === 'highlight' ? 'border-cyan-400 bg-cyan-500/10 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+        >
+          🖍️ Resaltador
+        </button>
+        <button
+          type="button"
           onClick={() => setTool('text')}
           className={`text-xs px-2.5 py-1.5 rounded-lg border ${tool === 'text' ? 'border-cyan-400 bg-cyan-500/10 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
         >
           🔤 Texto
         </button>
+        <button
+          type="button"
+          onClick={() => setTool('shape')}
+          className={`text-xs px-2.5 py-1.5 rounded-lg border ${tool === 'shape' ? 'border-cyan-400 bg-cyan-500/10 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+        >
+          ▭ Formas
+        </button>
+        {tool === 'shape' && (
+          <div className="flex items-center gap-1">
+            {SHAPE_KINDS.map((s) => (
+              <button
+                key={s.kind}
+                type="button"
+                onClick={() => setShapeKind(s.kind)}
+                aria-label={s.label}
+                title={s.label}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm border ${shapeKind === s.kind ? 'border-cyan-400 bg-cyan-500/10 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+              >
+                {s.icon}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="w-px h-6 bg-[var(--bg-border)] mx-1" />
         {PEN_COLORS.map((c) => (
           <button
@@ -275,7 +422,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
             style={{ backgroundColor: c.value }}
           />
         ))}
-        {tool === 'draw' && (
+        {(tool === 'draw' || tool === 'shape') && (
           <>
             <div className="w-px h-6 bg-[var(--bg-border)] mx-1" />
             {PEN_WIDTHS.map((w) => (
@@ -302,6 +449,9 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         <button type="button" onClick={undo} className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--bg-border)] text-slate-400 hover:text-slate-200">
           ↩ Deshacer
         </button>
+        <button type="button" onClick={redo} className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--bg-border)] text-slate-400 hover:text-slate-200">
+          ↪ Rehacer
+        </button>
         <button type="button" onClick={clearAll} className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--bg-border)] text-slate-400 hover:text-red-400 ml-auto">
           Borrar todo
         </button>
@@ -319,12 +469,45 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
+          {shapes.map((shape) => (
+            <path
+              key={shape.id}
+              d={shapePathD(shape.kind, shape.x1, shape.y1, shape.x2, shape.y2)}
+              stroke={shape.color}
+              strokeWidth={shape.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          ))}
+          {/* Shape being dragged out — painted imperatively for the same reason as the ink preview below. */}
+          <path ref={shapePreviewRef} stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+
           {strokes.map((stroke, i) => (
-            <path key={i} d={smoothPath(stroke.points)} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path
+              key={i}
+              d={smoothPath(stroke.points)}
+              stroke={stroke.color}
+              strokeWidth={stroke.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+              opacity={stroke.highlighter ? 0.4 : 1}
+              style={stroke.highlighter ? { mixBlendMode: 'multiply' } : undefined}
+            />
           ))}
           {/* In-progress stroke — its `d` is mutated directly via ref in appendPoint(),
               never through React state, so drawing never waits on a re-render. */}
-          <path ref={currentPathRef} stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path
+            ref={currentPathRef}
+            stroke={color}
+            strokeWidth={tool === 'highlight' ? HIGHLIGHT_WIDTH : width}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+            opacity={tool === 'highlight' ? 0.4 : 1}
+            style={tool === 'highlight' ? { mixBlendMode: 'multiply' } : undefined}
+          />
 
           {textBoxes.filter((tb) => tb.id !== editingId).map((tb) => (
             <g key={tb.id}>
