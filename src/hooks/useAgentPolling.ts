@@ -77,6 +77,11 @@ async function poll() {
   }
 }
 
+/** Manual refresh, exposed for a "Refrescar ahora" button — bypasses the debounce. */
+export async function refreshAgentsNow() {
+  await poll();
+}
+
 export function useAgentPolling() {
   useEffect(() => {
     // Fetch immediately unless we just fetched (debounce for React strict-mode double-invoke).

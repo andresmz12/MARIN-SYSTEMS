@@ -143,8 +143,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const linkClass = (active: boolean) =>
     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
       active
-        ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
-        : 'hover:bg-[var(--bg-hover)]'
+        ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-400/30 shadow-glow'
+        : 'border border-transparent hover:bg-[var(--bg-hover)]'
     }`
 
   const navLink = (href: string, label: string, icon: React.ReactNode) => (
@@ -190,7 +190,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 href={item.href}
                 className={`block px-2 py-2 rounded-lg text-xs transition-colors ${
                   pathname.startsWith(item.href)
-                    ? 'text-blue-400 bg-blue-600/10'
+                    ? 'text-cyan-300 bg-cyan-500/10'
                     : 'text-gray-500 hover:text-gray-300 hover:bg-[var(--bg-hover)]'
                 }`}
               >
@@ -222,12 +222,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           </svg>
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-blue-600/20 border border-blue-600/40 rounded flex items-center justify-center">
-            <svg className="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-6 h-6 rounded flex items-center justify-center bg-gradient-to-br from-cyan-500/30 to-violet-500/30 border border-cyan-400/40 shadow-glow">
+            <svg className="w-3 h-3 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l4-4 4 4 4-6" />
             </svg>
           </div>
-          <span className="font-bold text-white text-sm">Marin Systems</span>
+          <span className="font-display font-bold text-white text-sm">Marin Systems</span>
         </div>
       </header>
 
@@ -251,13 +251,13 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <div className="p-4 border-b border-[var(--bg-border)] flex items-center justify-between min-h-[60px]">
           {(!collapsed) && (
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 bg-blue-600/20 border border-blue-600/40 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-cyan-500/25 to-violet-500/25 border border-cyan-400/40 shadow-glow">
+                <svg className="w-4 h-4 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l4-4 4 4 4-6" />
                 </svg>
               </div>
               <div className="min-w-0">
-                <p className="font-bold text-white text-sm tracking-tight truncate">Marin Systems</p>
+                <p className="font-display font-bold gradient-text text-sm tracking-tight truncate">Marin Systems</p>
                 <p className="text-[10px] text-gray-500">Trading & Productividad</p>
               </div>
             </div>
@@ -265,8 +265,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
           {collapsed && (
             <div className="hidden lg:flex w-full justify-center">
-              <div className="w-8 h-8 bg-blue-600/20 border border-blue-600/40 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-cyan-500/25 to-violet-500/25 border border-cyan-400/40 shadow-glow">
+                <svg className="w-4 h-4 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l4-4 4 4 4-6" />
                 </svg>
               </div>
@@ -321,7 +321,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                     href={item.href}
                     className={`block px-2 py-2 rounded-lg text-xs transition-colors ${
                       pathname === item.href
-                        ? 'text-blue-400 bg-blue-600/10'
+                        ? 'text-cyan-300 bg-cyan-500/10'
                         : 'text-gray-500 hover:text-gray-300 hover:bg-[var(--bg-hover)]'
                     }`}
                   >
@@ -377,7 +377,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             href="/configuracion"
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
               pathname === '/configuracion'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
+                ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-400/30 shadow-glow'
                 : 'text-gray-500 hover:text-gray-200 hover:bg-[var(--bg-hover)]'
             }`}
           >
@@ -407,7 +407,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <Link
           href="/dashboard"
           className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[11px] transition-colors ${
-            isActive('/dashboard') ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+            isActive('/dashboard') ? 'text-cyan-300' : 'text-gray-500 hover:text-gray-300'
           }`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -419,7 +419,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <Link
           href="/trading/diario"
           className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[11px] transition-colors ${
-            pathname.startsWith('/trading') ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+            pathname.startsWith('/trading') ? 'text-cyan-300' : 'text-gray-500 hover:text-gray-300'
           }`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -431,7 +431,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <Link
           href="/habitos"
           className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[11px] transition-colors ${
-            isActive('/habitos') ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+            isActive('/habitos') ? 'text-cyan-300' : 'text-gray-500 hover:text-gray-300'
           }`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -443,7 +443,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <Link
           href="/agenda"
           className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[11px] transition-colors ${
-            isActive('/agenda') ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+            isActive('/agenda') ? 'text-cyan-300' : 'text-gray-500 hover:text-gray-300'
           }`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

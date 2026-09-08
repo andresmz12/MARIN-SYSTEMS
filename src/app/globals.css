@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,17 +6,20 @@
 
 /* ── Theme variables ── */
 :root {
-  --bg-base:       #0f0f0f;
-  --bg-sidebar:    #111111;
-  --bg-card:       #111111;
-  --bg-elevated:   #1a1a1a;
-  --bg-hover:      #222222;
-  --bg-border:     #2a2a2a;
-  --text-primary:  #e5e7eb;
-  --text-secondary:#9ca3af;
-  --text-muted:    #4b5563;
-  --scrollbar-thumb: #3a3a3a;
-  --scrollbar-thumb-hover: #4a4a4a;
+  --bg-base:       #0a0b0f;
+  --bg-sidebar:    #0b0d12;
+  --bg-card:       #10131a;
+  --bg-elevated:   #12151d;
+  --bg-hover:      #1a1f2b;
+  --bg-border:     #232838;
+  --text-primary:  #e8ecf5;
+  --text-secondary:#93a0b8;
+  --text-muted:    #55607a;
+  --scrollbar-thumb: #2a3142;
+  --scrollbar-thumb-hover: #3a4358;
+  --accent-cyan:   #22d3ee;
+  --accent-violet: #a78bfa;
+  --glow-ring: rgba(34,211,238,0.18);
 }
 
 .light {
@@ -31,6 +34,9 @@
   --text-muted:    #94a3b8;
   --scrollbar-thumb: #cbd5e1;
   --scrollbar-thumb-hover: #94a3b8;
+  --accent-cyan:   #0891b2;
+  --accent-violet: #7c3aed;
+  --glow-ring: rgba(8,145,178,0.12);
 }
 
 /* ── Base ── */
@@ -38,9 +44,20 @@
 
 body {
   background-color: var(--bg-base);
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(34,211,238,0.07), transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(167,139,250,0.06), transparent 45%),
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: auto, auto, 42px 42px, 42px 42px;
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+.light body, .light {
+  background-image: none;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -48,17 +65,49 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
+/* ── Futuristic utilities ── */
+.font-display { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; }
+
+.text-glow-cyan { color: var(--accent-cyan); text-shadow: 0 0 16px rgba(34,211,238,0.5); }
+
+.gradient-text {
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass {
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.hud-border {
+  border: 1px solid var(--bg-border);
+  box-shadow: 0 0 0 1px var(--glow-ring), inset 0 0 24px -18px var(--accent-cyan);
+}
+
 /* ── Component classes ── */
 @layer components {
   .card {
-    @apply rounded-xl p-4;
+    @apply rounded-xl p-4 transition-shadow duration-300;
     background-color: var(--bg-elevated);
     border: 1px solid var(--bg-border);
   }
+  .card:hover {
+    box-shadow: 0 0 0 1px var(--glow-ring), 0 8px 30px -12px rgba(34,211,238,0.18);
+  }
 
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm;
+    @apply text-white font-medium px-4 py-2 rounded-lg transition-all text-sm;
     @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none;
+    background: linear-gradient(90deg, #0ea5e9, #6366f1);
+    box-shadow: 0 0 0 1px rgba(34,211,238,0.25), 0 4px 18px -6px rgba(99,102,241,0.5);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 0 0 1px rgba(34,211,238,0.45), 0 6px 22px -4px rgba(99,102,241,0.65);
+    filter: brightness(1.08);
   }
 
   .btn-secondary {
@@ -76,12 +125,12 @@ body {
   }
 
   .input {
-    @apply rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full;
+    @apply rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 w-full transition-colors;
     background-color: var(--bg-card);
     border: 1px solid var(--bg-border);
     color: var(--text-primary);
   }
-  .input:focus { border-color: #3b82f6; }
+  .input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 0 1px var(--accent-cyan); }
   .input::placeholder { color: var(--text-muted); }
 
   .label {

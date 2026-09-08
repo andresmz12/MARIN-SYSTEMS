@@ -39,6 +39,24 @@ interface AppHealthFields {
   databaseConnected: boolean;
   memoryUsage: number | null;
   cpuUsage: number | null;
+  errorDetail: string | null;
+}
+
+// Turn a fetch failure into a human-readable reason instead of a generic "down" —
+// this is what tells the user WHY an agent isn't reporting real data (bad URL,
+// DNS failure, no health endpoint, timeout, etc.) instead of just a red dot.
+function describeFetchError(err: unknown, timeout: number): string {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return `Sin respuesta en ${timeout / 1000}s (timeout)`;
+  }
+  if (err instanceof TypeError) {
+    const msg = err.message || '';
+    if (/ENOTFOUND|getaddrinfo/i.test(msg)) return 'Dominio no existe (DNS)';
+    if (/ECONNREFUSED/i.test(msg)) return 'Conexión rechazada — el servicio no responde en esa URL';
+    if (/certificate|SSL|TLS/i.test(msg)) return 'Error de certificado SSL';
+    return `No se pudo conectar (${msg || 'fetch failed'})`;
+  }
+  return err instanceof Error ? err.message : 'Error desconocido al verificar salud';
 }
 
 function parseNum(v: unknown): number | null {
@@ -117,12 +135,16 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
 
     if (!response.ok) {
       // Trust an explicit "down" over the generic non-2xx → degraded default.
-      return { status: reported === 'down' ? 'down' : 'degraded', ...fields };
+      return {
+        status: reported === 'down' ? 'down' : 'degraded',
+        ...fields,
+        errorDetail: `HTTP ${response.status} en ${healthUrl}`,
+      };
     }
 
     // 2xx: honor the app's own status when it self-reports a problem, else healthy.
-    return { status: reported ?? 'healthy', ...fields };
-  } catch {
+    return { status: reported ?? 'healthy', ...fields, errorDetail: null };
+  } catch (err) {
     return {
       status: 'down',
       latency: Date.now() - startTime,
@@ -132,6 +154,7 @@ async function checkAppHealth(healthUrl: string, timeout = 5000): Promise<AppHea
       databaseConnected: false,
       memoryUsage: null,
       cpuUsage: null,
+      errorDetail: describeFetchError(err, timeout),
     };
   }
 }
@@ -156,17 +179,15 @@ export async function GET(_req: NextRequest) {
 
         const trackedFailures = consecutiveFailuresTracker.get(app.id) ?? 0;
 
+        const { errorDetail, ...healthFields } = health;
         return {
           id: app.id,
           name: app.name,
           agentName: app.agentName,
-          ...health,
+          ...healthFields,
           consecutiveFailures: Math.max(health.consecutiveFailures, trackedFailures),
-          message: health.status === 'down'
-            ? 'Health check failed'
-            : health.status === 'degraded'
-            ? 'Service degraded — non-2xx response'
-            : null,
+          message: errorDetail
+            ?? (healthFields.status === 'degraded' ? 'Servicio degradado — respuesta no-2xx' : null),
         };
       })
     );
