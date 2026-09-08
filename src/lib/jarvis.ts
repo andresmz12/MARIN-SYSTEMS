@@ -1,6 +1,6 @@
 import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { prisma } from './prisma'
-import { getDayStart, getDayEnd } from './utils'
+import { getDayStart, getDayEnd, getTodayString } from './utils'
 
 // Bumped from Haiku to Sonnet for write-capability: the propose-then-confirm
 // discipline below (never write with confirmed:true on the same turn it's
@@ -333,11 +333,18 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
       const { match, options } = await resolveHabit(userId, habitName)
       if (!match) return { error: `No encontré un hábito llamado "${habitName}". Hábitos existentes: ${options.join(', ') || 'ninguno'}` }
       if (input.confirmed !== true) return pending(`Marcar "${match.emoji} ${match.name}" como completado hoy`)
-      await prisma.habitCompletion.upsert({
-        where: { habitId_date: { habitId: match.id, date: getDayStart() } },
-        create: { habitId: match.id, userId, date: getDayStart() },
-        update: {},
+      // Range-check (not an exact-key upsert) because /api/habits/complete — the
+      // app's own UI route — stores completions at noon Bogotá time, not midnight
+      // (getDayStart()). An exact-match upsert here would miss that row and
+      // silently create a duplicate completion for the same habit/day.
+      const alreadyDone = await prisma.habitCompletion.findFirst({
+        where: { habitId: match.id, userId, date: { gte: getDayStart(), lte: getDayEnd() } },
       })
+      if (!alreadyDone) {
+        await prisma.habitCompletion.create({
+          data: { habitId: match.id, userId, date: new Date(`${getTodayString()}T12:00:00-05:00`) },
+        })
+      }
       return { success: true, habit: match.name }
     }
     case 'create_trade': {
@@ -358,7 +365,11 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
     case 'create_event': {
       const title = typeof input.title === 'string' ? input.title.trim() : ''
       if (!title) return { error: 'Falta el título del evento' }
-      const dateInput = typeof input.date === 'string' && !isNaN(Date.parse(input.date)) ? new Date(input.date) : new Date()
+      // Same noon-Bogotá convention as POST /api/events — a plain `new Date(dateStr)`
+      // parses a bare "YYYY-MM-DD" as UTC midnight, which renders as the PREVIOUS
+      // day once the Agenda UI formats it in America/Bogota (UTC-5).
+      const dateStr = typeof input.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : getTodayString()
+      const dateInput = new Date(`${dateStr}T12:00:00-05:00`)
       const time = typeof input.time === 'string' ? input.time : null
       const type = typeof input.type === 'string' && input.type ? input.type : 'personal'
       if (input.confirmed !== true) {
@@ -426,15 +437,20 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
         ].filter(Boolean)
         return pending(`Actualizar el estado de hoy: ${parts.join(', ')}`)
       }
-      const existing = await prisma.dailyState.findFirst({ where: { userId, date: { gte: getDayStart(), lte: getDayEnd() } } })
-      const data = {
-        ...(mentalState !== undefined ? { mentalState } : {}),
-        ...(rutinaCompleted !== undefined ? { rutinaCompleted } : {}),
-        ...(hasNews !== undefined ? { hasNews } : {}),
-      }
-      const state = existing
-        ? await prisma.dailyState.update({ where: { id: existing.id }, data })
-        : await prisma.dailyState.create({ data: { userId, date: getDayStart(), mentalState: mentalState ?? 3, rutinaCompleted: rutinaCompleted ?? false, hasNews: hasNews ?? false } })
+      // Same exact convention as POST /api/daily-state (the app's own UI route):
+      // one row per day, keyed by noon Bogotá time via the real userId_date
+      // unique constraint — not getDayStart() (midnight), which would create a
+      // second, disconnected row for "today" instead of updating the real one.
+      const stateDate = new Date(`${getTodayString()}T12:00:00-05:00`)
+      const state = await prisma.dailyState.upsert({
+        where: { userId_date: { userId, date: stateDate } },
+        update: {
+          ...(mentalState !== undefined ? { mentalState } : {}),
+          ...(rutinaCompleted !== undefined ? { rutinaCompleted } : {}),
+          ...(hasNews !== undefined ? { hasNews } : {}),
+        },
+        create: { userId, date: stateDate, mentalState: mentalState ?? 3, rutinaCompleted: rutinaCompleted ?? false, hasNews: hasNews ?? false },
+      })
       return { success: true, state }
     }
 
