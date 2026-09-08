@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { JarvisFullscreen } from './JarvisFullscreen'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -14,6 +15,7 @@ const GREETING: ChatMessage = {
 
 export function JarvisWidget() {
   const [open, setOpen] = useState(false)
+  const [immersive, setImmersive] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -126,6 +128,14 @@ export function JarvisWidget() {
             <div className="flex items-center gap-1">
               <button
                 type="button"
+                onClick={() => setImmersive(true)}
+                title="Modo inmersivo (solo voz)"
+                className="p-1.5 rounded-md text-xs text-violet-300 hover:bg-[var(--bg-hover)]"
+              >
+                🎙️
+              </button>
+              <button
+                type="button"
                 onClick={() => setVoiceOn((v) => !v)}
                 title={voiceOn ? 'Silenciar voz' : 'Activar voz'}
                 className={`p-1.5 rounded-md text-xs ${voiceOn ? 'text-cyan-300' : 'text-slate-500'} hover:bg-[var(--bg-hover)]`}
@@ -207,6 +217,8 @@ export function JarvisWidget() {
           </form>
         </div>
       )}
+
+      {immersive && <JarvisFullscreen onClose={() => setImmersive(false)} />}
     </>
   )
 }
