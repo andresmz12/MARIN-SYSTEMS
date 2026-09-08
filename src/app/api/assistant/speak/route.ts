@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error generando audio'
+    console.error('[assistant/speak] TTS failed:', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

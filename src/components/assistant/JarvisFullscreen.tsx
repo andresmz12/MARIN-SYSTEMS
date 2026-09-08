@@ -103,7 +103,13 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl, outputAnalyser }:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       })
-      if (!res.ok || stateRef.current !== 'speaking') return
+      if (stateRef.current !== 'speaking') return // interrupted while we were fetching
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        // eslint-disable-next-line no-console
+        console.error('[jarvis] /api/assistant/speak failed:', res.status, body?.error)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
       const blob = await res.blob()
       if (stateRef.current !== 'speaking') return
       const url = URL.createObjectURL(blob)
@@ -116,8 +122,16 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl, outputAnalyser }:
         if (stateRef.current === 'speaking') setJarvisState('listening')
       }
       await audioEl.play()
-    } catch {
-      if (stateRef.current === 'speaking') setJarvisState('listening')
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[jarvis] speak() failed, recovering to listening:', err)
+      if (stateRef.current === 'speaking') {
+        // Flash red briefly so a failure is visible instead of silently getting stuck.
+        setJarvisState('error')
+        setTimeout(() => {
+          if (stateRef.current === 'error') setJarvisState('listening')
+        }, 900)
+      }
     }
   }
 
