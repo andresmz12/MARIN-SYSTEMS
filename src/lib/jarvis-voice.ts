@@ -29,9 +29,20 @@ export async function synthesizeJarvisVoice(text: string): Promise<Buffer> {
     signal: AbortSignal.timeout(30_000),
   })
 
-  if (res.status === 401) throw new Error('API key de ElevenLabs inválida')
-  if (res.status === 429) throw new Error('Sin créditos disponibles en ElevenLabs')
-  if (!res.ok) throw new Error(`ElevenLabs error ${res.status}`)
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = (await res.json()) as { detail?: { message?: string; status?: string } | string }
+      detail = typeof errJson.detail === 'string'
+        ? errJson.detail
+        : errJson.detail?.message ?? errJson.detail?.status ?? JSON.stringify(errJson)
+    } catch {
+      detail = await res.text().catch(() => '')
+    }
+    if (res.status === 401) throw new Error(`API key de ElevenLabs inválida — ${detail}`)
+    if (res.status === 429) throw new Error(`Sin créditos disponibles en ElevenLabs — ${detail}`)
+    throw new Error(`ElevenLabs error ${res.status} — ${detail}`)
+  }
 
   const arrayBuffer = await res.arrayBuffer()
   return Buffer.from(arrayBuffer)
