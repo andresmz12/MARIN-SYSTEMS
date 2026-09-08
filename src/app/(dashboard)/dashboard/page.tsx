@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { getDailyQuote, computeTrafficLight } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
-import { Sparkline } from '@/components/ui/Sparkline'
+import { DashboardAreaChart, DashboardBarChart, DashboardGauge } from '@/components/ui/DashboardChart'
 
 interface DailyState {
   id?: string
@@ -97,10 +97,10 @@ interface IrsNewsLite {
 const MOOD_LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente']
 
 const ACCENT = {
-  blue: { text: 'text-cyan-300', border: 'border-cyan-500/25 hover:border-cyan-400/50', badge: 'bg-cyan-500/10 border-cyan-400/30 text-cyan-300', wash: 'from-cyan-500/[0.07]', hex: '#22d3ee', glow: 'rgba(34,211,238,0.16)' },
-  purple: { text: 'text-violet-300', border: 'border-violet-500/25 hover:border-violet-400/50', badge: 'bg-violet-500/10 border-violet-400/30 text-violet-300', wash: 'from-violet-500/[0.07]', hex: '#a78bfa', glow: 'rgba(167,139,250,0.16)' },
-  emerald: { text: 'text-emerald-300', border: 'border-emerald-500/25 hover:border-emerald-400/50', badge: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300', wash: 'from-emerald-500/[0.07]', hex: '#34d399', glow: 'rgba(52,211,153,0.16)' },
-  amber: { text: 'text-amber-300', border: 'border-amber-500/25 hover:border-amber-400/50', badge: 'bg-amber-500/10 border-amber-400/30 text-amber-300', wash: 'from-amber-500/[0.07]', hex: '#fbbf24', glow: 'rgba(251,191,36,0.16)' },
+  blue: { text: 'text-cyan-300', border: 'border-cyan-500/25 hover:border-cyan-400/50', badge: 'bg-cyan-500/10 border-cyan-400/30 text-cyan-300', wash: 'from-cyan-500/[0.14]', hex: '#22d3ee', glow: 'rgba(34,211,238,0.16)' },
+  purple: { text: 'text-violet-300', border: 'border-violet-500/25 hover:border-violet-400/50', badge: 'bg-violet-500/10 border-violet-400/30 text-violet-300', wash: 'from-violet-500/[0.14]', hex: '#a78bfa', glow: 'rgba(167,139,250,0.16)' },
+  emerald: { text: 'text-emerald-300', border: 'border-emerald-500/25 hover:border-emerald-400/50', badge: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300', wash: 'from-emerald-500/[0.14]', hex: '#34d399', glow: 'rgba(52,211,153,0.16)' },
+  amber: { text: 'text-amber-300', border: 'border-amber-500/25 hover:border-amber-400/50', badge: 'bg-amber-500/10 border-amber-400/30 text-amber-300', wash: 'from-amber-500/[0.14]', hex: '#fbbf24', glow: 'rgba(251,191,36,0.16)' },
 } as const
 
 type Accent = keyof typeof ACCENT
@@ -124,15 +124,25 @@ function Section({
   const a = ACCENT[accent]
   return (
     <section
-      className={`group relative overflow-hidden border p-5 space-y-4 bg-[var(--bg-elevated)] transition-all duration-300 hover:-translate-y-0.5 ${a.border}`}
-      style={{ clipPath: HUD_CLIP, boxShadow: `0 0 0 1px rgba(255,255,255,0.02)` }}
+      className={`group relative overflow-hidden border p-5 space-y-4 transition-all duration-300 hover:-translate-y-0.5 ${a.border}`}
+      style={{
+        clipPath: HUD_CLIP,
+        background: `radial-gradient(140% 100% at 0% 0%, ${a.glow}, transparent 60%), var(--bg-elevated)`,
+        boxShadow: `0 0 0 1px rgba(255,255,255,0.02), 0 12px 40px -20px ${a.glow}`,
+      }}
     >
+      {/* Always-on ambient glow, stronger on hover — replaces the flat single-tone card */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-        style={{ boxShadow: `0 0 32px -6px ${a.glow}` }}
+        className="pointer-events-none absolute inset-0 opacity-60 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ boxShadow: `inset 0 0 60px -30px ${a.glow}` }}
+      />
+      {/* Faint dot-grid texture so the panel reads as "designed", not a flat fill */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.12]"
+        style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '16px 16px', color: a.hex }}
       />
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${a.wash} to-transparent`} />
-      <div className="pointer-events-none absolute top-0 left-0 right-4 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-40" style={{ color: a.hex }} />
+      <div className="pointer-events-none absolute top-0 left-0 right-4 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-60" style={{ color: a.hex }} />
       <div className="relative flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className={`w-9 h-9 border flex items-center justify-center flex-shrink-0 ${a.badge}`} style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)' }}>
@@ -460,18 +470,16 @@ export default function DashboardPage() {
             </svg>
           }
         >
-          <div className="grid grid-cols-2 gap-3">
-            <StatBlock label="Trades hoy" value={todayTrades.length} caption={`${wins}W · ${losses}L`} />
-            <StatBlock
-              label="Win Rate"
-              value={`${winRate}%`}
-              valueClass={winRate >= 60 ? 'text-green-400' : winRate >= 40 ? 'text-yellow-400' : 'text-red-400'}
-              caption={`últ. 10: ${stats?.last10WinRate ?? '—'}%`}
-            />
+          <div className="flex items-center gap-4">
+            <DashboardGauge value={winRate} color={ACCENT.blue.hex} label="win rate" />
+            <div className="flex-1 grid grid-cols-2 gap-3">
+              <StatBlock label="Trades hoy" value={todayTrades.length} caption={`${wins}W · ${losses}L`} />
+              <StatBlock label="Últ. 10" value={`${stats?.last10WinRate ?? '—'}%`} caption="win rate reciente" />
+            </div>
           </div>
           <div>
             <p className="text-[11px] text-gray-600 mb-1">Curva de equity · últimos 14 trades</p>
-            <Sparkline data={equitySpark} color={ACCENT.blue.hex} valueSuffix=" pips" />
+            <DashboardAreaChart data={equitySpark} color={ACCENT.blue.hex} suffix=" pips" />
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
             <Link href="/trading/diario" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5">
@@ -510,7 +518,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <p className="text-[11px] text-gray-600 mb-1">Hábitos completados · últimos 14 días</p>
-            <Sparkline data={habitsSpark} color={ACCENT.purple.hex} />
+            <DashboardBarChart data={habitsSpark} color={ACCENT.purple.hex} />
           </div>
           <div className="flex items-center justify-between text-xs pt-1 border-t border-[#2a2a2a]">
             {dailyGoals.length > 0 ? (
@@ -552,7 +560,7 @@ export default function DashboardPage() {
           )}
           <div>
             <p className="text-[11px] text-gray-600 mb-1">Tareas corporativas completadas · últimos 14 días</p>
-            <Sparkline data={negociosSpark} color={ACCENT.emerald.hex} />
+            <DashboardBarChart data={negociosSpark} color={ACCENT.emerald.hex} />
           </div>
           {urgentTasks.length > 0 ? (
             <div className="space-y-1.5 pt-1 border-t border-[#2a2a2a]">
@@ -602,7 +610,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <p className="text-[11px] text-gray-600 mb-1">Guiones generados · últimos 14 días</p>
-            <Sparkline data={contentSpark} color={ACCENT.amber.hex} />
+            <DashboardBarChart data={contentSpark} color={ACCENT.amber.hex} />
           </div>
           <div className="flex flex-wrap gap-2 pt-1 border-t border-[#2a2a2a]">
             <Link href="/content-creator" className="btn-secondary text-xs py-1.5 px-3">Content Creator</Link>
