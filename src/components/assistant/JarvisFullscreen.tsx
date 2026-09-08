@@ -38,6 +38,12 @@ function computeRms(data: Uint8Array): number {
 
 export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscreenProps) {
   const [state, setState] = useState<JarvisState>('idle')
+  // The <audio> element only ever reports a generic "failed to load" — when
+  // the server actually rejected the TTS request (bad voice id, no credits,
+  // invalid key) that real reason is in the response body, which a plain
+  // `src=` assignment never reads. Re-fetching the same URL on error recovers
+  // it so it's visible instead of only "no sound, no idea why".
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const stateRef = useRef<JarvisState>('idle')
   const levelRef = useRef(0)
@@ -89,30 +95,46 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     setJarvisState('listening')
   }
 
+  async function reportSpeakFailure(url: string, fallback: string) {
+    try {
+      const res = await fetch(url)
+      const body = await res.json().catch(() => null)
+      const message: string = body?.error ?? fallback
+      console.error('[jarvis] TTS failed:', message)
+      setErrorMessage(message)
+    } catch {
+      console.error('[jarvis] TTS failed:', fallback)
+      setErrorMessage(fallback)
+    }
+  }
+
   async function speak(text: string) {
     setJarvisState('speaking')
+    setErrorMessage(null)
+    const url = `/api/assistant/speak?text=${encodeURIComponent(text)}`
     try {
       // No fetch()+blob() here on purpose — setting `src` directly lets the
       // <audio> element stream the response progressively as ElevenLabs
       // generates it, instead of blocking on the full clip twice (once
       // server<-ElevenLabs, once client<-server) before a single sample plays.
-      audioEl.src = `/api/assistant/speak?text=${encodeURIComponent(text)}`
+      audioEl.src = url
       audioEl.muted = false
       audioEl.volume = 1
 
       audioEl.onended = () => {
         if (stateRef.current === 'speaking') setJarvisState('listening')
       }
-      // A blocked/failed media load (CSP, corrupt blob, codec) doesn't always reject
-      // play() — it can instead fire a silent 'error' event on the element, which
-      // used to leave the reactor stuck showing "speaking" forever with no sound.
+      // A blocked/failed media load (CSP, corrupt blob, codec, or the server
+      // rejecting the TTS request) doesn't always reject play() — it can
+      // instead fire a silent 'error' event on the element, which used to
+      // leave the reactor stuck showing "speaking" forever with no sound.
       audioEl.onerror = () => {
-        console.error('[jarvis] <audio> element error:', audioEl.error)
         if (stateRef.current === 'speaking') {
           setJarvisState('error')
+          reportSpeakFailure(url, 'Error de audio (revisa la consola)')
           setTimeout(() => {
             if (stateRef.current === 'error') setJarvisState('listening')
-          }, 900)
+          }, 2500)
         }
       }
       await audioEl.play()
@@ -122,9 +144,10 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       if (stateRef.current === 'speaking') {
         // Flash red briefly so a failure is visible instead of silently getting stuck.
         setJarvisState('error')
+        setErrorMessage(err instanceof Error ? err.message : 'Error desconocido')
         setTimeout(() => {
           if (stateRef.current === 'error') setJarvisState('listening')
-        }, 900)
+        }, 2500)
       }
     }
   }
@@ -298,6 +321,12 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       <div className="relative z-10 w-[78vw] h-[78vw] max-w-[480px] max-h-[480px]">
         <JarvisReactor state={state} levelRef={levelRef} />
       </div>
+
+      {errorMessage && (
+        <p className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 max-w-[85vw] text-center text-xs text-red-400 bg-black/60 border border-red-500/30 rounded-lg px-3 py-2">
+          {errorMessage}
+        </p>
+      )}
     </div>
   )
 }
