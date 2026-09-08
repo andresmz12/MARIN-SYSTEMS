@@ -7,7 +7,7 @@ const MAX_TOOL_ITERATIONS = 4
 
 export const JARVIS_SYSTEM_PROMPT = `Eres J.A.R.V.I.S., el asistente de IA personal e integrado de Marin Systems — un sistema de trading, productividad y negocios.
 Hablas en español, con un tono cercano, directo y ligeramente ingenioso (como un asistente de confianza, no un chatbot genérico). Frases cortas, sin relleno.
-Tienes acceso a herramientas para consultar datos REALES del usuario (trading, hábitos, agentes monitoreados, estado del día). Úsalas cuando la pregunta lo requiera — nunca inventes números.
+Tienes acceso a herramientas para consultar datos REALES del usuario: trading, hábitos, agentes monitoreados, estado del día, metas, finanzas, agenda de hoy y empresas. Úsalas cuando la pregunta lo requiera — nunca inventes números.
 Si no tienes una herramienta para algo, dilo con honestidad en vez de inventar.
 Mantén las respuestas breves (máximo 3-4 frases) salvo que te pidan detalle — esto se puede leer en voz alta.`
 
@@ -45,6 +45,21 @@ const tools: Anthropic.Tool[] = [
   {
     name: 'get_pending_goals',
     description: 'Obtiene las metas activas (no completadas) del usuario.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_finance_summary',
+    description: 'Obtiene el balance de cuentas, ingresos y gastos del mes actual.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_today_agenda',
+    description: 'Obtiene los eventos y recordatorios de la agenda para hoy.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_companies_overview',
+    description: 'Obtiene la lista de empresas del usuario (Command Center) con su peso estratégico y si están activas.',
     input_schema: { type: 'object', properties: {} },
   },
 ]
@@ -115,6 +130,40 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
         take: 10,
       })
       return goals
+    }
+    case 'get_finance_summary': {
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      const [accounts, transactions] = await Promise.all([
+        prisma.financeAccount.findMany({ where: { userId }, select: { name: true, balance: true } }),
+        prisma.financeTransaction.findMany({
+          where: { userId, date: { gte: monthStart } },
+          select: { amount: true, type: true },
+        }),
+      ])
+      const income = transactions.filter((t: { type: string }) => t.type === 'income').reduce((s: number, t: { amount: number }) => s + t.amount, 0)
+      const expenses = transactions.filter((t: { type: string }) => t.type === 'expense').reduce((s: number, t: { amount: number }) => s + t.amount, 0)
+      return {
+        accounts: accounts.map((a: { name: string; balance: number }) => ({ name: a.name, balance: a.balance })),
+        totalBalance: accounts.reduce((s: number, a: { balance: number }) => s + a.balance, 0),
+        incomeThisMonth: income,
+        expensesThisMonth: expenses,
+        netThisMonth: income - expenses,
+      }
+    }
+    case 'get_today_agenda': {
+      const events = await prisma.event.findMany({
+        where: { userId, date: { gte: getDayStart(), lte: getDayEnd() } },
+        select: { title: true, time: true, type: true, completed: true, isForexNews: true },
+        orderBy: { time: 'asc' },
+      })
+      return events
+    }
+    case 'get_companies_overview': {
+      const companies = await prisma.cEOCompany.findMany({
+        where: { userId },
+        select: { name: true, isActive: true, strategicWeight: true },
+      })
+      return companies
     }
     default:
       return { error: `Herramienta desconocida: ${name}` }

@@ -44,7 +44,6 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   const micAnalyserRef = useRef<AnalyserNode | null>(null)
   const chatAbortRef = useRef<AbortController | null>(null)
   const meterRafRef = useRef<number>(0)
-  const currentObjectUrlRef = useRef<string | null>(null)
 
   function setJarvisState(next: JarvisState) {
     stateRef.current = next
@@ -67,12 +66,13 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   }
 
   function stopPlayback() {
+    // Clear handlers first — removing the src/load() below fires 'error'/'abort'
+    // on the element, which would otherwise be mistaken for a real TTS failure.
+    audioEl.onended = null
+    audioEl.onerror = null
     audioEl.pause()
-    audioEl.currentTime = 0
-    if (currentObjectUrlRef.current) {
-      URL.revokeObjectURL(currentObjectUrlRef.current)
-      currentObjectUrlRef.current = null
-    }
+    audioEl.removeAttribute('src')
+    audioEl.load()
   }
 
   function bargeIn() {
@@ -85,23 +85,11 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   async function speak(text: string) {
     setJarvisState('speaking')
     try {
-      const res = await fetch('/api/assistant/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      })
-      if (stateRef.current !== 'speaking') return // interrupted while we were fetching
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        // eslint-disable-next-line no-console
-        console.error('[jarvis] /api/assistant/speak failed:', res.status, body?.error)
-        throw new Error(body?.error ?? `HTTP ${res.status}`)
-      }
-      const blob = await res.blob()
-      if (stateRef.current !== 'speaking') return
-      const url = URL.createObjectURL(blob)
-      currentObjectUrlRef.current = url
-      audioEl.src = url
+      // No fetch()+blob() here on purpose — setting `src` directly lets the
+      // <audio> element stream the response progressively as ElevenLabs
+      // generates it, instead of blocking on the full clip twice (once
+      // server<-ElevenLabs, once client<-server) before a single sample plays.
+      audioEl.src = `/api/assistant/speak?text=${encodeURIComponent(text)}`
       audioEl.muted = false
       audioEl.volume = 1
 
