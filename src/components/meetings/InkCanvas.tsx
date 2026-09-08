@@ -56,12 +56,48 @@ function distToSegment(p: StrokePoint, a: StrokePoint, b: StrokePoint): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
 }
 
-function strokeNearPoint(stroke: Stroke, p: StrokePoint, radius: number): boolean {
-  if (stroke.points.length === 1) return Math.hypot(p.x - stroke.points[0].x, p.y - stroke.points[0].y) <= radius
-  for (let i = 0; i < stroke.points.length - 1; i++) {
-    if (distToSegment(p, stroke.points[i], stroke.points[i + 1]) <= radius) return true
+// Real eraser: cuts only the portion of a stroke under the eraser instead of
+// deleting the whole stroke, splitting it into the surviving sub-runs.
+function eraseStrokeAtPoint(stroke: Stroke, p: StrokePoint, radius: number): Stroke[] {
+  const pts = stroke.points
+  if (pts.length === 1) {
+    return Math.hypot(p.x - pts[0].x, p.y - pts[0].y) <= radius ? [] : [stroke]
   }
-  return false
+  const keep: boolean[] = new Array(pts.length).fill(true)
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (distToSegment(p, pts[i], pts[i + 1]) <= radius) {
+      keep[i] = false
+      keep[i + 1] = false
+    }
+  }
+  const runs: StrokePoint[][] = []
+  let cur: StrokePoint[] = []
+  for (let i = 0; i < pts.length; i++) {
+    if (keep[i]) {
+      cur.push(pts[i])
+    } else {
+      if (cur.length >= 2) runs.push(cur)
+      cur = []
+    }
+  }
+  if (cur.length >= 2) runs.push(cur)
+  return runs.map((run) => ({ ...stroke, points: run }))
+}
+
+function eraseAtPoint(strokes: Stroke[], p: StrokePoint, radius: number): Stroke[] {
+  return strokes.flatMap((s) => eraseStrokeAtPoint(s, p, radius))
+}
+
+// Apple Pencil / high-frequency touch input reports faster than the browser
+// paints (up to 240Hz on iPad Pro vs ~60fps rendering) — a single pointermove
+// only carries the latest sample. getCoalescedEvents() returns every sample
+// batched since the last event, so using it (falling back to the event itself
+// where unsupported) is what keeps fast strokes from coming out as broken,
+// disconnected dashes.
+function getPointerSamples(e: React.PointerEvent): PointerEvent[] {
+  const native = e.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }
+  const coalesced = typeof native.getCoalescedEvents === 'function' ? native.getCoalescedEvents() : null
+  return coalesced && coalesced.length > 0 ? coalesced : [native]
 }
 
 export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function InkCanvas(
@@ -72,12 +108,20 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const [tool, setTool] = useState<Tool>('draw')
   const [color, setColor] = useState(PEN_COLORS[0].value)
   const [width, setWidth] = useState(PEN_WIDTHS[1])
-  const [current, setCurrent] = useState<StrokePoint[] | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
   const draggingText = useRef<{ id: string; offsetX: number; offsetY: number; moved: boolean } | null>(null)
   const strokeUndoStack = useRef<Stroke[][]>([])
   const drawing = useRef(false)
+  // The in-progress stroke is tracked in a ref and painted by mutating the
+  // <path> element's `d` attribute directly (see appendPoint) instead of
+  // through React state. Calling setState on every pointermove forced a full
+  // re-render per sample, which couldn't keep up with Apple Pencil's sample
+  // rate and dropped points — the strokes came out broken/discontinuous.
+  const currentPointsRef = useRef<StrokePoint[]>([])
+  const currentPathRef = useRef<SVGPathElement>(null)
+  const latestStrokesRef = useRef<Stroke[]>(strokes)
+  latestStrokesRef.current = strokes
 
   function toCanvasPoint(e: { clientX: number; clientY: number }): StrokePoint {
     const svg = svgRef.current
@@ -135,10 +179,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     drawing.current = true
     if (tool === 'erase') {
       pushStrokeUndo()
-      onChangeStrokes(strokes.filter((s) => !strokeNearPoint(s, p, ERASER_RADIUS)))
+      onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
     } else {
-      setCurrent([p])
+      currentPointsRef.current = [p]
+      currentPathRef.current?.setAttribute('d', smoothPath(currentPointsRef.current))
     }
+  }
+
+  function appendPoint(p: StrokePoint) {
+    currentPointsRef.current.push(p)
+    currentPathRef.current?.setAttribute('d', smoothPath(currentPointsRef.current))
   }
 
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -150,11 +200,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       return
     }
     if (!drawing.current) return
-    const p = toCanvasPoint(e)
     if (tool === 'erase') {
-      onChangeStrokes(strokes.filter((s) => !strokeNearPoint(s, p, ERASER_RADIUS)))
+      const p = toCanvasPoint(e)
+      onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
     } else {
-      setCurrent((pts) => (pts ? [...pts, p] : [p]))
+      // Replay every coalesced pencil sample since the last frame, not just the latest one.
+      for (const sample of getPointerSamples(e)) {
+        appendPoint(toCanvasPoint(sample))
+      }
     }
   }
 
@@ -164,11 +217,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       return
     }
     drawing.current = false
-    if (tool === 'draw' && current && current.length > 0) {
+    if (tool === 'draw' && currentPointsRef.current.length > 0) {
       pushStrokeUndo()
-      onChangeStrokes([...strokes, { color, width, points: current }])
+      onChangeStrokes([...strokes, { color, width, points: currentPointsRef.current }])
     }
-    setCurrent(null)
+    currentPointsRef.current = []
+    currentPathRef.current?.setAttribute('d', '')
   }
 
   function undo() {
@@ -268,7 +322,9 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
           {strokes.map((stroke, i) => (
             <path key={i} d={smoothPath(stroke.points)} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           ))}
-          {current && <path d={smoothPath(current)} stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" fill="none" />}
+          {/* In-progress stroke — its `d` is mutated directly via ref in appendPoint(),
+              never through React state, so drawing never waits on a re-render. */}
+          <path ref={currentPathRef} stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
 
           {textBoxes.filter((tb) => tb.id !== editingId).map((tb) => (
             <g key={tb.id}>
