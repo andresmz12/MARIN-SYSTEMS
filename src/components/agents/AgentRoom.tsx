@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { MonitoredApp } from '@/types/agents';
 import { useAgentStore } from '@/stores/agentStore';
 import { useAgentPolling, refreshAgentsNow } from '@/hooks/useAgentPolling';
@@ -23,10 +24,19 @@ export function AgentRoom({ initialApps }: AgentRoomProps) {
     (state) =>
       Object.values(state.agents).filter((a) => a.status === 'healthy').length
   );
-  const downAgents = useAgentStore((state) =>
-    initialApps
-      .map((app) => ({ app, data: state.agents[app.id] }))
-      .filter(({ data }) => data?.status === 'down' && data?.message)
+  // Select the raw record with useShallow (stable across renders unless the
+  // store actually changes it), then derive with useMemo. The previous version
+  // derived a brand-new array straight from a Zustand selector — Zustand
+  // compares selector output by reference, so a fresh array every call always
+  // read as "changed", forcing a re-render that ran the selector again forever
+  // (React error #185, crashed the whole Agentes page in production).
+  const agentsById = useAgentStore(useShallow((state) => state.agents));
+  const downAgents = useMemo(
+    () =>
+      initialApps
+        .map((app) => ({ app, data: agentsById[app.id] }))
+        .filter(({ data }) => data?.status === 'down' && data?.message),
+    [initialApps, agentsById]
   );
 
   const [view, setView] = useState<ViewMode>('office');

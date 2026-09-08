@@ -51,21 +51,27 @@ export function JarvisWidget() {
         type="button"
         onClick={openJarvis}
         aria-label="Abrir Jarvis"
-        className="fixed bottom-20 lg:bottom-6 right-5 z-[60] flex items-center gap-2.5 pl-1.5 pr-4 py-1.5 rounded-full glass hud-border group"
+        className="fixed bottom-20 lg:bottom-6 right-5 z-[60] flex items-center gap-2.5 pl-1.5 pr-4 py-1.5 rounded-full border border-amber-400/25 group"
+        style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(14px)' }}
       >
+        {/* Jarvis gets its own gold/amber identity — a hologram look, distinct from the app's cyan/violet theme */}
         <span className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0">
           <span
-            className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 animate-pulse-glow"
+            className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 to-yellow-600 animate-pulse-glow"
             style={{ filter: 'blur(5px)' }}
           />
-          <span className="relative w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-violet-600 border border-cyan-300/40 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <span className="relative w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-yellow-600 border border-amber-200/50 flex items-center justify-center">
+            <svg className="w-4 h-4 text-[#1a1206]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <circle cx="12" cy="12" r="3" strokeWidth={1.5} />
               <circle cx="12" cy="12" r="7.5" strokeWidth={1.2} opacity={0.6} />
             </svg>
           </span>
         </span>
-        <span className="font-display text-sm font-semibold tracking-[0.15em] gradient-text">JARVIS</span>
+        <span
+          className="font-display text-sm font-semibold tracking-[0.15em] bg-gradient-to-r from-amber-300 to-yellow-500 bg-clip-text text-transparent"
+        >
+          JARVIS
+        </span>
       </button>
 
       {immersive && audioCtxRef.current && audioElRef.current && (

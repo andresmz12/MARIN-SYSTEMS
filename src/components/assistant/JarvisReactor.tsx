@@ -10,11 +10,13 @@ interface JarvisReactorProps {
   levelRef: React.MutableRefObject<number>
 }
 
+// Gold/amber hologram palette — the classic Iron Man J.A.R.V.I.S. look — instead
+// of the app's cyan/violet theme, which is intentionally left untouched elsewhere.
 const STATE_RGB: Record<JarvisState, [number, number, number]> = {
-  idle: [80, 96, 130],
-  listening: [34, 211, 238],
-  thinking: [167, 139, 250],
-  speaking: [232, 236, 245],
+  idle: [120, 96, 40],
+  listening: [251, 191, 36],
+  thinking: [249, 158, 11],
+  speaking: [255, 223, 150],
   error: [239, 68, 68],
 }
 
@@ -137,7 +139,7 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
   }, [state, levelRef])
 
   return (
-    <svg ref={rootRef} viewBox="0 0 240 240" className="w-full h-full drop-shadow-[0_0_60px_rgba(34,211,238,0.15)]">
+    <svg ref={rootRef} viewBox="0 0 240 240" className="w-full h-full drop-shadow-[0_0_60px_rgba(251,191,36,0.18)]">
       <defs>
         <radialGradient id="jarvis-core-grad" cx="35%" cy="30%" r="75%">
           <stop offset="0%" stopColor="#ffffff" stopOpacity={0.95} />

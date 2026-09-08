@@ -250,7 +250,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
         className="absolute inset-0 transition-[background] duration-700 ease-out"
         style={{
           backgroundImage: `radial-gradient(circle at 50% 45%, ${
-            state === 'error' ? 'rgba(239,68,68,0.14)' : 'rgba(34,211,238,0.10)'
+            state === 'error' ? 'rgba(239,68,68,0.14)' : 'rgba(251,191,36,0.12)'
           }, transparent 58%)`,
         }}
       />
@@ -267,7 +267,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
         style={{
           top: 0,
           bottom: 0,
-          backgroundImage: 'linear-gradient(180deg, transparent, rgba(34,211,238,0.14), transparent)',
+          backgroundImage: 'linear-gradient(180deg, transparent, rgba(251,191,36,0.16), transparent)',
           backgroundSize: '100% 50%',
         }}
       />
@@ -275,7 +275,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
         <div
           key={corner}
-          className={`absolute w-10 h-10 border-cyan-400/25 ${
+          className={`absolute w-10 h-10 border-amber-400/30 ${
             corner === 'tl' ? 'top-6 left-6 border-t border-l' :
             corner === 'tr' ? 'top-6 right-6 border-t border-r' :
             corner === 'bl' ? 'bottom-6 left-6 border-b border-l' :
