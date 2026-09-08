@@ -21,6 +21,7 @@ export default function ReunionesPage() {
   const [companies, setCompanies] = useState<CompanyLite[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [form, setForm] = useState({ title: '', companyId: '' })
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function ReunionesPage() {
 
   async function createMeeting(e: React.FormEvent) {
     e.preventDefault()
+    setCreateError(null)
     setCreating(true)
     try {
       const res = await fetch('/api/meetings', {
@@ -50,10 +52,17 @@ export default function ReunionesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: form.title || undefined, companyId: form.companyId || undefined }),
       })
-      if (res.ok) {
-        const meeting = await res.json()
-        router.push(`/reuniones/${meeting.id}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        console.error('[reuniones] create failed:', res.status, body)
+        setCreateError(body?.error ?? `No se pudo crear la reunión (HTTP ${res.status})`)
+        return
       }
+      const meeting = await res.json()
+      router.push(`/reuniones/${meeting.id}`)
+    } catch (err) {
+      console.error('[reuniones] create threw:', err)
+      setCreateError('No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.')
     } finally {
       setCreating(false)
     }
@@ -92,6 +101,7 @@ export default function ReunionesPage() {
         <button type="submit" disabled={creating} className="btn-primary">
           {creating ? 'Creando…' : '+ Nueva reunión'}
         </button>
+        {createError && <p className="w-full text-xs text-red-400">{createError}</p>}
       </form>
 
       {loading ? (
