@@ -1,9 +1,8 @@
-// Voz de Jarvis vía ElevenLabs — grave, calmada, tono "mayordomo" (estilo Daniel:
-// británico, autoritativo, funciona bien en español con el modelo multilingüe).
-// Si esta voz deja de existir en tu cuenta de ElevenLabs, cámbiala aquí por otra
-// de tu Voice Library (elevenlabs.io/app/voice-library) — es la única constante
-// que hay que tocar.
-const JARVIS_VOICE_ID = 'onwK4e9ZLuTAKqWW03F9'
+// Voz de Jarvis vía ElevenLabs — elegida por Andrés desde su Voice Library
+// (voz "Josh"-style: cálida, conversacional). Si deja de existir en la
+// cuenta, cámbiala aquí por otra de elevenlabs.io/app/voice-library — es
+// la única constante que hay que tocar.
+const JARVIS_VOICE_ID = 'Rsz5u2Huh1hPlPr0oxRQ'
 
 const MAX_CHARS = 600 // mantiene las respuestas cortas -> menor costo y latencia
 
