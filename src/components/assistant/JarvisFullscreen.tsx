@@ -19,12 +19,18 @@ interface JarvisFullscreenProps {
   audioEl: HTMLAudioElement
 }
 
-// A short/noisy interim result (echo, a stray "ah", background sound) used to
-// cut Jarvis off after a single 3-character fragment. Barge-in now needs a
-// real word-or-more AND two consecutive interim results confirming it, so
-// Jarvis only gets interrupted by sustained speech, not a blip.
-const BARGE_IN_MIN_CHARS = 8
-const BARGE_IN_STREAK_NEEDED = 2
+// Still too sensitive at 8 chars / streak 2 — it was cutting Jarvis off from
+// its own voice bleeding back into the mic (browser echoCancellation on a
+// plain <audio> element is not perfectly reliable, especially on iOS Safari),
+// not from the user actually talking. Three defenses now, all required at
+// once: a longer, clearly-sustained transcript, more consecutive confirms,
+// and an actual loud mic level (not just picked-up echo) at the same time.
+const BARGE_IN_MIN_CHARS = 16
+const BARGE_IN_STREAK_NEEDED = 3
+const BARGE_IN_MIN_LEVEL = 0.32
+// Ignore barge-in entirely for a moment after Jarvis starts talking — the
+// first instant of playback is the likeliest spot for an echo/pop false-positive.
+const BARGE_IN_GRACE_MS = 900
 
 function computeRms(data: Uint8Array): number {
   let sum = 0
@@ -56,6 +62,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   const chatAbortRef = useRef<AbortController | null>(null)
   const meterRafRef = useRef<number>(0)
   const bargeInStreakRef = useRef(0)
+  const speakStartedAtRef = useRef(0)
 
   function setJarvisState(next: JarvisState) {
     stateRef.current = next
@@ -68,7 +75,12 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     const data = new Uint8Array(analyser.fftSize)
     const loop = () => {
       if (closedRef.current) return
-      if (stateRef.current === 'listening' && micAnalyserRef.current) {
+      // Also measured while Jarvis is speaking/thinking — the reactor's visual
+      // only reads this ref during 'listening' (speaking uses a synthetic
+      // pulse instead), so this doesn't change anything on screen; it's purely
+      // so bargeIn() below can require an actually-loud mic, not just a
+      // transcript fragment that could be Jarvis's own voice echoing back.
+      if (stateRef.current !== 'idle' && stateRef.current !== 'error' && micAnalyserRef.current) {
         micAnalyserRef.current.getByteTimeDomainData(data)
         levelRef.current = computeRms(data)
       }
@@ -111,6 +123,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   async function speak(text: string) {
     setJarvisState('speaking')
     setErrorMessage(null)
+    speakStartedAtRef.current = Date.now()
     const url = `/api/assistant/speak?text=${encodeURIComponent(text)}`
     try {
       // No fetch()+blob() here on purpose — setting `src` directly lets the
@@ -222,7 +235,9 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
         const transcript = result[0]?.transcript ?? ''
         if (!result.isFinal) {
           if (stateRef.current === 'speaking' || stateRef.current === 'thinking') {
-            if (transcript.trim().length >= BARGE_IN_MIN_CHARS) {
+            const withinGrace = Date.now() - speakStartedAtRef.current < BARGE_IN_GRACE_MS
+            const loudEnough = levelRef.current >= BARGE_IN_MIN_LEVEL
+            if (!withinGrace && loudEnough && transcript.trim().length >= BARGE_IN_MIN_CHARS) {
               bargeInStreakRef.current += 1
               if (bargeInStreakRef.current >= BARGE_IN_STREAK_NEEDED) bargeIn()
             } else {

@@ -2,7 +2,7 @@
 // base; se probó otra más cálida que se trababa en español y se revirtió. Ahora
 // en voz elegida por el usuario desde su biblioteca de ElevenLabs. Si deja de
 // existir en la cuenta, cámbiala aquí por otra de elevenlabs.io/app/voice-library.
-const JARVIS_VOICE_ID = 'LcMajEnHqf3tUTha5ppa'
+const JARVIS_VOICE_ID = 'ukLWoGgadTS2g4jpfMn2'
 
 const MAX_CHARS = 600 // mantiene las respuestas cortas -> menor costo y latencia
 

@@ -164,10 +164,23 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
       // like real light — this is the single biggest lever for "hologram" feel.
       ctx.globalCompositeOperation = 'lighter'
 
-      ctx.lineWidth = 0.6
+      // Core glow FIRST and small — the previous version had this covering ~80%
+      // of the sphere's radius, which additively washed almost the whole mesh
+      // out to flat white instead of letting the wireframe read clearly.
+      const coreR = R * 0.14 * (1 + boost * 0.25)
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 2.2)
+      grad.addColorStop(0, 'rgba(255,255,255,0.9)')
+      grad.addColorStop(0.35, `rgba(${r},${g},${b},0.55)`)
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`)
+      ctx.fillStyle = grad
+      ctx.beginPath()
+      ctx.arc(cx, cy, coreR * 2.2, 0, Math.PI * 2)
+      ctx.fill()
+
+      ctx.lineWidth = 0.8
       for (const [i, j] of pairs) {
         const depth = (projZ[i] + projZ[j]) / 2
-        const alpha = Math.max(0, 0.16 + depth * 0.16) * (0.5 + boost * 0.5)
+        const alpha = Math.max(0, 0.22 + depth * 0.22) * (0.55 + boost * 0.5)
         if (alpha <= 0.01) continue
         ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`
         ctx.beginPath()
@@ -178,28 +191,18 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
 
       for (let i = 0; i < points.length; i++) {
         const depth = (projZ[i] + 1) / 2 // 0 (back) .. 1 (front)
-        const size = (0.55 + depth * 1.5) * projScale[i]
-        const alpha = (0.2 + depth * 0.55) * (0.6 + boost * 0.4)
+        const size = (0.6 + depth * 1.6) * projScale[i]
+        const alpha = (0.3 + depth * 0.6) * (0.6 + boost * 0.4)
         ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`
         ctx.beginPath()
         ctx.arc(projX[i], projY[i], size, 0, Math.PI * 2)
         ctx.fill()
       }
 
-      // Core glow — layered radial gradient, white-hot center fading to the state color.
-      const coreR = R * 0.32 * (1 + boost * 0.2)
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 2.6)
-      grad.addColorStop(0, 'rgba(255,255,255,0.95)')
-      grad.addColorStop(0.28, `rgba(${r},${g},${b},0.85)`)
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`)
-      ctx.fillStyle = grad
-      ctx.beginPath()
-      ctx.arc(cx, cy, coreR * 2.6, 0, Math.PI * 2)
-      ctx.fill()
-
-      // Outer ambient haze, well beyond the sphere itself.
-      const haze = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.7)
-      haze.addColorStop(0, `rgba(${r},${g},${b},${(0.05 + boost * 0.07).toFixed(3)})`)
+      // Outer ambient haze, well beyond the sphere itself — kept faint so it
+      // frames the sphere instead of blurring its edge.
+      const haze = ctx.createRadialGradient(cx, cy, R * 0.95, cx, cy, R * 1.5)
+      haze.addColorStop(0, `rgba(${r},${g},${b},${(0.04 + boost * 0.05).toFixed(3)})`)
       haze.addColorStop(1, `rgba(${r},${g},${b},0)`)
       ctx.fillStyle = haze
       ctx.beginPath()
@@ -220,7 +223,7 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
 
   return (
     <div ref={containerRef} className="w-full h-full">
-      <canvas ref={canvasRef} className="w-full h-full" style={{ filter: 'drop-shadow(0 0 70px rgba(251,191,36,0.25))' }} />
+      <canvas ref={canvasRef} className="w-full h-full" style={{ filter: 'drop-shadow(0 0 40px rgba(251,191,36,0.16))' }} />
     </div>
   )
 }
