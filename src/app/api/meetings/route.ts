@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const companyId = typeof body?.companyId === 'string' && body.companyId ? body.companyId : null
 
   const meeting = await prisma.meeting.create({
-    data: { userId: session.user.id, title, date, companyId, strokes: [] },
+    data: { userId: session.user.id, title, date, companyId, pages: [] },
   })
   return NextResponse.json(meeting, { status: 201 })
 }

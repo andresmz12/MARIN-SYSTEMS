@@ -742,9 +742,9 @@ model Meeting {
   date       DateTime      @default(now())
   companyId  String?
   company    Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  // Trazos vectoriales (array de {points:[{x,y}], color, width}) — permite
-  // reabrir y seguir editando la nota, y renderizarla a PNG para IA/PDF.
-  strokes    Json          @default("[]")
+  // Cuaderno de páginas — cada página es un lienzo de tinta (con texto tipiado
+  // mezclado) o un mapa mental. Ver src/components/meetings/types.ts.
+  pages      Json          @default("[]")
   summary    String?       @db.Text
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt

@@ -31,14 +31,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const body = await req.json().catch(() => null) as {
-    title?: unknown; companyId?: unknown; strokes?: unknown; summary?: unknown
+    title?: unknown; companyId?: unknown; pages?: unknown; summary?: unknown
   } | null
   if (!body) return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
 
   const data: Record<string, unknown> = {}
   if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim()
   if (body.companyId === null || typeof body.companyId === 'string') data.companyId = body.companyId || null
-  if (Array.isArray(body.strokes)) data.strokes = body.strokes
+  if (Array.isArray(body.pages)) data.pages = body.pages
   if (typeof body.summary === 'string') data.summary = body.summary
 
   const meeting = await prisma.meeting.update({ where: { id: params.id }, data })

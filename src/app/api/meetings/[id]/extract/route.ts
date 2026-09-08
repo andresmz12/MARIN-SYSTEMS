@@ -14,12 +14,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   if (!meeting) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
 
-  const body = await req.json().catch(() => null) as { imageBase64?: unknown } | null
-  const imageBase64 = typeof body?.imageBase64 === 'string' ? body.imageBase64.replace(/^data:image\/png;base64,/, '') : ''
-  if (!imageBase64) return NextResponse.json({ error: 'Se requiere imageBase64' }, { status: 400 })
+  const body = await req.json().catch(() => null) as { images?: unknown; mindmapText?: unknown } | null
+  const images = Array.isArray(body?.images)
+    ? body.images.filter((s): s is string => typeof s === 'string').map((s) => s.replace(/^data:image\/png;base64,/, ''))
+    : []
+  const mindmapText = typeof body?.mindmapText === 'string' ? body.mindmapText : ''
+  if (images.length === 0 && !mindmapText.trim()) {
+    return NextResponse.json({ error: 'No hay contenido para extraer' }, { status: 400 })
+  }
 
   try {
-    const { summary, tasks } = await extractMeetingNotes(imageBase64)
+    const { summary, tasks } = await extractMeetingNotes(images, mindmapText)
 
     await prisma.$transaction([
       prisma.meeting.update({ where: { id: meeting.id }, data: { summary } }),
