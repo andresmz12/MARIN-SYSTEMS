@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState, use as usePromise } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import jsPDF from 'jspdf'
 import { InkCanvas, InkCanvasHandle } from '@/components/meetings/InkCanvas'
@@ -21,8 +21,9 @@ interface MeetingDetail {
   tasks: MeetingTaskItem[]
 }
 
-export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = usePromise(params)
+export default function MeetingDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const inkRef = useRef<InkCanvasHandle>(null)
   const mapRef = useRef<MindMapCanvasHandle>(null)
