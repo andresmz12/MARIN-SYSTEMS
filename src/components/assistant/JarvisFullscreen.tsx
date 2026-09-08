@@ -108,6 +108,18 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       audioEl.onended = () => {
         if (stateRef.current === 'speaking') setJarvisState('listening')
       }
+      // A blocked/failed media load (CSP, corrupt blob, codec) doesn't always reject
+      // play() — it can instead fire a silent 'error' event on the element, which
+      // used to leave the reactor stuck showing "speaking" forever with no sound.
+      audioEl.onerror = () => {
+        console.error('[jarvis] <audio> element error:', audioEl.error)
+        if (stateRef.current === 'speaking') {
+          setJarvisState('error')
+          setTimeout(() => {
+            if (stateRef.current === 'error') setJarvisState('listening')
+          }, 900)
+        }
+      }
       await audioEl.play()
     } catch (err) {
       // eslint-disable-next-line no-console
