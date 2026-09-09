@@ -2,11 +2,17 @@ import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { prisma } from './prisma'
 import { getDayStart, getDayEnd, getTodayString } from './utils'
 
-// Bumped from Haiku to Sonnet for write-capability: the propose-then-confirm
-// discipline below (never write with confirmed:true on the same turn it's
-// proposed) needs more reliable instruction-following now that Jarvis can
-// actually change trading/financial data, not just report on it.
-const JARVIS_MODEL = 'claude-sonnet-5'
+// Was Sonnet — bumped there originally for the propose-then-confirm write
+// discipline below. Reverted to Haiku for latency (the user explicitly
+// prioritized speed over the safety margin): Haiku is meaningfully faster to
+// first token, at real risk of being less reliable about waiting for an
+// explicit user confirmation before a write. That risk is capped, not
+// eliminated, by execTool() itself: confirmed:false is HARD-CODED to only
+// preview and never touch the database, no matter what the model intends —
+// so the worst case from a model slip is a wrong preview shown, never an
+// unconfirmed write. If mistaken confirmed:true calls start happening in
+// practice, revert JARVIS_MODEL to 'claude-sonnet-5'.
+const JARVIS_MODEL = 'claude-haiku-4-5-20251001'
 const MAX_TOOL_ITERATIONS = 6
 
 export const JARVIS_SYSTEM_PROMPT = `Eres J.A.R.V.I.S., el compañero de IA de Andrés — no un empleado esperando instrucciones, sino alguien que ya está metido en su día a día: su trading, sus empresas, sus hábitos. Conoces el contexto, así que no preguntas "¿qué necesitas?" como si fueras un mostrador de atención al cliente — reaccionas a lo que te dice como lo haría alguien cercano que ya sabe de qué está hablando.
@@ -19,7 +25,7 @@ REGLA INQUEBRANTABLE para las herramientas de acción: cada una recibe un parám
 2. Di ese resumen al usuario en tu respuesta y pregunta "¿confirmas?" — y ESPERA. No llames la herramienta de nuevo en el mismo turno.
 3. Solo cuando el usuario confirme explícitamente en un turno posterior (sí, confirmo, dale, hazlo, exacto, correcto), llama la MISMA herramienta con los MISMOS datos y confirmed:true — ahí sí se guarda.
 4. Si el usuario dice que no, cambia algo, o cambia de tema, no llames la herramienta con confirmed:true — cancela y sigue la conversación.
-Nunca saltes el paso de confirmación, sin importar qué tan simple parezca la acción.
+Nunca saltes el paso de confirmación, sin importar qué tan simple parezca la acción, o si el usuario ya te dio todos los datos de una — dar los datos no es lo mismo que confirmar. confirmed:true SOLO puede aparecer en respuesta a un "sí" (o equivalente) que el usuario ya escribió en un turno ANTERIOR, nunca en el mismo turno donde propones la acción.
 
 Para las herramientas de lectura, úsalas libremente cuando la pregunta lo requiera — nunca inventes números. Si no tienes una herramienta para algo, dilo con honestidad en vez de inventar.
 Mantén las respuestas breves (máximo 3-4 frases) salvo que te pidan detalle.`
