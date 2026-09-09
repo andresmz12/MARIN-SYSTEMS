@@ -31,7 +31,7 @@ const PEN_COLORS = [
 ]
 const PEN_WIDTHS = [2, 4, 7]
 const HIGHLIGHT_WIDTH = 22
-const ERASER_RADIUS = 18
+const ERASER_RADIUS = 26 // was 18 — too small a hit target to feel reliable on a real device
 const TEXT_FONT_SIZE = 28
 const SHAPE_KINDS: { kind: ShapeKind; label: string; icon: string }[] = [
   { kind: 'rect', label: 'Rectángulo', icon: '▭' },
@@ -181,10 +181,11 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const latestShapesRef = useRef<Shape[]>(shapes)
   latestStrokesRef.current = strokes
   latestShapesRef.current = shapes
-  // Once a stylus has been seen on this device, ignore 'touch' pointer events
-  // entirely — otherwise the palm resting on the screen while writing with
-  // the Pencil draws its own stray strokes.
-  const penDetectedRef = useRef(false)
+  // The pointerId currently driving a draw/erase/shape gesture, if any. Only
+  // this pointer's events are acted on; any other concurrent contact (a palm
+  // resting on the screen while writing with the Pencil, most commonly) is
+  // ignored outright rather than being allowed to interrupt the gesture.
+  const activePointerIdRef = useRef<number | null>(null)
 
   function toCanvasPoint(e: { clientX: number; clientY: number }): StrokePoint {
     const svg = svgRef.current
@@ -230,11 +231,19 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   }
 
   function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    if (e.pointerType === 'pen') penDetectedRef.current = true
-    if (e.pointerType === 'touch' && penDetectedRef.current) return
-
     if (editingId) commitEditing()
     if (draggingText.current) return // handled by the handle's own pointer events
+
+    // A second concurrent contact (typically a resting palm while the Pencil
+    // is down) is ignored outright instead of hijacking the in-progress
+    // gesture. This works regardless of pointerType — a type-based approach
+    // ("ignore touch once a pen has ever been seen") was tried first and was
+    // both too aggressive (a single stray Pencil hover event could lock out
+    // ALL finger drawing for the rest of the session) and too weak (it never
+    // stopped a concurrent palm touch from resetting an in-progress stroke,
+    // since a second pointerdown wasn't rejected at all).
+    if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return
+    activePointerIdRef.current = e.pointerId
 
     ;(e.target as Element).setPointerCapture(e.pointerId)
     const p = toCanvasPoint(e)
@@ -267,8 +276,6 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   }
 
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (e.pointerType === 'touch' && penDetectedRef.current) return
-
     if (draggingText.current) {
       const p = toCanvasPoint(e)
       const d = draggingText.current
@@ -276,6 +283,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       onChangeTextBoxes(textBoxes.map((tb) => (tb.id === d.id ? { ...tb, x: p.x - d.offsetX, y: p.y - d.offsetY } : tb)))
       return
     }
+    if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm)
     if (!drawing.current) return
     if (tool === 'erase') {
       const p = toCanvasPoint(e)
@@ -299,6 +307,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       draggingText.current = null
       return
     }
+    if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm) lifted
+    activePointerIdRef.current = null
     drawing.current = false
     if (tool === 'draw' || tool === 'highlight') {
       if (currentPointsRef.current.length > 0) {
@@ -468,6 +478,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
+          onPointerCancel={handlePointerUp}
         >
           {shapes.map((shape) => (
             <path
