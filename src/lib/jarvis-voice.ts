@@ -1,8 +1,10 @@
-// Voz de Jarvis vía ElevenLabs. Historial: "Daniel" (onwK4e9ZLuTAKqWW03F9) fue la
-// base; se probó otra más cálida que se trababa en español y se revirtió. Ahora
-// en voz elegida por el usuario desde su biblioteca de ElevenLabs. Si deja de
-// existir en la cuenta, cámbiala aquí por otra de elevenlabs.io/app/voice-library.
-const JARVIS_VOICE_ID = 'ukLWoGgadTS2g4jpfMn2'
+// Voz de Jarvis vía ElevenLabs. Historial: "Daniel" (onwK4e9ZLuTAKqWW03F9) es la
+// base confiable — se probaron dos voces elegidas por el usuario después
+// (Rsz5u2Huh1hPlPr0oxRQ: se trababa en español; luego LcMajEnHqf3tUTha5ppa y
+// ukLWoGgadTS2g4jpfMn2 con el modelo flash: sonaba mal) y ninguna mejoró sobre
+// esta. Vuelta a Daniel. Si deja de existir en la cuenta, cámbiala aquí por
+// otra de elevenlabs.io/app/voice-library.
+const JARVIS_VOICE_ID = 'onwK4e9ZLuTAKqWW03F9'
 
 const MAX_CHARS = 600 // mantiene las respuestas cortas -> menor costo y latencia
 
@@ -41,13 +43,13 @@ export async function streamJarvisVoice(text: string): Promise<ReadableStream<Ui
     },
     body: JSON.stringify({
       text: trimmed,
-      // eleven_flash_v2_5 is ElevenLabs' purpose-built low-latency model
-      // (~75ms model processing vs several hundred ms on eleven_multilingual_v2)
-      // — this is the actual remaining lever now that the app-side pipeline is
-      // fully streamed; the old "reading a script" complaint came from
-      // optimize_streaming_latency (a param, not a model choice), which stays
-      // off — flash gets speed without that quality trade-off.
-      model_id: 'eleven_flash_v2_5',
+      // eleven_flash_v2_5 (tried for latency) audibly sounded worse — flash
+      // trades voice quality for speed, and that trade wasn't worth it. Back
+      // to eleven_multilingual_v2. The chat pipeline is already fully
+      // streamed (see chatWithJarvis/handleUserUtterance), which is the part
+      // that actually moved the needle on speed without hurting quality —
+      // this model swap is not needed to keep that benefit.
+      model_id: 'eleven_multilingual_v2',
       // Lower stability = more natural pitch/pace variation instead of a flat
       // "reading a script" cadence.
       voice_settings: { stability: 0.32, similarity_boost: 0.75, style: 0.55, use_speaker_boost: true },
