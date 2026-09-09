@@ -1,7 +1,6 @@
 'use client'
 
-import { useImperativeHandle, useRef, useState, forwardRef } from 'react'
-import { svgToPng } from '@/lib/svg-export'
+import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { Shape, ShapeKind, Stroke, StrokePoint, TextBox, newId } from './types'
 
 export interface InkCanvasHandle {
@@ -17,11 +16,15 @@ interface InkCanvasProps {
   onChangeShapes: (shapes: Shape[]) => void
 }
 
-// Fixed logical canvas size (roughly letter proportions) — the SVG scales to fit
-// the screen via viewBox, but every stroke/text box is stored in this coordinate
-// space so it renders identically at any screen size and exports cleanly.
+// Fixed logical drawing space — every stroke/shape/text box is stored in
+// these coordinates regardless of screen size, and the on-screen <canvas>
+// (and the offscreen export canvas) both map onto it via a scale transform.
 export const CANVAS_W = 1000
 export const CANVAS_H = 1360
+// Exported PNGs are rendered at a fixed higher resolution instead of
+// capturing the live on-screen canvas, so a small phone screen doesn't
+// produce a blurry export.
+const EXPORT_SCALE = 2
 
 const PEN_COLORS = [
   { label: 'Negro', value: '#1a1a2e' },
@@ -31,7 +34,7 @@ const PEN_COLORS = [
 ]
 const PEN_WIDTHS = [2, 4, 7]
 const HIGHLIGHT_WIDTH = 22
-const ERASER_RADIUS = 26 // was 18 — too small a hit target to feel reliable on a real device
+const ERASER_RADIUS = 26
 const TEXT_FONT_SIZE = 28
 const SHAPE_KINDS: { kind: ShapeKind; label: string; icon: string }[] = [
   { kind: 'rect', label: 'Rectángulo', icon: '▭' },
@@ -41,20 +44,6 @@ const SHAPE_KINDS: { kind: ShapeKind; label: string; icon: string }[] = [
 ]
 
 type Tool = 'draw' | 'highlight' | 'erase' | 'text' | 'shape'
-
-function smoothPath(points: StrokePoint[]): string {
-  if (points.length === 0) return ''
-  if (points.length === 1) return `M${points[0].x},${points[0].y} L${points[0].x},${points[0].y}`
-  let d = `M${points[0].x},${points[0].y}`
-  for (let i = 1; i < points.length - 1; i++) {
-    const midX = (points[i].x + points[i + 1].x) / 2
-    const midY = (points[i].y + points[i + 1].y) / 2
-    d += ` Q${points[i].x},${points[i].y} ${midX},${midY}`
-  }
-  const last = points[points.length - 1]
-  d += ` L${last.x},${last.y}`
-  return d
-}
 
 function distToSegment(p: StrokePoint, a: StrokePoint, b: StrokePoint): number {
   const dx = b.x - a.x
@@ -111,8 +100,9 @@ function eraseShapesAtPoint(shapes: Shape[], p: StrokePoint, radius: number): Sh
   return shapes.filter((s) => !shapeNearPoint(s, p, radius))
 }
 
-// One `d` string for every shape kind so the live preview and the committed
-// shape can share the exact same renderer (see shapePathD usages below).
+// One SVG path-data string per shape kind, fed straight into Path2D so canvas
+// can stroke it — reuses the exact same geometry for the live preview, the
+// committed render, and the export.
 function shapePathD(kind: ShapeKind, x1: number, y1: number, x2: number, y2: number): string {
   if (kind === 'rect') {
     return `M${x1},${y1} H${x2} V${y2} H${x1} Z`
@@ -143,21 +133,97 @@ function shapePathD(kind: ShapeKind, x1: number, y1: number, x2: number, y2: num
 // paints (up to 240Hz on iPad Pro vs ~60fps rendering) — a single pointermove
 // only carries the latest sample. getCoalescedEvents() returns every sample
 // batched since the last event, so using it (falling back to the event itself
-// where unsupported) is what keeps fast strokes from coming out as broken,
-// disconnected dashes.
+// where unsupported) is what keeps fast strokes from coming out broken.
 function getPointerSamples(e: React.PointerEvent): PointerEvent[] {
   const native = e.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }
   const coalesced = typeof native.getCoalescedEvents === 'function' ? native.getCoalescedEvents() : null
   return coalesced && coalesced.length > 0 ? coalesced : [native]
 }
 
-interface UndoSnapshot { strokes: Stroke[]; shapes: Shape[] }
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
+  const pts = stroke.points
+  if (pts.length === 0) return
+  ctx.save()
+  ctx.globalAlpha = stroke.highlighter ? 0.4 : 1
+  if (stroke.highlighter) ctx.globalCompositeOperation = 'multiply'
+  ctx.strokeStyle = stroke.color
+  ctx.lineWidth = stroke.width
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  if (pts.length === 1) {
+    ctx.moveTo(pts[0].x, pts[0].y)
+    ctx.lineTo(pts[0].x, pts[0].y)
+  } else {
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length - 1; i++) {
+      const midX = (pts[i].x + pts[i + 1].x) / 2
+      const midY = (pts[i].y + pts[i + 1].y) / 2
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY)
+    }
+    const last = pts[pts.length - 1]
+    ctx.lineTo(last.x, last.y)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawShape(ctx: CanvasRenderingContext2D, shape: Shape) {
+  const d = shapePathD(shape.kind, shape.x1, shape.y1, shape.x2, shape.y2)
+  if (!d) return
+  ctx.save()
+  ctx.strokeStyle = shape.color
+  ctx.lineWidth = shape.width
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.stroke(new Path2D(d))
+  ctx.restore()
+}
+
+function drawText(ctx: CanvasRenderingContext2D, tb: TextBox) {
+  ctx.save()
+  ctx.fillStyle = tb.color
+  ctx.font = `${tb.fontSize}px Inter, sans-serif`
+  ctx.textBaseline = 'alphabetic'
+  tb.text.split('\n').forEach((line, i) => {
+    ctx.fillText(line, tb.x, tb.y + i * tb.fontSize * 1.2)
+  })
+  ctx.restore()
+}
+
+// Straight segment painted immediately as the pointer moves, for instant
+// feedback — the committed stroke gets the nicer quadratic smoothing from
+// drawStroke() once it lands in state. This is the standard "signature pad"
+// technique: cheap per-point painting instead of a full-scene redraw for
+// every sample, which is what lets it keep up with a fast stroke.
+function paintLiveSegment(
+  ctx: CanvasRenderingContext2D,
+  from: StrokePoint,
+  to: StrokePoint,
+  color: string,
+  width: number,
+  highlighter: boolean
+) {
+  ctx.save()
+  ctx.globalAlpha = highlighter ? 0.4 : 1
+  if (highlighter) ctx.globalCompositeOperation = 'multiply'
+  ctx.strokeStyle = color
+  ctx.lineWidth = width
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  ctx.moveTo(from.x, from.y)
+  ctx.lineTo(to.x, to.y)
+  ctx.stroke()
+  ctx.restore()
+}
 
 export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function InkCanvas(
   { strokes, textBoxes, shapes, onChangeStrokes, onChangeTextBoxes, onChangeShapes },
   ref
 ) {
-  const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [tool, setTool] = useState<Tool>('draw')
   const [color, setColor] = useState(PEN_COLORS[0].value)
   const [width, setWidth] = useState(PEN_WIDTHS[1])
@@ -165,37 +231,87 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
   const draggingText = useRef<{ id: string; offsetX: number; offsetY: number; moved: boolean } | null>(null)
-  const undoStack = useRef<UndoSnapshot[]>([])
-  const redoStack = useRef<UndoSnapshot[]>([])
+  const undoStack = useRef<{ strokes: Stroke[]; shapes: Shape[] }[]>([])
+  const redoStack = useRef<{ strokes: Stroke[]; shapes: Shape[] }[]>([])
   const drawing = useRef(false)
-  // The in-progress stroke is tracked in a ref and painted by mutating the
-  // <path> element's `d` attribute directly (see appendPoint) instead of
-  // through React state. Calling setState on every pointermove forced a full
-  // re-render per sample, which couldn't keep up with Apple Pencil's sample
-  // rate and dropped points — the strokes came out broken/discontinuous.
   const currentPointsRef = useRef<StrokePoint[]>([])
-  const currentPathRef = useRef<SVGPathElement>(null)
-  const shapePreviewRef = useRef<SVGPathElement>(null)
   const shapeStartRef = useRef<StrokePoint | null>(null)
-  const latestStrokesRef = useRef<Stroke[]>(strokes)
-  const latestShapesRef = useRef<Shape[]>(shapes)
-  latestStrokesRef.current = strokes
-  latestShapesRef.current = shapes
   // The pointerId currently driving a draw/erase/shape gesture, if any. Only
   // this pointer's events are acted on; any other concurrent contact (a palm
   // resting on the screen while writing with the Pencil, most commonly) is
   // ignored outright rather than being allowed to interrupt the gesture.
   const activePointerIdRef = useRef<number | null>(null)
 
+  // Mirrors of the latest props, read by drawSceneOn() so a redraw triggered
+  // from a stale closure (e.g. a ResizeObserver callback registered on mount)
+  // never paints outdated content.
+  const latestStrokesRef = useRef<Stroke[]>(strokes)
+  const latestShapesRef = useRef<Shape[]>(shapes)
+  const latestTextBoxesRef = useRef<TextBox[]>(textBoxes)
+  const latestEditingIdRef = useRef<string | null>(editingId)
+  latestStrokesRef.current = strokes
+  latestShapesRef.current = shapes
+  latestTextBoxesRef.current = textBoxes
+  latestEditingIdRef.current = editingId
+
   function toCanvasPoint(e: { clientX: number; clientY: number }): StrokePoint {
-    const svg = svgRef.current
-    if (!svg) return { x: 0, y: 0 }
-    const rect = svg.getBoundingClientRect()
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
     return {
       x: ((e.clientX - rect.left) / rect.width) * CANVAS_W,
       y: ((e.clientY - rect.top) / rect.height) * CANVAS_H,
     }
   }
+
+  function drawSceneOn(ctx: CanvasRenderingContext2D) {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
+    ctx.fillStyle = '#fdfdfd'
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+    for (const shape of latestShapesRef.current) drawShape(ctx, shape)
+    for (const stroke of latestStrokesRef.current) drawStroke(ctx, stroke)
+    for (const tb of latestTextBoxesRef.current) {
+      if (tb.id === latestEditingIdRef.current) continue
+      drawText(ctx, tb)
+    }
+  }
+
+  function redraw() {
+    const ctx = canvasRef.current?.getContext('2d')
+    if (ctx) drawSceneOn(ctx)
+  }
+
+  function setupCanvasSize() {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container) return
+    const cssWidth = container.clientWidth
+    if (cssWidth === 0) return
+    const cssHeight = cssWidth * (CANVAS_H / CANVAS_W)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    canvas.style.width = `${cssWidth}px`
+    canvas.style.height = `${cssHeight}px`
+    canvas.width = Math.round(cssWidth * dpr)
+    canvas.height = Math.round(cssHeight * dpr)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const scale = (cssWidth * dpr) / CANVAS_W
+    ctx.setTransform(scale, 0, 0, scale, 0, 0)
+    redraw()
+  }
+
+  useEffect(() => {
+    setupCanvasSize()
+    const ro = new ResizeObserver(() => setupCanvasSize())
+    if (containerRef.current) ro.observe(containerRef.current)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    redraw()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strokes, shapes, textBoxes, editingId])
 
   function pushUndo() {
     undoStack.current.push({
@@ -223,32 +339,24 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     setEditingValue('')
   }
 
-  function handleTextHandleDown(tb: TextBox, e: React.PointerEvent) {
-    e.stopPropagation()
-    ;(e.target as Element).setPointerCapture(e.pointerId)
-    const p = toCanvasPoint(e)
-    draggingText.current = { id: tb.id, offsetX: p.x - tb.x, offsetY: p.y - tb.y, moved: false }
-  }
-
-  function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
+  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (editingId) commitEditing()
-    if (draggingText.current) return // handled by the handle's own pointer events
 
     // A second concurrent contact (typically a resting palm while the Pencil
     // is down) is ignored outright instead of hijacking the in-progress
-    // gesture. This works regardless of pointerType — a type-based approach
-    // ("ignore touch once a pen has ever been seen") was tried first and was
-    // both too aggressive (a single stray Pencil hover event could lock out
-    // ALL finger drawing for the rest of the session) and too weak (it never
-    // stopped a concurrent palm touch from resetting an in-progress stroke,
-    // since a second pointerdown wasn't rejected at all).
+    // gesture. Works regardless of pointerType, so it doesn't depend on
+    // correctly detecting "this is a stylus" — the earlier approach (ignore
+    // all touch once any 'pen' event is ever seen) was both too aggressive
+    // (a single stray Pencil hover could lock out all finger drawing for the
+    // rest of the session) and too weak (a concurrent palm touch still reset
+    // an in-progress stroke, since it was never rejected at pointerdown).
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return
     activePointerIdRef.current = e.pointerId
-
     ;(e.target as Element).setPointerCapture(e.pointerId)
     const p = toCanvasPoint(e)
 
     if (tool === 'text') {
+      activePointerIdRef.current = null // discrete tap, not a sustained gesture
       const box: TextBox = { id: newId('text'), x: p.x, y: p.y, text: '', color, fontSize: TEXT_FONT_SIZE }
       onChangeTextBoxes([...textBoxes, box])
       startEditingBox(box)
@@ -263,28 +371,17 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     } else if (tool === 'shape') {
       pushUndo()
       shapeStartRef.current = p
-      shapePreviewRef.current?.setAttribute('d', shapePathD(shapeKind, p.x, p.y, p.x, p.y))
     } else {
       currentPointsRef.current = [p]
-      currentPathRef.current?.setAttribute('d', smoothPath(currentPointsRef.current))
+      const ctx = canvasRef.current?.getContext('2d')
+      if (ctx) paintLiveSegment(ctx, p, p, color, tool === 'highlight' ? HIGHLIGHT_WIDTH : width, tool === 'highlight')
     }
   }
 
-  function appendPoint(p: StrokePoint) {
-    currentPointsRef.current.push(p)
-    currentPathRef.current?.setAttribute('d', smoothPath(currentPointsRef.current))
-  }
-
-  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (draggingText.current) {
-      const p = toCanvasPoint(e)
-      const d = draggingText.current
-      d.moved = true
-      onChangeTextBoxes(textBoxes.map((tb) => (tb.id === d.id ? { ...tb, x: p.x - d.offsetX, y: p.y - d.offsetY } : tb)))
-      return
-    }
+  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm)
     if (!drawing.current) return
+
     if (tool === 'erase') {
       const p = toCanvasPoint(e)
       onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
@@ -293,23 +390,35 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       if (!shapeStartRef.current) return
       const p = toCanvasPoint(e)
       const start = shapeStartRef.current
-      shapePreviewRef.current?.setAttribute('d', shapePathD(shapeKind, start.x, start.y, p.x, p.y))
+      const ctx = canvasRef.current?.getContext('2d')
+      if (ctx) {
+        drawSceneOn(ctx)
+        ctx.save()
+        ctx.strokeStyle = color
+        ctx.lineWidth = width
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        const d = shapePathD(shapeKind, start.x, start.y, p.x, p.y)
+        if (d) ctx.stroke(new Path2D(d))
+        ctx.restore()
+      }
     } else {
+      const ctx = canvasRef.current?.getContext('2d')
       // Replay every coalesced pencil sample since the last frame, not just the latest one.
       for (const sample of getPointerSamples(e)) {
-        appendPoint(toCanvasPoint(sample))
+        const p = toCanvasPoint(sample)
+        const prev = currentPointsRef.current[currentPointsRef.current.length - 1]
+        currentPointsRef.current.push(p)
+        if (ctx && prev) paintLiveSegment(ctx, prev, p, color, tool === 'highlight' ? HIGHLIGHT_WIDTH : width, tool === 'highlight')
       }
     }
   }
 
-  function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
-    if (draggingText.current) {
-      draggingText.current = null
-      return
-    }
+  function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
     if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm) lifted
     activePointerIdRef.current = null
     drawing.current = false
+
     if (tool === 'draw' || tool === 'highlight') {
       if (currentPointsRef.current.length > 0) {
         pushUndo()
@@ -324,7 +433,6 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         ])
       }
       currentPointsRef.current = []
-      currentPathRef.current?.setAttribute('d', '')
     } else if (tool === 'shape' && shapeStartRef.current) {
       const start = shapeStartRef.current
       const p = toCanvasPoint(e)
@@ -336,7 +444,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         undoStack.current.pop()
       }
       shapeStartRef.current = null
-      shapePreviewRef.current?.setAttribute('d', '')
+      redraw()
     }
   }
 
@@ -366,8 +474,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
 
   useImperativeHandle(ref, () => ({
     exportPng: async () => {
-      if (!svgRef.current) return ''
-      return svgToPng(svgRef.current, CANVAS_W, CANVAS_H)
+      const off = document.createElement('canvas')
+      off.width = CANVAS_W * EXPORT_SCALE
+      off.height = CANVAS_H * EXPORT_SCALE
+      const ctx = off.getContext('2d')
+      if (!ctx) return ''
+      ctx.setTransform(EXPORT_SCALE, 0, 0, EXPORT_SCALE, 0, 0)
+      drawSceneOn(ctx)
+      return off.toDataURL('image/png')
     },
   }))
 
@@ -468,87 +582,56 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       </div>
 
       {/* Canvas */}
-      <div className="relative">
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-          className="w-full rounded-xl border border-[var(--bg-border)] shadow-inner touch-none select-none"
-          style={{ background: '#fdfdfd', aspectRatio: `${CANVAS_W} / ${CANVAS_H}`, cursor: tool === 'erase' ? 'cell' : tool === 'text' ? 'text' : 'crosshair' }}
+      <div ref={containerRef} className="relative w-full" style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}>
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full rounded-xl border border-[var(--bg-border)] shadow-inner touch-none select-none"
+          style={{ background: '#fdfdfd', touchAction: 'none', cursor: tool === 'erase' ? 'cell' : tool === 'text' ? 'text' : 'crosshair' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
           onPointerCancel={handlePointerUp}
-        >
-          {shapes.map((shape) => (
-            <path
-              key={shape.id}
-              d={shapePathD(shape.kind, shape.x1, shape.y1, shape.x2, shape.y2)}
-              stroke={shape.color}
-              strokeWidth={shape.width}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ))}
-          {/* Shape being dragged out — painted imperatively for the same reason as the ink preview below. */}
-          <path ref={shapePreviewRef} stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        />
 
-          {strokes.map((stroke, i) => (
-            <path
-              key={i}
-              d={smoothPath(stroke.points)}
-              stroke={stroke.color}
-              strokeWidth={stroke.width}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-              opacity={stroke.highlighter ? 0.4 : 1}
-              style={stroke.highlighter ? { mixBlendMode: 'multiply' } : undefined}
-            />
-          ))}
-          {/* In-progress stroke — its `d` is mutated directly via ref in appendPoint(),
-              never through React state, so drawing never waits on a re-render. */}
-          <path
-            ref={currentPathRef}
-            stroke={color}
-            strokeWidth={tool === 'highlight' ? HIGHLIGHT_WIDTH : width}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            opacity={tool === 'highlight' ? 0.4 : 1}
-            style={tool === 'highlight' ? { mixBlendMode: 'multiply' } : undefined}
-          />
-
-          {textBoxes.filter((tb) => tb.id !== editingId).map((tb) => (
-            <g key={tb.id}>
-              <text
-                x={tb.x}
-                y={tb.y}
-                fill={tb.color}
-                fontSize={tb.fontSize}
-                fontFamily="Inter, sans-serif"
-                onPointerDown={(e) => { if (tool === 'text') { e.stopPropagation(); startEditingBox(tb) } }}
-              >
-                {tb.text.split('\n').map((line, i) => (
-                  <tspan key={i} x={tb.x} dy={i === 0 ? 0 : tb.fontSize * 1.2}>{line}</tspan>
-                ))}
-              </text>
-              {tool === 'text' && (
-                <circle
-                  cx={tb.x - 16}
-                  cy={tb.y - tb.fontSize / 2}
-                  r={10}
-                  fill="#22d3ee"
-                  stroke="#0a0a0a"
-                  strokeWidth={1}
-                  style={{ cursor: 'move' }}
-                  onPointerDown={(e) => handleTextHandleDown(tb, e)}
-                />
-              )}
-            </g>
-          ))}
-        </svg>
+        {/* Drag/edit handles for text boxes — HTML overlay siblings of the
+            canvas (a canvas can't host interactive children). Tap without
+            dragging opens the text for editing; dragging moves it. */}
+        {tool === 'text' &&
+          textBoxes
+            .filter((tb) => tb.id !== editingId)
+            .map((tb) => (
+              <div
+                key={tb.id}
+                role="button"
+                tabIndex={-1}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+                  const p = toCanvasPoint(e)
+                  draggingText.current = { id: tb.id, offsetX: p.x - tb.x, offsetY: p.y - tb.y, moved: false }
+                }}
+                onPointerMove={(e) => {
+                  const d = draggingText.current
+                  if (!d || d.id !== tb.id) return
+                  const p = toCanvasPoint(e)
+                  d.moved = true
+                  onChangeTextBoxes(textBoxes.map((t) => (t.id === d.id ? { ...t, x: p.x - d.offsetX, y: p.y - d.offsetY } : t)))
+                }}
+                onPointerUp={(e) => {
+                  e.stopPropagation()
+                  const d = draggingText.current
+                  draggingText.current = null
+                  if (d && d.id === tb.id && !d.moved) startEditingBox(tb)
+                }}
+                className="absolute w-6 h-6 rounded-full bg-cyan-400 border border-black/70 cursor-move touch-none"
+                style={{
+                  left: `${((tb.x - 16) / CANVAS_W) * 100}%`,
+                  top: `${((tb.y - tb.fontSize / 2 - 10) / CANVAS_H) * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              />
+            ))}
 
         {editingId && (() => {
           const tb = textBoxes.find((t) => t.id === editingId)
