@@ -63,6 +63,12 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   const meterRafRef = useRef<number>(0)
   const bargeInStreakRef = useRef(0)
   const speakStartedAtRef = useRef(0)
+  // Sentences arrive one at a time as Claude streams its reply; they're queued
+  // here and played back-to-back through the single <audio> element instead of
+  // waiting for the whole reply before speaking anything.
+  const speechQueueRef = useRef<string[]>([])
+  const playingRef = useRef(false)
+  const streamDoneRef = useRef(true)
 
   function setJarvisState(next: JarvisState) {
     stateRef.current = next
@@ -103,6 +109,9 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     if (stateRef.current !== 'speaking' && stateRef.current !== 'thinking') return
     bargeInStreakRef.current = 0
     chatAbortRef.current?.abort()
+    speechQueueRef.current = []
+    playingRef.current = false
+    streamDoneRef.current = true
     stopPlayback()
     setJarvisState('listening')
   }
@@ -120,7 +129,28 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     }
   }
 
-  async function speak(text: string) {
+  // Pulls the next queued sentence and plays it; when the queue runs dry it
+  // only drops back to 'listening' once the chat stream has actually finished
+  // (streamDoneRef) — otherwise more sentences are still on their way.
+  function playNextInQueue() {
+    const next = speechQueueRef.current.shift()
+    if (!next) {
+      playingRef.current = false
+      if (streamDoneRef.current && stateRef.current === 'speaking') setJarvisState('listening')
+      return
+    }
+    playingRef.current = true
+    speakOne(next)
+  }
+
+  function enqueueSpeech(text: string) {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    speechQueueRef.current.push(trimmed)
+    if (!playingRef.current) playNextInQueue()
+  }
+
+  async function speakOne(text: string) {
     setJarvisState('speaking')
     setErrorMessage(null)
     speakStartedAtRef.current = Date.now()
@@ -134,45 +164,60 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       audioEl.muted = false
       audioEl.volume = 1
 
-      audioEl.onended = () => {
-        if (stateRef.current === 'speaking') setJarvisState('listening')
-      }
+      // Move on to the next queued sentence instead of always dropping back
+      // to 'listening' — see playNextInQueue for when it actually stops.
+      audioEl.onended = () => playNextInQueue()
       // A blocked/failed media load (CSP, corrupt blob, codec, or the server
       // rejecting the TTS request) doesn't always reject play() — it can
       // instead fire a silent 'error' event on the element, which used to
       // leave the reactor stuck showing "speaking" forever with no sound.
       audioEl.onerror = () => {
-        if (stateRef.current === 'speaking') {
-          setJarvisState('error')
-          reportSpeakFailure(url, 'Error de audio (revisa la consola)')
-          setTimeout(() => {
-            if (stateRef.current === 'error') setJarvisState('listening')
-          }, 2500)
-        }
+        reportSpeakFailure(url, 'Error de audio (revisa la consola)')
+        setJarvisState('error')
+        setTimeout(() => playNextInQueue(), 900)
       }
       await audioEl.play()
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[jarvis] speak() failed, recovering to listening:', err)
-      if (stateRef.current === 'speaking') {
-        // Flash red briefly so a failure is visible instead of silently getting stuck.
-        setJarvisState('error')
-        setErrorMessage(err instanceof Error ? err.message : 'Error desconocido')
-        setTimeout(() => {
-          if (stateRef.current === 'error') setJarvisState('listening')
-        }, 2500)
+      console.error('[jarvis] speakOne() failed, skipping to next:', err)
+      setErrorMessage(err instanceof Error ? err.message : 'Error desconocido')
+      playNextInQueue()
+    }
+  }
+
+  // Splits complete sentences off the front of `buffer` (so each can be sent
+  // to TTS immediately) and returns whatever incomplete fragment is left.
+  // Guards against splitting a decimal like "3.5" into two sentences.
+  function splitSentences(buffer: string): { complete: string[]; rest: string } {
+    const complete: string[] = []
+    let start = 0
+    for (let i = 0; i < buffer.length; i++) {
+      const c = buffer[i]
+      if (c === '.' || c === '!' || c === '?' || c === '\n') {
+        if (c === '.' && /\d/.test(buffer[i + 1] ?? '')) continue
+        const piece = buffer.slice(start, i + 1).trim()
+        if (piece) complete.push(piece)
+        start = i + 1
       }
     }
+    return { complete, rest: buffer.slice(start) }
   }
 
   async function handleUserUtterance(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
     setJarvisState('thinking')
+    setErrorMessage(null)
     historyRef.current = [...historyRef.current, { role: 'user' as const, content: trimmed }].slice(-20)
 
     const controller = new AbortController()
     chatAbortRef.current = controller
+    streamDoneRef.current = false
+    let sentenceBuffer = ''
+    let spokenAny = false
+    let finalReply = ''
+    let accumulatedText = ''
+
     try {
       const res = await fetch('/api/assistant/chat', {
         method: 'POST',
@@ -180,12 +225,48 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
         body: JSON.stringify({ messages: historyRef.current }),
         signal: controller.signal,
       })
+      if (!res.body) throw new Error('Sin cuerpo de respuesta')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let leftover = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        leftover += decoder.decode(value, { stream: true })
+        let nlIdx: number
+        while ((nlIdx = leftover.indexOf('\n')) >= 0) {
+          const line = leftover.slice(0, nlIdx).trim()
+          leftover = leftover.slice(nlIdx + 1)
+          if (!line) continue
+          const evt = JSON.parse(line) as { type: string; delta?: string; reply?: string; error?: string }
+          if (evt.type === 'text' && evt.delta) {
+            sentenceBuffer += evt.delta
+            accumulatedText += evt.delta
+            const { complete, rest } = splitSentences(sentenceBuffer)
+            for (const sentence of complete) {
+              enqueueSpeech(sentence)
+              spokenAny = true
+            }
+            sentenceBuffer = rest
+          } else if (evt.type === 'done') {
+            finalReply = evt.reply ?? ''
+          } else if (evt.type === 'error') {
+            throw new Error(evt.error || 'Error del servidor')
+          }
+        }
+      }
+
       if (controller.signal.aborted) return
-      const data = await res.json()
-      const reply: string = data.reply ?? 'No pude procesar eso.'
-      historyRef.current = [...historyRef.current, { role: 'assistant' as const, content: reply }].slice(-20)
-      if (stateRef.current === 'thinking') await speak(reply)
+      if (sentenceBuffer.trim()) {
+        enqueueSpeech(sentenceBuffer)
+        spokenAny = true
+      }
+      streamDoneRef.current = true
+      historyRef.current = [...historyRef.current, { role: 'assistant' as const, content: finalReply || accumulatedText.trim() || 'No pude procesar eso.' }].slice(-20)
+      if (!spokenAny && stateRef.current === 'thinking') setJarvisState('listening')
     } catch (err) {
+      streamDoneRef.current = true
       if ((err as Error)?.name !== 'AbortError' && stateRef.current === 'thinking') {
         setJarvisState('listening')
       }
@@ -275,6 +356,10 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       closedRef.current = true
       cancelAnimationFrame(meterRafRef.current)
       recognitionRef.current?.stop()
+      chatAbortRef.current?.abort()
+      speechQueueRef.current = []
+      playingRef.current = false
+      streamDoneRef.current = true
       stopPlayback()
       micStreamRef.current?.getTracks().forEach((t) => t.stop())
     }

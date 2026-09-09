@@ -460,10 +460,30 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
   }
 }
 
-export async function chatWithJarvis(userId: string, history: JarvisMessage[]): Promise<{ reply: string; history: JarvisMessage[] }> {
+/**
+ * Streams the reply text as it's generated (via onDelta) instead of waiting for
+ * the whole response — this is what lets the client start speaking the first
+ * sentence while Claude is still writing the rest, instead of the old
+ * chat-then-speak pipeline where the ENTIRE reply (sometimes after a tool-call
+ * round trip) had to finish generating before a single word of audio started.
+ * That non-streamed round trip was the single biggest source of the "muy
+ * lento" complaint — ElevenLabs' own streaming was already fast.
+ *
+ * Tool-use iterations still run non-streamed (a tool call needs its complete
+ * JSON input before it can execute), but any iteration is free to emit
+ * spoken text before or instead of calling a tool, so most turns — the ones
+ * with no tool calls at all — get the full benefit.
+ */
+export async function chatWithJarvis(
+  userId: string,
+  history: JarvisMessage[],
+  onDelta: (text: string) => void
+): Promise<{ reply: string; history: JarvisMessage[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
-    return { reply: 'Mi conexión con Anthropic no está configurada (falta ANTHROPIC_API_KEY).', history }
+    const reply = 'Mi conexión con Anthropic no está configurada (falta ANTHROPIC_API_KEY).'
+    onDelta(reply)
+    return { reply, history }
   }
 
   const client = new Anthropic({ apiKey })
@@ -471,13 +491,15 @@ export async function chatWithJarvis(userId: string, history: JarvisMessage[]): 
 
   try {
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-      const response = await client.messages.create({
+      const stream = client.messages.stream({
         model: JARVIS_MODEL,
         max_tokens: 800,
         system: JARVIS_SYSTEM_PROMPT,
         tools,
         messages,
       })
+      stream.on('text', (delta) => onDelta(delta))
+      const response = await stream.finalMessage()
 
       if (response.stop_reason === 'tool_use') {
         messages = [...messages, { role: 'assistant', content: response.content }]
@@ -499,14 +521,21 @@ export async function chatWithJarvis(userId: string, history: JarvisMessage[]): 
         .trim()
 
       const newHistory: JarvisMessage[] = [...history, { role: 'assistant', content: text || '...' }]
+      if (!text) onDelta('No tengo una respuesta para eso.')
       return { reply: text || 'No tengo una respuesta para eso.', history: newHistory }
     }
 
-    return { reply: 'Necesité demasiados pasos para responder eso — intenta preguntar algo más específico.', history }
+    const reply = 'Necesité demasiados pasos para responder eso — intenta preguntar algo más específico.'
+    onDelta(reply)
+    return { reply, history }
   } catch (err) {
     const status = err instanceof APIError ? err.status : null
-    if (status === 429) return { reply: 'Estoy saturado de solicitudes ahora mismo. Intenta en unos segundos.', history }
-    console.error('[jarvis] error', err)
-    return { reply: 'Tuve un problema procesando eso. Intenta de nuevo.', history }
+    const reply =
+      status === 429
+        ? 'Estoy saturado de solicitudes ahora mismo. Intenta en unos segundos.'
+        : 'Tuve un problema procesando eso. Intenta de nuevo.'
+    if (status !== 429) console.error('[jarvis] error', err)
+    onDelta(reply)
+    return { reply, history }
   }
 }

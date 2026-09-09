@@ -20,6 +20,12 @@ function validateHistory(body: unknown): JarvisMessage[] | null {
   return messages.slice(-20)
 }
 
+// Streams newline-delimited JSON events ({"type":"text","delta":...} as the
+// reply is generated, then one final {"type":"done","reply":...}) instead of
+// waiting for the whole reply and returning one JSON blob. The client speaks
+// each sentence as soon as it arrives instead of waiting for Claude to finish
+// writing the entire response (and any tool-call round trip before it) —
+// that wait was the dominant source of Jarvis's perceived latency.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,6 +35,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Se requiere messages: {role, content}[]' }, { status: 400 })
   }
 
-  const result = await chatWithJarvis(session.user.id, history)
-  return NextResponse.json(result)
+  const userId = session.user.id
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (obj: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+      try {
+        const result = await chatWithJarvis(userId, history, (delta) => send({ type: 'text', delta }))
+        send({ type: 'done', reply: result.reply })
+      } catch (err) {
+        console.error('[assistant/chat] stream failed:', err)
+        send({ type: 'error', error: 'Tuve un problema procesando eso.' })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new NextResponse(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  })
 }
