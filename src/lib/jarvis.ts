@@ -493,7 +493,11 @@ export async function chatWithJarvis(
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
       const stream = client.messages.stream({
         model: JARVIS_MODEL,
-        max_tokens: 800,
+        // Capped down from 800 — Jarvis's replies are meant to be a few short
+        // spoken sentences (per the system prompt); 800 tokens was enough
+        // headroom for the model to occasionally ramble, which is pure added
+        // latency for a voice UI. This is a safety ceiling, not the target length.
+        max_tokens: 350,
         system: JARVIS_SYSTEM_PROMPT,
         tools,
         messages,

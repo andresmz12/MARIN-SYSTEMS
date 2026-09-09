@@ -41,11 +41,15 @@ export async function streamJarvisVoice(text: string): Promise<ReadableStream<Ui
     },
     body: JSON.stringify({
       text: trimmed,
-      model_id: 'eleven_multilingual_v2',
+      // eleven_flash_v2_5 is ElevenLabs' purpose-built low-latency model
+      // (~75ms model processing vs several hundred ms on eleven_multilingual_v2)
+      // — this is the actual remaining lever now that the app-side pipeline is
+      // fully streamed; the old "reading a script" complaint came from
+      // optimize_streaming_latency (a param, not a model choice), which stays
+      // off — flash gets speed without that quality trade-off.
+      model_id: 'eleven_flash_v2_5',
       // Lower stability = more natural pitch/pace variation instead of a flat
-      // "reading a script" cadence; optimize_streaming_latency is gone entirely —
-      // that setting explicitly trades prosody quality for a small speed win,
-      // which is exactly what made it sound choppy/robotic.
+      // "reading a script" cadence.
       voice_settings: { stability: 0.32, similarity_boost: 0.75, style: 0.55, use_speaker_boost: true },
     }),
     signal: AbortSignal.timeout(30_000),
