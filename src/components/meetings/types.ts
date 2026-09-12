@@ -1,4 +1,7 @@
-export interface StrokePoint { x: number; y: number }
+/** `w` is the stroke width at this point — set from Apple Pencil pressure so a
+ * stroke swells and tapers like real ink. Absent for mouse/finger input, where
+ * the whole stroke just uses its base width. */
+export interface StrokePoint { x: number; y: number; w?: number }
 // `highlighter` marks a semi-transparent marker stroke (rendered with lower
 // opacity + multiply blend) instead of a normal pen stroke.
 export interface Stroke { color: string; width: number; points: StrokePoint[]; highlighter?: boolean }

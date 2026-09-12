@@ -134,10 +134,19 @@ function shapePathD(kind: ShapeKind, x1: number, y1: number, x2: number, y2: num
 // only carries the latest sample. getCoalescedEvents() returns every sample
 // batched since the last event, so using it (falling back to the event itself
 // where unsupported) is what keeps fast strokes from coming out broken.
-function getPointerSamples(e: React.PointerEvent): PointerEvent[] {
-  const native = e.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }
-  const coalesced = typeof native.getCoalescedEvents === 'function' ? native.getCoalescedEvents() : null
-  return coalesced && coalesced.length > 0 ? coalesced : [native]
+function getPointerSamples(e: PointerEvent): PointerEvent[] {
+  const withCoalesced = e as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }
+  const coalesced = typeof withCoalesced.getCoalescedEvents === 'function' ? withCoalesced.getCoalescedEvents() : null
+  return coalesced && coalesced.length > 0 ? coalesced : [e]
+}
+
+// Apple Pencil reports real 0..1 pressure; finger/mouse report a constant
+// (0.5 while down, or 0). Only the Pencil gets variable width — for everything
+// else the stroke keeps the width picked in the toolbar.
+function widthForSample(base: number, e: PointerEvent): number {
+  if (e.pointerType !== 'pen') return base
+  const pressure = e.pressure > 0 ? e.pressure : 0.5
+  return base * (0.4 + pressure * 1.2)
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
@@ -147,23 +156,48 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
   ctx.globalAlpha = stroke.highlighter ? 0.4 : 1
   if (stroke.highlighter) ctx.globalCompositeOperation = 'multiply'
   ctx.strokeStyle = stroke.color
-  ctx.lineWidth = stroke.width
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.beginPath()
+
   if (pts.length === 1) {
+    ctx.lineWidth = pts[0].w ?? stroke.width
+    ctx.beginPath()
     ctx.moveTo(pts[0].x, pts[0].y)
     ctx.lineTo(pts[0].x, pts[0].y)
-  } else {
-    ctx.moveTo(pts[0].x, pts[0].y)
-    for (let i = 1; i < pts.length - 1; i++) {
-      const midX = (pts[i].x + pts[i + 1].x) / 2
-      const midY = (pts[i].y + pts[i + 1].y) / 2
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY)
-    }
-    const last = pts[pts.length - 1]
-    ctx.lineTo(last.x, last.y)
+    ctx.stroke()
+    ctx.restore()
+    return
   }
+
+  const hasPressure = !stroke.highlighter && pts.some((p) => p.w != null)
+  if (hasPressure) {
+    // Each segment strokes at its own thickness — that per-segment swell and
+    // taper is what makes a Pencil stroke read as ink instead of a flat line.
+    // Segments are dense enough (coalesced samples) that straight lines between
+    // them look smooth without the quadratic pass below.
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]
+      const b = pts[i]
+      ctx.lineWidth = ((a.w ?? stroke.width) + (b.w ?? stroke.width)) / 2
+      ctx.beginPath()
+      ctx.moveTo(a.x, a.y)
+      ctx.lineTo(b.x, b.y)
+      ctx.stroke()
+    }
+    ctx.restore()
+    return
+  }
+
+  ctx.lineWidth = stroke.width
+  ctx.beginPath()
+  ctx.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length - 1; i++) {
+    const midX = (pts[i].x + pts[i + 1].x) / 2
+    const midY = (pts[i].y + pts[i + 1].y) / 2
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY)
+  }
+  const last = pts[pts.length - 1]
+  ctx.lineTo(last.x, last.y)
   ctx.stroke()
   ctx.restore()
 }
@@ -241,6 +275,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   // resting on the screen while writing with the Pencil, most commonly) is
   // ignored outright rather than being allowed to interrupt the gesture.
   const activePointerIdRef = useRef<number | null>(null)
+  const handlersRef = useRef<{
+    down: (e: PointerEvent) => void
+    move: (e: PointerEvent) => void
+    up: (e: PointerEvent) => void
+  }>({ down: () => {}, move: () => {}, up: () => {} })
+  const erasingRef = useRef(false)
+  const eraseRafRef = useRef(0)
 
   // Mirrors of the latest props, read by drawSceneOn() so a redraw triggered
   // from a stale closure (e.g. a ResizeObserver callback registered on mount)
@@ -249,8 +290,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const latestShapesRef = useRef<Shape[]>(shapes)
   const latestTextBoxesRef = useRef<TextBox[]>(textBoxes)
   const latestEditingIdRef = useRef<string | null>(editingId)
-  latestStrokesRef.current = strokes
-  latestShapesRef.current = shapes
+  // While an erase drag is in flight the mirrors deliberately hold NEWER state
+  // than React does (applyErase updates them every sample but only pushes up to
+  // React once per frame), so syncing them from props here would undo the part
+  // of the erase React hasn't caught up with yet.
+  if (!erasingRef.current) {
+    latestStrokesRef.current = strokes
+    latestShapesRef.current = shapes
+  }
   latestTextBoxesRef.current = textBoxes
   latestEditingIdRef.current = editingId
 
@@ -262,6 +309,15 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       x: ((e.clientX - rect.left) / rect.width) * CANVAS_W,
       y: ((e.clientY - rect.top) / rect.height) * CANVAS_H,
     }
+  }
+
+  /** A stroke point, carrying a per-point width only for Apple Pencil input —
+   * finger and mouse strokes stay width-less so they keep the smooth
+   * constant-width rendering path in drawStroke(). */
+  function samplePoint(e: PointerEvent, base: number, isHighlighter: boolean): StrokePoint {
+    const p = toCanvasPoint(e)
+    if (isHighlighter || e.pointerType !== 'pen') return p
+    return { ...p, w: widthForSample(base, e) }
   }
 
   function drawSceneOn(ctx: CanvasRenderingContext2D) {
@@ -308,10 +364,86 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Always points at this render's handlers, so the listeners registered once
+  // below never call a stale closure.
+  handlersRef.current = { down: handlePointerDown, move: handlePointerMove, up: handlePointerUp }
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    // Native listeners with { passive: false } + preventDefault, NOT React's
+    // synthetic handlers. This is the fix for strokes dying mid-draw on iPad:
+    // React can't stop Safari's own gesture recognizer from claiming the
+    // touch as a scroll/selection, and the moment it does, Safari fires
+    // pointercancel and the stroke ends right there — which is exactly the
+    // "draws a bit of a line and cuts" symptom. preventDefault at the native
+    // level stops that gesture from ever starting.
+    const onDown = (e: PointerEvent) => {
+      e.preventDefault()
+      handlersRef.current.down(e)
+    }
+    // Movement and release are tracked on WINDOW, not the canvas: if pointer
+    // capture isn't granted (or the finger leaves the canvas bounds mid-word)
+    // the canvas stops receiving events and the stroke would freeze halfway.
+    const onMove = (e: PointerEvent) => {
+      if (activePointerIdRef.current === e.pointerId) e.preventDefault()
+      handlersRef.current.move(e)
+    }
+    const onUp = (e: PointerEvent) => handlersRef.current.up(e)
+    // iOS also drives scrolling/selection from raw touch events; blocking
+    // those on the canvas closes the last door the pointer events leave open.
+    const blockTouch = (e: TouchEvent) => e.preventDefault()
+
+    canvas.addEventListener('pointerdown', onDown, { passive: false })
+    canvas.addEventListener('touchstart', blockTouch, { passive: false })
+    canvas.addEventListener('touchmove', blockTouch, { passive: false })
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('touchstart', blockTouch)
+      canvas.removeEventListener('touchmove', blockTouch)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [])
+
   useEffect(() => {
     redraw()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strokes, shapes, textBoxes, editingId])
+
+  /**
+   * Erases at a point and repaints immediately, but pushes the result up to
+   * React at most once per frame. Calling onChangeStrokes on every pointer
+   * sample meant a full re-render of the meeting page up to 240 times a
+   * second, which is what made erasing feel stuck.
+   */
+  function applyErase(p: StrokePoint) {
+    latestStrokesRef.current = eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS)
+    latestShapesRef.current = eraseShapesAtPoint(latestShapesRef.current, p, ERASER_RADIUS)
+    redraw()
+    if (eraseRafRef.current) return
+    eraseRafRef.current = requestAnimationFrame(() => {
+      eraseRafRef.current = 0
+      onChangeStrokes(latestStrokesRef.current)
+      onChangeShapes(latestShapesRef.current)
+    })
+  }
+
+  function flushErase() {
+    if (eraseRafRef.current) {
+      cancelAnimationFrame(eraseRafRef.current)
+      eraseRafRef.current = 0
+    }
+    onChangeStrokes(latestStrokesRef.current)
+    onChangeShapes(latestShapesRef.current)
+    erasingRef.current = false
+  }
 
   function pushUndo() {
     undoStack.current.push({
@@ -339,7 +471,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     setEditingValue('')
   }
 
-  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+  function handlePointerDown(e: PointerEvent) {
     if (editingId) commitEditing()
 
     // A second concurrent contact (typically a resting palm while the Pencil
@@ -352,7 +484,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     // an in-progress stroke, since it was never rejected at pointerdown).
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return
     activePointerIdRef.current = e.pointerId
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    try {
+      canvasRef.current?.setPointerCapture(e.pointerId)
+    } catch {
+      // Capture is a nice-to-have; the window-level move/up listeners below
+      // keep the stroke alive even when it isn't granted.
+    }
     const p = toCanvasPoint(e)
 
     if (tool === 'text') {
@@ -366,26 +503,26 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     drawing.current = true
     if (tool === 'erase') {
       pushUndo()
-      onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
-      onChangeShapes(eraseShapesAtPoint(latestShapesRef.current, p, ERASER_RADIUS))
+      erasingRef.current = true
+      applyErase(p)
     } else if (tool === 'shape') {
       pushUndo()
       shapeStartRef.current = p
     } else {
-      currentPointsRef.current = [p]
+      const base = tool === 'highlight' ? HIGHLIGHT_WIDTH : width
+      const first = samplePoint(e, base, tool === 'highlight')
+      currentPointsRef.current = [first]
       const ctx = canvasRef.current?.getContext('2d')
-      if (ctx) paintLiveSegment(ctx, p, p, color, tool === 'highlight' ? HIGHLIGHT_WIDTH : width, tool === 'highlight')
+      if (ctx) paintLiveSegment(ctx, first, first, color, first.w ?? base, tool === 'highlight')
     }
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+  function handlePointerMove(e: PointerEvent) {
     if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm)
     if (!drawing.current) return
 
     if (tool === 'erase') {
-      const p = toCanvasPoint(e)
-      onChangeStrokes(eraseAtPoint(latestStrokesRef.current, p, ERASER_RADIUS))
-      onChangeShapes(eraseShapesAtPoint(latestShapesRef.current, p, ERASER_RADIUS))
+      applyErase(toCanvasPoint(e))
     } else if (tool === 'shape') {
       if (!shapeStartRef.current) return
       const p = toCanvasPoint(e)
@@ -404,20 +541,26 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
     } else {
       const ctx = canvasRef.current?.getContext('2d')
+      const base = tool === 'highlight' ? HIGHLIGHT_WIDTH : width
       // Replay every coalesced pencil sample since the last frame, not just the latest one.
       for (const sample of getPointerSamples(e)) {
-        const p = toCanvasPoint(sample)
+        const p = samplePoint(sample, base, tool === 'highlight')
         const prev = currentPointsRef.current[currentPointsRef.current.length - 1]
         currentPointsRef.current.push(p)
-        if (ctx && prev) paintLiveSegment(ctx, prev, p, color, tool === 'highlight' ? HIGHLIGHT_WIDTH : width, tool === 'highlight')
+        if (ctx && prev) {
+          const segmentWidth = ((prev.w ?? base) + (p.w ?? base)) / 2
+          paintLiveSegment(ctx, prev, p, color, segmentWidth, tool === 'highlight')
+        }
       }
     }
   }
 
-  function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+  function handlePointerUp(e: PointerEvent) {
     if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm) lifted
     activePointerIdRef.current = null
     drawing.current = false
+
+    if (erasingRef.current) flushErase()
 
     if (tool === 'draw' || tool === 'highlight') {
       if (currentPointsRef.current.length > 0) {
@@ -583,15 +726,21 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
 
       {/* Canvas */}
       <div ref={containerRef} className="relative w-full" style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}>
+        {/* Pointer handling is wired up with native listeners in an effect
+            above, not with React's synthetic props — see the comment there. */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full rounded-xl border border-[var(--bg-border)] shadow-inner touch-none select-none"
-          style={{ background: '#fdfdfd', touchAction: 'none', cursor: tool === 'erase' ? 'cell' : tool === 'text' ? 'text' : 'crosshair' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          style={{
+            background: '#fdfdfd',
+            touchAction: 'none',
+            overscrollBehavior: 'none',
+            // Stops iOS from popping the selection magnifier / callout menu
+            // partway through a stroke, which also interrupts drawing.
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            cursor: tool === 'erase' ? 'cell' : tool === 'text' ? 'text' : 'crosshair',
+          }}
         />
 
         {/* Drag/edit handles for text boxes — HTML overlay siblings of the
