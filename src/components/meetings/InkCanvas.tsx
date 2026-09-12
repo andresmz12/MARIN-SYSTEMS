@@ -279,9 +279,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     down: (e: PointerEvent) => void
     move: (e: PointerEvent) => void
     up: (e: PointerEvent) => void
-  }>({ down: () => {}, move: () => {}, up: () => {} })
+    lostCapture: (e: PointerEvent) => void
+  }>({ down: () => {}, move: () => {}, up: () => {}, lostCapture: () => {} })
   const erasingRef = useRef(false)
   const eraseRafRef = useRef(0)
+  /** Last position seen for the active gesture, so a gesture that has to be
+   * force-ended (see handlePointerDown) still knows where it finished. */
+  const lastPointRef = useRef<StrokePoint | null>(null)
 
   // Mirrors of the latest props, read by drawSceneOn() so a redraw triggered
   // from a stale closure (e.g. a ResizeObserver callback registered on mount)
@@ -366,7 +370,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
 
   // Always points at this render's handlers, so the listeners registered once
   // below never call a stale closure.
-  handlersRef.current = { down: handlePointerDown, move: handlePointerMove, up: handlePointerUp }
+  handlersRef.current = {
+    down: handlePointerDown,
+    move: handlePointerMove,
+    up: handlePointerUp,
+    lostCapture: handleLostCapture,
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -391,21 +400,24 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       handlersRef.current.move(e)
     }
     const onUp = (e: PointerEvent) => handlersRef.current.up(e)
-    // iOS also drives scrolling/selection from raw touch events; blocking
-    // those on the canvas closes the last door the pointer events leave open.
-    const blockTouch = (e: TouchEvent) => e.preventDefault()
+    const onLostCapture = (e: PointerEvent) => handlersRef.current.lostCapture(e)
+    // Blocks page scrolling as a fallback to touch-action: none. Deliberately
+    // NOT also blocking touchstart: on iOS the pointer events are synthesized
+    // from the touch sequence, and preventing touchstart there can swallow the
+    // pointerup that ends the stroke.
+    const blockTouchMove = (e: TouchEvent) => e.preventDefault()
 
     canvas.addEventListener('pointerdown', onDown, { passive: false })
-    canvas.addEventListener('touchstart', blockTouch, { passive: false })
-    canvas.addEventListener('touchmove', blockTouch, { passive: false })
+    canvas.addEventListener('touchmove', blockTouchMove, { passive: false })
+    canvas.addEventListener('lostpointercapture', onLostCapture)
     window.addEventListener('pointermove', onMove, { passive: false })
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)
 
     return () => {
       canvas.removeEventListener('pointerdown', onDown)
-      canvas.removeEventListener('touchstart', blockTouch)
-      canvas.removeEventListener('touchmove', blockTouch)
+      canvas.removeEventListener('touchmove', blockTouchMove)
+      canvas.removeEventListener('lostpointercapture', onLostCapture)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
@@ -445,13 +457,26 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     erasingRef.current = false
   }
 
+  // Snapshots (and commits below) work off the mirrors rather than the props:
+  // two strokes drawn back to back can both finish before React re-renders, and
+  // building the second one on the stale prop would silently drop the first.
   function pushUndo() {
     undoStack.current.push({
-      strokes: strokes.map((s) => ({ ...s, points: [...s.points] })),
-      shapes: shapes.map((s) => ({ ...s })),
+      strokes: latestStrokesRef.current.map((s) => ({ ...s, points: [...s.points] })),
+      shapes: latestShapesRef.current.map((s) => ({ ...s })),
     })
     if (undoStack.current.length > 50) undoStack.current.shift()
     redoStack.current = []
+  }
+
+  function commitStrokes(next: Stroke[]) {
+    latestStrokesRef.current = next
+    onChangeStrokes(next)
+  }
+
+  function commitShapes(next: Shape[]) {
+    latestShapesRef.current = next
+    onChangeShapes(next)
   }
 
   function startEditingBox(tb: TextBox) {
@@ -482,7 +507,15 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     // (a single stray Pencil hover could lock out all finger drawing for the
     // rest of the session) and too weak (a concurrent palm touch still reset
     // an in-progress stroke, since it was never rejected at pointerdown).
-    if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return
+    const activeId = activePointerIdRef.current
+    if (activeId !== null && activeId !== e.pointerId) {
+      if (isPointerStillDown(activeId)) return // genuinely a second contact — ignore it
+      // The active pointer's pointerup never reached us (iOS swallows it in
+      // some gesture handoffs). Recovering here is essential: a stale id would
+      // otherwise reject EVERY later stroke, so you'd draw one line and the
+      // canvas would be dead for the rest of the session.
+      finishGesture(lastPointRef.current)
+    }
     activePointerIdRef.current = e.pointerId
     try {
       canvasRef.current?.setPointerCapture(e.pointerId)
@@ -520,6 +553,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   function handlePointerMove(e: PointerEvent) {
     if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm)
     if (!drawing.current) return
+    lastPointRef.current = toCanvasPoint(e)
 
     if (tool === 'erase') {
       applyErase(toCanvasPoint(e))
@@ -555,8 +589,24 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
   }
 
-  function handlePointerUp(e: PointerEvent) {
-    if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm) lifted
+  /** True while the browser still considers that pointer to be down. Used to
+   * tell a real concurrent contact (a palm) apart from a gesture whose
+   * pointerup we simply never received. */
+  function isPointerStillDown(id: number): boolean {
+    try {
+      return canvasRef.current?.hasPointerCapture(id) ?? false
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Ends the current gesture and commits whatever it produced. Split out of
+   * handlePointerUp so it can also be reached from `lostpointercapture` and
+   * from a recovery in handlePointerDown — a stroke must never be able to stay
+   * "in progress" forever just because one pointerup went missing.
+   */
+  function finishGesture(endPoint: StrokePoint | null) {
     activePointerIdRef.current = null
     drawing.current = false
 
@@ -565,8 +615,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     if (tool === 'draw' || tool === 'highlight') {
       if (currentPointsRef.current.length > 0) {
         pushUndo()
-        onChangeStrokes([
-          ...strokes,
+        commitStrokes([
+          ...latestStrokesRef.current,
           {
             color,
             width: tool === 'highlight' ? HIGHLIGHT_WIDTH : width,
@@ -578,9 +628,9 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       currentPointsRef.current = []
     } else if (tool === 'shape' && shapeStartRef.current) {
       const start = shapeStartRef.current
-      const p = toCanvasPoint(e)
-      if (Math.hypot(p.x - start.x, p.y - start.y) >= 4) {
-        onChangeShapes([...shapes, { id: newId('shape'), kind: shapeKind, x1: start.x, y1: start.y, x2: p.x, y2: p.y, color, width }])
+      const p = endPoint
+      if (p && Math.hypot(p.x - start.x, p.y - start.y) >= 4) {
+        commitShapes([...latestShapesRef.current, { id: newId('shape'), kind: shapeKind, x1: start.x, y1: start.y, x2: p.x, y2: p.y, color, width }])
       } else {
         // Too small to be a real shape — the pushUndo() from pointerdown left
         // a stray checkpoint with nothing changed; drop it so undo stays clean.
@@ -589,6 +639,20 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       shapeStartRef.current = null
       redraw()
     }
+    lastPointRef.current = null
+  }
+
+  function handlePointerUp(e: PointerEvent) {
+    if (e.pointerId !== activePointerIdRef.current) return // a different, ignored contact (e.g. palm) lifted
+    finishGesture(toCanvasPoint(e))
+  }
+
+  function handleLostCapture(e: PointerEvent) {
+    // Fires on a normal release too, but by then pointerup has already cleared
+    // the active id and this is a no-op. It matters as the backstop for when
+    // pointerup never arrives at all.
+    if (e.pointerId !== activePointerIdRef.current) return
+    finishGesture(lastPointRef.current)
   }
 
   function undo() {
