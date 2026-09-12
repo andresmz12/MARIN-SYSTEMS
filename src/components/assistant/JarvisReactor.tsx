@@ -65,6 +65,13 @@ function buildNeighborPairs(pts: Point3D[], maxPerPoint: number, maxDist: number
 }
 
 const POINT_COUNT = 560
+// Filaments and particles are grouped into this many opacity buckets so each
+// bucket can be drawn as ONE path instead of one draw call per element.
+const BUCKETS = 6
+// Ceilings of the per-element alpha formulas below, used to map an element's
+// alpha onto a bucket index.
+const MAX_LINE_ALPHA = 0.47
+const MAX_DOT_ALPHA = 0.9
 
 export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -91,8 +98,16 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
     let width = 0
     let height = 0
 
+    // Allocated once and reused (cleared, not re-created) every frame so the
+    // render loop doesn't churn garbage 60 times a second.
+    const lineBuckets: number[][] = Array.from({ length: BUCKETS }, () => [])
+    const dotBuckets: number[][] = Array.from({ length: BUCKETS }, () => [])
+
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      // Capped at 1.5 rather than 2: this scene is fill-rate heavy (big soft
+      // gradients), and at 2x on a Retina iPad it pushes ~78% more pixels per
+      // frame for a difference nobody can see on a glow this soft.
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
       width = container.clientWidth
       height = container.clientHeight
       canvas.width = width * dpr
@@ -177,25 +192,58 @@ export function JarvisReactor({ state, levelRef }: JarvisReactorProps) {
       ctx.arc(cx, cy, coreR * 2.2, 0, Math.PI * 2)
       ctx.fill()
 
+      // Everything below is batched into a handful of draw calls by grouping
+      // elements into a few opacity buckets. Drawing each filament and each
+      // particle with its own beginPath()/stroke() meant ~2000 separate draw
+      // calls per frame, which is what made this stutter on an iPad — one
+      // path per bucket brings that down to ~10 with no visible difference.
       ctx.lineWidth = 0.8
-      for (const [i, j] of pairs) {
+      for (let b0 = 0; b0 < BUCKETS; b0++) lineBuckets[b0].length = 0
+      for (let k = 0; k < pairs.length; k++) {
+        const [i, j] = pairs[k]
         const depth = (projZ[i] + projZ[j]) / 2
         const alpha = Math.max(0, 0.22 + depth * 0.22) * (0.55 + boost * 0.5)
         if (alpha <= 0.01) continue
+        const bucket = Math.min(BUCKETS - 1, Math.floor((alpha / MAX_LINE_ALPHA) * BUCKETS))
+        lineBuckets[bucket].push(i, j)
+      }
+      for (let b0 = 0; b0 < BUCKETS; b0++) {
+        const bucket = lineBuckets[b0]
+        if (bucket.length === 0) continue
+        const alpha = ((b0 + 0.5) / BUCKETS) * MAX_LINE_ALPHA
         ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`
         ctx.beginPath()
-        ctx.moveTo(projX[i], projY[i])
-        ctx.lineTo(projX[j], projY[j])
+        for (let k = 0; k < bucket.length; k += 2) {
+          const i = bucket[k]
+          const j = bucket[k + 1]
+          ctx.moveTo(projX[i], projY[i])
+          ctx.lineTo(projX[j], projY[j])
+        }
         ctx.stroke()
       }
 
+      for (let b0 = 0; b0 < BUCKETS; b0++) dotBuckets[b0].length = 0
       for (let i = 0; i < points.length; i++) {
         const depth = (projZ[i] + 1) / 2 // 0 (back) .. 1 (front)
-        const size = (0.6 + depth * 1.6) * projScale[i]
         const alpha = (0.3 + depth * 0.6) * (0.6 + boost * 0.4)
+        const bucket = Math.min(BUCKETS - 1, Math.floor((alpha / MAX_DOT_ALPHA) * BUCKETS))
+        dotBuckets[bucket].push(i)
+      }
+      for (let b0 = 0; b0 < BUCKETS; b0++) {
+        const bucket = dotBuckets[b0]
+        if (bucket.length === 0) continue
+        const alpha = ((b0 + 0.5) / BUCKETS) * MAX_DOT_ALPHA
         ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`
         ctx.beginPath()
-        ctx.arc(projX[i], projY[i], size, 0, Math.PI * 2)
+        for (let k = 0; k < bucket.length; k++) {
+          const i = bucket[k]
+          const depth = (projZ[i] + 1) / 2
+          const size = (0.6 + depth * 1.6) * projScale[i]
+          // moveTo before each arc keeps them as separate subpaths — without
+          // it, canvas joins consecutive arcs with a straight line.
+          ctx.moveTo(projX[i] + size, projY[i])
+          ctx.arc(projX[i], projY[i], size, 0, Math.PI * 2)
+        }
         ctx.fill()
       }
 

@@ -32,6 +32,19 @@ const BARGE_IN_MIN_LEVEL = 0.32
 // first instant of playback is the likeliest spot for an echo/pop false-positive.
 const BARGE_IN_GRACE_MS = 900
 
+// The first chunk is spoken as soon as one sentence exists (fastest possible
+// start). Later chunks group sentences up to this length before being sent, so
+// ElevenLabs synthesizes whole thoughts with continuous intonation instead of
+// restarting its prosody at every single period.
+const LATER_CHUNK_MIN_CHARS = 160
+
+interface SpeechItem {
+  text: string
+  /** Pre-downloaded audio, ready before this chunk's turn arrives. Null for the
+   * first chunk of a reply, which streams progressively instead (see speakOne). */
+  blobUrl: Promise<string> | null
+}
+
 function computeRms(data: Uint8Array): number {
   let sum = 0
   for (let i = 0; i < data.length; i++) {
@@ -63,12 +76,18 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   const meterRafRef = useRef<number>(0)
   const bargeInStreakRef = useRef(0)
   const speakStartedAtRef = useRef(0)
-  // Sentences arrive one at a time as Claude streams its reply; they're queued
-  // here and played back-to-back through the single <audio> element instead of
-  // waiting for the whole reply before speaking anything.
-  const speechQueueRef = useRef<string[]>([])
+  // Chunks of the reply arrive as Claude streams it; they're queued here and
+  // played back-to-back through the single <audio> element instead of waiting
+  // for the whole reply before speaking anything. Every chunk after the first
+  // is downloaded in the background WHILE the previous one plays (blobUrl), so
+  // the seams are gapless — fetching each one only when its turn came left a
+  // dead pause at every sentence boundary, which is what made Jarvis sound
+  // chopped up.
+  const speechQueueRef = useRef<SpeechItem[]>([])
   const playingRef = useRef(false)
   const streamDoneRef = useRef(true)
+  const firstChunkSentRef = useRef(false)
+  const activeBlobUrlRef = useRef<string | null>(null)
 
   function setJarvisState(next: JarvisState) {
     stateRef.current = next
@@ -95,6 +114,22 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     loop()
   }
 
+  function releaseActiveBlob() {
+    if (activeBlobUrlRef.current) {
+      URL.revokeObjectURL(activeBlobUrlRef.current)
+      activeBlobUrlRef.current = null
+    }
+  }
+
+  /** Drops every queued chunk, releasing the audio already downloaded for them. */
+  function clearSpeechQueue() {
+    for (const item of speechQueueRef.current) {
+      item.blobUrl?.then((url) => URL.revokeObjectURL(url)).catch(() => {})
+    }
+    speechQueueRef.current = []
+    playingRef.current = false
+  }
+
   function stopPlayback() {
     // Clear handlers first — removing the src/load() below fires 'error'/'abort'
     // on the element, which would otherwise be mistaken for a real TTS failure.
@@ -103,22 +138,36 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     audioEl.pause()
     audioEl.removeAttribute('src')
     audioEl.load()
+    releaseActiveBlob()
   }
 
   function bargeIn() {
     if (stateRef.current !== 'speaking' && stateRef.current !== 'thinking') return
     bargeInStreakRef.current = 0
     chatAbortRef.current?.abort()
-    speechQueueRef.current = []
-    playingRef.current = false
+    clearSpeechQueue()
     streamDoneRef.current = true
     stopPlayback()
     setJarvisState('listening')
   }
 
-  async function reportSpeakFailure(url: string, fallback: string) {
+  function ttsUrl(text: string) {
+    return `/api/assistant/speak?text=${encodeURIComponent(text)}`
+  }
+
+  /** Downloads a chunk's audio up front so it can start the instant its turn comes. */
+  async function prefetchAudio(text: string): Promise<string> {
+    const res = await fetch(ttsUrl(text))
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      throw new Error(body?.error ?? `No se pudo generar el audio (HTTP ${res.status})`)
+    }
+    return URL.createObjectURL(await res.blob())
+  }
+
+  async function reportSpeakFailure(text: string, fallback: string) {
     try {
-      const res = await fetch(url)
+      const res = await fetch(ttsUrl(text))
       const body = await res.json().catch(() => null)
       const message: string = body?.error ?? fallback
       console.error('[jarvis] TTS failed:', message)
@@ -129,9 +178,9 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     }
   }
 
-  // Pulls the next queued sentence and plays it; when the queue runs dry it
-  // only drops back to 'listening' once the chat stream has actually finished
-  // (streamDoneRef) — otherwise more sentences are still on their way.
+  // Pulls the next queued chunk and plays it; when the queue runs dry it only
+  // drops back to 'listening' once the chat stream has actually finished
+  // (streamDoneRef) — otherwise more chunks are still on their way.
   function playNextInQueue() {
     const next = speechQueueRef.current.shift()
     if (!next) {
@@ -146,33 +195,67 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
   function enqueueSpeech(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
-    speechQueueRef.current.push(trimmed)
+    const isFirst = !firstChunkSentRef.current
+    firstChunkSentRef.current = true
+    const blobUrl = isFirst ? null : prefetchAudio(trimmed)
+    // Mark the prefetch as handled so a failure here isn't an unhandled
+    // rejection; the real error surfaces where speakOne awaits it.
+    blobUrl?.catch(() => {})
+    speechQueueRef.current.push({ text: trimmed, blobUrl })
     if (!playingRef.current) playNextInQueue()
   }
 
-  async function speakOne(text: string) {
+  async function speakOne(item: SpeechItem) {
     setJarvisState('speaking')
     setErrorMessage(null)
     speakStartedAtRef.current = Date.now()
-    const url = `/api/assistant/speak?text=${encodeURIComponent(text)}`
+    releaseActiveBlob()
+
+    let src: string
     try {
-      // No fetch()+blob() here on purpose — setting `src` directly lets the
-      // <audio> element stream the response progressively as ElevenLabs
-      // generates it, instead of blocking on the full clip twice (once
-      // server<-ElevenLabs, once client<-server) before a single sample plays.
-      audioEl.src = url
+      if (item.blobUrl) {
+        // Already downloaded while the previous chunk was playing — starts instantly.
+        src = await item.blobUrl
+        if (closedRef.current) {
+          URL.revokeObjectURL(src)
+          return
+        }
+        activeBlobUrlRef.current = src
+      } else {
+        // First chunk of the reply: setting `src` directly lets the <audio>
+        // element stream the response progressively as ElevenLabs generates
+        // it, instead of waiting for the full clip before a single sample
+        // plays. Worth the slightly less precise error reporting.
+        src = ttsUrl(item.text)
+      }
+    } catch (err) {
+      console.error('[jarvis] prefetch failed, skipping chunk:', err)
+      setErrorMessage(err instanceof Error ? err.message : 'Error generando audio')
+      playNextInQueue()
+      return
+    }
+
+    try {
+      audioEl.src = src
       audioEl.muted = false
       audioEl.volume = 1
 
-      // Move on to the next queued sentence instead of always dropping back
-      // to 'listening' — see playNextInQueue for when it actually stops.
+      // Move on to the next queued chunk instead of always dropping back to
+      // 'listening' — see playNextInQueue for when it actually stops.
       audioEl.onended = () => playNextInQueue()
-      // A blocked/failed media load (CSP, corrupt blob, codec, or the server
+      // A blocked/failed media load (CSP, corrupt data, codec, or the server
       // rejecting the TTS request) doesn't always reject play() — it can
       // instead fire a silent 'error' event on the element, which used to
       // leave the reactor stuck showing "speaking" forever with no sound.
       audioEl.onerror = () => {
-        reportSpeakFailure(url, 'Error de audio (revisa la consola)')
+        if (item.blobUrl) {
+          // The audio downloaded fine, so this is a decode/playback failure —
+          // re-requesting it would just return valid audio again.
+          console.error('[jarvis] <audio> failed to play a prefetched chunk:', audioEl.error)
+          setErrorMessage('El audio no se pudo reproducir')
+        } else {
+          reportSpeakFailure(item.text, 'Error de audio (revisa la consola)')
+        }
         setJarvisState('error')
         setTimeout(() => playNextInQueue(), 900)
       }
@@ -213,7 +296,9 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
     const controller = new AbortController()
     chatAbortRef.current = controller
     streamDoneRef.current = false
+    firstChunkSentRef.current = false
     let sentenceBuffer = ''
+    let pendingChunk = ''
     let spokenAny = false
     let finalReply = ''
     let accumulatedText = ''
@@ -245,8 +330,16 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
             accumulatedText += evt.delta
             const { complete, rest } = splitSentences(sentenceBuffer)
             for (const sentence of complete) {
-              enqueueSpeech(sentence)
-              spokenAny = true
+              pendingChunk = pendingChunk ? `${pendingChunk} ${sentence}` : sentence
+              // Send the very first chunk the moment one sentence is ready;
+              // after that hold sentences together into longer chunks so each
+              // request covers a whole thought.
+              const minChars = firstChunkSentRef.current ? LATER_CHUNK_MIN_CHARS : 0
+              if (pendingChunk.length >= minChars) {
+                enqueueSpeech(pendingChunk)
+                pendingChunk = ''
+                spokenAny = true
+              }
             }
             sentenceBuffer = rest
           } else if (evt.type === 'done') {
@@ -258,8 +351,9 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       }
 
       if (controller.signal.aborted) return
-      if (sentenceBuffer.trim()) {
-        enqueueSpeech(sentenceBuffer)
+      const tail = `${pendingChunk} ${sentenceBuffer}`.trim()
+      if (tail) {
+        enqueueSpeech(tail)
         spokenAny = true
       }
       streamDoneRef.current = true
@@ -357,8 +451,7 @@ export function JarvisFullscreen({ onClose, audioCtx, audioEl }: JarvisFullscree
       cancelAnimationFrame(meterRafRef.current)
       recognitionRef.current?.stop()
       chatAbortRef.current?.abort()
-      speechQueueRef.current = []
-      playingRef.current = false
+      clearSpeechQueue()
       streamDoneRef.current = true
       stopPlayback()
       micStreamRef.current?.getTracks().forEach((t) => t.stop())
