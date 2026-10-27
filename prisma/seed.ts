@@ -103,7 +103,7 @@ async function seedMonitoredApps() {
         name: 'Agente de salud Report System',
         agentName: 'Ángela',
         role: 'Generación de Reportes Financieros',
-        healthUrl: 'https://www.reportssystem.com/api/health',
+        healthUrl: 'https://www.reportssystems.com/api/health',
         color: '#3B82F6',
       },
       {
