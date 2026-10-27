@@ -16,6 +16,12 @@ interface AutoState {
 
 interface Reference { type: 'link' | 'text'; value: string; note?: string }
 
+// La URL guardada es absoluta (para las redes); en pantalla se usa la ruta relativa
+// para no depender de que NEXT_PUBLIC_APP_URL coincida con el dominio actual (CSP).
+function localImagePath(url: string): string {
+  try { return new URL(url).pathname } catch { return url }
+}
+
 export function ContentReviewQueue({ companies }: Props) {
   const { showToast } = useToast()
   const [posts, setPosts] = useState<GeneratedPost[]>([])
@@ -196,7 +202,7 @@ export function ContentReviewQueue({ companies }: Props) {
           <div>
             <p className="text-sm font-semibold text-zinc-100">📎 Referencias de estilo</p>
             <p className="text-xs text-zinc-400">
-              Links a posts que te gustan, o texto de ejemplos. Se usan como guía de estilo en cada generación (máx. 15).
+              Pega el TEXTO de posts que te gustan (la IA no puede abrir links). Si pones un link, añade en la nota qué te gusta de él. Se usan como guía de estilo (máx. 15).
             </p>
           </div>
           {refs.map((r, i) => (
@@ -210,7 +216,7 @@ export function ContentReviewQueue({ companies }: Props) {
             <input
               value={refInput}
               onChange={(e) => setRefInput(e.target.value)}
-              placeholder="Link o texto de ejemplo"
+              placeholder="Texto de un post que te gusta (o un link + nota)"
               className="flex-1 min-w-[200px] bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200"
             />
             <input
@@ -280,7 +286,7 @@ export function ContentReviewQueue({ companies }: Props) {
                 {post.imageUrl ? (
                   <div className="flex items-start gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={post.imageUrl} alt="" className="w-24 h-24 rounded-md object-cover border border-zinc-700" />
+                    <img src={localImagePath(post.imageUrl)} alt="" className="w-24 h-24 rounded-md object-cover border border-zinc-700" />
                     <button onClick={() => removeImage(post.id)} className="text-xs text-red-300 hover:text-red-200">Quitar</button>
                   </div>
                 ) : (

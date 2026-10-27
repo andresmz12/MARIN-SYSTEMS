@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getISOWeek } from 'date-fns'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
 import { recentFeedback, referenceLines } from '@/lib/auto-content'
@@ -32,6 +33,10 @@ export async function POST(req: Request) {
   const auth = req.headers.get('Authorization')
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  // Sin clave, generateMarketingContent devuelve texto de relleno: mejor fallar que guardar basura.
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
   }
   const body = (await req.json().catch(() => ({}))) as { force?: boolean }
   const force = body.force === true
@@ -83,7 +88,8 @@ export async function POST(req: Request) {
         })
 
         const usedTopics: string[] = []
-        let created = 0
+        const drafts: Prisma.GeneratedPostCreateManyInput[] = []
+        const usedAngleIds: string[] = []
 
         const slots = nextSlots(now)
         for (let i = 0; i < slots.length; i++) {
@@ -112,10 +118,13 @@ export async function POST(req: Request) {
               voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
               forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
             })
+            // Claude falló y ai.ts devolvió el texto de relleno: abortar esta marca.
+            if (generated.copy.includes('[Contenido de ')) {
+              throw new Error('La IA no devolvió contenido válido (se descarta toda la tanda)')
+            }
             dayTopics.push(generated.topic)
 
-            await prisma.generatedPost.create({
-              data: {
+            drafts.push({
                 userId: profile.userId,
                 companyId: profile.companyId,
                 brandProfileId: profile.id,
@@ -132,15 +141,18 @@ export async function POST(req: Request) {
                 scheduledDate,
                 weekNumber: getISOWeek(scheduledDate),
                 dayOfWeek: Math.min(5, Math.max(1, scheduledDate.getUTCDay())),
-              },
             })
-            created++
           }
           usedTopics.push(...dayTopics)
-          if (angle) {
-            await prisma.contentAngle.update({ where: { id: angle.id }, data: { status: 'used' } })
-          }
+          if (angle) usedAngleIds.push(angle.id)
         }
+
+        // Todo o nada: así un fallo a mitad no deja una tanda incompleta.
+        await prisma.$transaction([
+          prisma.generatedPost.createMany({ data: drafts }),
+          prisma.contentAngle.updateMany({ where: { id: { in: usedAngleIds } }, data: { status: 'used' } }),
+        ])
+        const created = drafts.length
 
         if (created > 0) {
           const notify = await sendContentReadyEmail({ companyName: name, count: created, pendingTotal: pending + created })

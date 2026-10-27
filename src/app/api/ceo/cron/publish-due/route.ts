@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 120
 
+const STALE_AFTER_MS = 30 * 60 * 60 * 1000
+
 // Publica los posts aprobados cuya hora ya llegó, enviándolos por webhook a un
 // servicio intermedio (Make, Zapier, n8n, ...) que los sube a cada red.
 // Sin PUBLISH_WEBHOOK_URL no hace nada: los posts quedan "aprobados" para subir a mano.
@@ -16,11 +18,14 @@ export async function POST(req: Request) {
   if (!url) return NextResponse.json({ skipped: 'PUBLISH_WEBHOOK_URL no configurado' })
 
   try {
+    // Ventana de 30 h: un post aprobado con más retraso ya no es oportuno y se deja
+    // para que el dueño decida (reprogramar o subir a mano).
+    const oldest = new Date(Date.now() - STALE_AFTER_MS)
     const due = await prisma.generatedPost.findMany({
       where: {
         status: 'approved',
         imageUrl: { not: null },
-        scheduledDate: { lte: new Date() },
+        scheduledDate: { lte: new Date(), gte: oldest },
         platform: { in: ['instagram', 'facebook', 'linkedin', 'tiktok'] },
       },
       include: { company: { select: { name: true } } },
