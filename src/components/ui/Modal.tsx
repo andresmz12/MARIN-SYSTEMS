@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ModalProps {
   isOpen: boolean
@@ -11,6 +12,11 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+  // El modal se pinta en <body>: si un ancestro tiene transform/filter (animaciones),
+  // `fixed` deja de ser relativo a la pantalla y el contenedor lo recorta.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -19,7 +25,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
     return () => document.removeEventListener('keydown', handleKey)
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
   const sizeClass = {
     sm: 'max-w-sm',
@@ -27,7 +33,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
     lg: 'max-w-2xl',
   }[size]
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative w-full ${sizeClass} max-h-[85vh] flex flex-col bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-2xl`}>
@@ -44,6 +50,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
         </div>
         <div className="p-4 overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
