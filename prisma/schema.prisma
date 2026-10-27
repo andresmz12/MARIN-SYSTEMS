@@ -457,10 +457,23 @@ model GeneratedPost {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   company        CEOCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
+  image          PostImage?
 
   @@index([userId])
   @@index([companyId])
   @@index([companyId, weekNumber])
+}
+
+// Imagen del post (JPEG). Se sirve por una URL pública con token no adivinable
+// para que Instagram/Facebook/LinkedIn (o un servicio intermedio) puedan bajarla.
+model PostImage {
+  id        String        @id @default(cuid())
+  postId    String        @unique
+  post      GeneratedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  token     String        @unique @default(cuid())
+  data      Bytes
+  mime      String        @default("image/jpeg")
+  createdAt DateTime      @default(now())
 }
 
 model CompanyRevenue {

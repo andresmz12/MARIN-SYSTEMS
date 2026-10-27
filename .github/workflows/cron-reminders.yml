@@ -7,7 +7,8 @@ on:
     - cron: "0 23 * * *"    # evening  — 6:00 PM Colombia
     - cron: "0 */6 * * *"   # generate — cada 6 horas
     - cron: "0 13 * * 1"   # weekly-angles — lunes 8:00 AM Colombia (UTC-5)
-    - cron: "0 14 * * *"   # auto-content — a diario 9:00 AM COL; el endpoint genera un día por medio
+    - cron: "0 14 * * 0"   # auto-content — domingos 9:00 AM COL; genera los posts de L/X/V
+    - cron: "10 * * * *"   # publish-due — cada hora; publica lo aprobado cuya hora ya llegó
   workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
 
 jobs:
@@ -82,9 +83,9 @@ jobs:
             https://marin-systems-production.up.railway.app/api/ceo/cron/weekly-angles
 
   auto-content:
-    name: Auto Content (9:00 AM COL, every other day)
+    name: Auto Content (Sun 9:00 AM COL, posts for Mon/Wed/Fri)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 14 * * *'
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 14 * * 0'
     steps:
       - name: POST /ceo/cron/auto-content
         run: |
@@ -94,3 +95,17 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}' \
             https://marin-systems-production.up.railway.app/api/ceo/cron/auto-content
+
+  publish-due:
+    name: Publish Due Posts (hourly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 * * * *'
+    steps:
+      - name: POST /ceo/cron/publish-due
+        run: |
+          curl --fail -s -X POST \
+            --max-time 120 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/ceo/cron/publish-due

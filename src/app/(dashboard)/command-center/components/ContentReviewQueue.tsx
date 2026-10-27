@@ -90,6 +90,36 @@ export function ContentReviewQueue({ companies }: Props) {
     setRefNote('')
   }
 
+  async function uploadImage(id: string, file: File) {
+    setBusyId(id)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/ceo/content/${id}/image`, { method: 'POST', body: form })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(err.error ?? 'Error')
+      }
+      showToast('Imagen subida', 'success')
+      await load()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo subir la imagen', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function removeImage(id: string) {
+    const res = await fetch(`/api/ceo/content/${id}/image`, { method: 'DELETE' })
+    if (res.ok) await load()
+    else showToast('No se pudo quitar la imagen', 'error')
+  }
+
+  function copyText(text: string, msg: string) {
+    navigator.clipboard?.writeText(text)
+    showToast(msg, 'success')
+  }
+
   async function patch(id: string, body: Record<string, unknown>, okMsg: string) {
     setBusyId(id)
     try {
@@ -129,6 +159,7 @@ export function ContentReviewQueue({ companies }: Props) {
 
   const pending = posts.filter((p) => p.status === 'pending_review')
   const approved = posts.filter((p) => p.status === 'approved')
+  const missingImages = posts.filter((p) => !p.imageUrl && p.imagePrompt)
 
   return (
     <div className="space-y-5">
@@ -136,7 +167,7 @@ export function ContentReviewQueue({ companies }: Props) {
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold text-zinc-100">🤖 Piloto automático</p>
           <p className="text-xs text-zinc-400">
-            Genera un set de posts (Instagram, Facebook, LinkedIn y TikTok) un día por medio. Nada se publica sin tu aprobación.
+            Cada domingo genera los posts de lunes, miércoles y viernes (Instagram, Facebook, LinkedIn y TikTok). Nada se publica sin tu aprobación.
           </p>
         </div>
         <select
@@ -195,6 +226,26 @@ export function ContentReviewQueue({ companies }: Props) {
         </div>
       )}
 
+      {missingImages.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-sm font-semibold text-amber-200">🖼️ Faltan {missingImages.length} imagen{missingImages.length > 1 ? 'es' : ''}</p>
+            <p className="text-xs text-zinc-400">
+              Copia todos los prompts, genéralos en ChatGPT en una sola sesión y sube cada imagen en su post. Se convierten a JPEG solas.
+            </p>
+          </div>
+          <button
+            onClick={() => copyText(
+              missingImages.map((p, i) => `${i + 1}. [${PLATFORM_CONFIG[p.platform]?.label ?? p.platform}] ${p.imagePrompt}`).join('\n\n'),
+              'Prompts copiados',
+            )}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-amber-200 border border-amber-500/40 hover:bg-amber-500/10"
+          >
+            Copiar todos los prompts
+          </button>
+        </div>
+      )}
+
       {loading && <p className="text-sm text-zinc-500">Cargando…</p>}
       {!loading && pending.length === 0 && (
         <p className="text-sm text-zinc-500">No hay posts por revisar. Los nuevos aparecen aquí cuando el piloto automático los genere.</p>
@@ -224,12 +275,44 @@ export function ContentReviewQueue({ companies }: Props) {
               />
               {post.hashtags.length > 0 && <p className="text-xs text-indigo-300">{post.hashtags.join(' ')}</p>}
               <p className="text-xs text-zinc-300">CTA: {post.cta}</p>
-              {post.imagePrompt && (
-                <div className="rounded-lg border border-dashed border-zinc-700 p-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">🖼️ Imagen sugerida</p>
-                  <p className="text-xs text-zinc-300">{post.imagePrompt}</p>
-                </div>
-              )}
+              <div className="rounded-lg border border-dashed border-zinc-700 p-2.5 space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen</p>
+                {post.imageUrl ? (
+                  <div className="flex items-start gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={post.imageUrl} alt="" className="w-24 h-24 rounded-md object-cover border border-zinc-700" />
+                    <button onClick={() => removeImage(post.id)} className="text-xs text-red-300 hover:text-red-200">Quitar</button>
+                  </div>
+                ) : (
+                  <>
+                    {post.imagePrompt && <p className="text-xs text-zinc-300">{post.imagePrompt}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      {post.imagePrompt && (
+                        <button
+                          onClick={() => copyText(post.imagePrompt as string, 'Prompt copiado')}
+                          className="text-xs text-zinc-200 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
+                        >
+                          Copiar prompt
+                        </button>
+                      )}
+                      <label className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 cursor-pointer">
+                        {busy ? 'Subiendo…' : 'Subir imagen'}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={busy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]
+                            if (f) uploadImage(post.id, f)
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
               <input
                 value={notes[post.id] ?? ''}
                 onChange={(e) => setNotes((x) => ({ ...x, [post.id]: e.target.value }))}
@@ -266,7 +349,7 @@ export function ContentReviewQueue({ companies }: Props) {
 
       {approved.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-zinc-200">Aprobados — listos para subir manualmente</h3>
+          <h3 className="text-sm font-semibold text-zinc-200">Aprobados — se publican a su hora (o súbelos a mano)</h3>
           {approved.map((post) => {
             const plat = PLATFORM_CONFIG[post.platform]
             const cfg = POST_STATUS_CONFIG[post.status]
@@ -274,6 +357,7 @@ export function ContentReviewQueue({ companies }: Props) {
               <div key={post.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
                 <span className={`w-2 h-2 rounded-full ${cfg?.dot ?? ''}`} />
                 <span className="text-sm text-zinc-200 flex-1 truncate">{plat?.emoji} {post.topic}</span>
+                <span className={`text-xs ${post.imageUrl ? 'text-emerald-300' : 'text-amber-300'}`}>{post.imageUrl ? '🖼️ con imagen' : 'sin imagen'}</span>
                 <button
                   onClick={() => { navigator.clipboard?.writeText(`${post.copy}\n\n${post.hashtags.join(' ')}`); showToast('Copy copiado', 'success') }}
                   className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
