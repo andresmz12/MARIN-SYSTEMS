@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
+import { withCronLog } from '@/lib/cron-run'
 import { prisma } from '@/lib/prisma'
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL ?? 'https://n8n-production-c601.up.railway.app/webhook/marin-tasks'
 
-export async function POST(req: Request) {
+async function handler(req: Request) {
   const auth = req.headers.get('Authorization')
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -102,3 +103,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Error en cron evening' }, { status: 500 })
   }
 }
+
+export const POST = withCronLog('evening', handler)

@@ -172,11 +172,15 @@ export async function sendAgentAlertEmail({
   appName,
   status,
   latency,
+  reason,
+  since,
 }: {
   agentName: string
   appName: string
   status: 'down' | 'degraded'
   latency: number | null
+  reason?: string | null
+  since?: Date | null
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const to = process.env.ALERT_EMAIL_TO ?? ''
   if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
@@ -187,6 +191,7 @@ export async function sendAgentAlertEmail({
     ? '#991b1b,#dc2626,#ef4444'
     : '#92400e,#d97706,#f59e0b'
   const now = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+  const sinceLabel = since ? since.toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : null
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
   const subject = `[Marin Systems] Alerta: ${agentName} está ${statusLabel}`
 
@@ -217,8 +222,16 @@ export async function sendAgentAlertEmail({
           <p style="margin:0;color:#e4e4e7;font-size:13px;">${latency != null ? `${latency}ms` : '—'}</p>
         </td>
       </tr>
+      ${reason ? `<tr><td colspan="2" style="padding-top:12px;">
+        <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Motivo</p>
+        <p style="margin:0;color:#e4e4e7;font-size:13px;">${reason}</p>
+      </td></tr>` : ''}
+      ${sinceLabel ? `<tr><td colspan="2" style="padding-top:12px;">
+        <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Desde (Colombia)</p>
+        <p style="margin:0;color:#e4e4e7;font-size:13px;">${sinceLabel}</p>
+      </td></tr>` : ''}
       <tr><td colspan="2" style="padding-top:12px;">
-        <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Hora (Colombia)</p>
+        <p style="margin:0 0 2px;color:#71717a;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Detectado (Colombia)</p>
         <p style="margin:0;color:#e4e4e7;font-size:13px;">${now}</p>
       </td></tr>
     </table>
@@ -237,8 +250,60 @@ export async function sendAgentAlertEmail({
 </table>
 </body></html>`
 
-  const text = `Alerta Marin Systems: ${agentName} está ${statusLabel}\n${appName}\n${latency != null ? `Latencia: ${latency}ms\n` : ''}Hora: ${now}\n\nVer: ${appUrl}/agentes`
+  const text = `Alerta Marin Systems: ${agentName} está ${statusLabel}\n${appName}\n${reason ? `Motivo: ${reason}\n` : ''}${sinceLabel ? `Desde: ${sinceLabel}\n` : ''}${latency != null ? `Latencia: ${latency}ms\n` : ''}Detectado: ${now}\n\nVer: ${appUrl}/agentes`
   return sendEmail(to, subject, html, text)
+}
+
+function formatDuration(ms: number | null): string {
+  if (ms == null || ms < 0) return 'desconocida'
+  const min = Math.round(ms / 60000)
+  if (min < 1) return 'menos de 1 minuto'
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  return `${h} h ${min % 60} min`
+}
+
+export async function sendAgentRecoveredEmail({
+  agentName,
+  appName,
+  downtimeMs,
+}: {
+  agentName: string
+  appName: string
+  downtimeMs: number | null
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
+  const duration = formatDuration(downtimeMs)
+  const subject = `[Marin Systems] ${agentName} se recuperó ✅`
+  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
+  <h2 style="margin:0 0 8px;">✅ ${agentName} se recuperó</h2>
+  <p style="margin:0 0 16px;color:#a1a1aa;"><strong>${appName}</strong> volvió a responder. Duración del problema: <strong>${duration}</strong>.</p>
+  <a href="${appUrl}/agentes" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Marin Systems →</a>
+</div>`
+  const text = `${agentName} (${appName}) se recuperó. Duración del problema: ${duration}.\n\nVer: ${appUrl}/agentes`
+  return sendEmail(to, subject, html, text)
+}
+
+export async function sendCronFailureEmail({
+  job,
+  error,
+}: {
+  job: string
+  error: string
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+
+  const subject = `[Marin Systems] Falló la tarea automática "${job}"`
+  const safe = error.slice(0, 500).replace(/</g, '&lt;')
+  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
+  <h2 style="margin:0 0 8px;">⚠️ Falló la tarea "${job}"</h2>
+  <p style="margin:0;color:#a1a1aa;">${safe}</p>
+</div>`
+  return sendEmail(to, subject, html, `Falló la tarea automática "${job}": ${error.slice(0, 500)}`)
 }
 
 export async function sendContentReadyEmail({

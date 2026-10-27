@@ -26,6 +26,7 @@ const securityHeaders = [
 
 const nextConfig = {
   experimental: {
+    instrumentationHook: true,
     serverComponentsExternalPackages: ['@prisma/client', 'bcryptjs'],
   },
   async headers() {

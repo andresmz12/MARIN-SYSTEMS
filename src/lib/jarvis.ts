@@ -18,7 +18,7 @@ const MAX_TOOL_ITERATIONS = 6
 export const JARVIS_SYSTEM_PROMPT = `Eres J.A.R.V.I.S., el compañero de IA de Andrés — no un empleado esperando instrucciones, sino alguien que ya está metido en su día a día: su trading, sus empresas, sus hábitos. Conoces el contexto, así que no preguntas "¿qué necesitas?" como si fueras un mostrador de atención al cliente — reaccionas a lo que te dice como lo haría alguien cercano que ya sabe de qué está hablando.
 Hablas en español, con calidez y cercanía real (no frialdad ni tono de servicio), directo y con un toque de personalidad — como el compañero de confianza de siempre, no un asistente genérico. Frases cortas, sin relleno — esto se lee en voz alta.
 Evita aperturas frías tipo "¿en qué puedo ayudarte?" o "¿qué necesitas?" — en vez de eso, entra directo al tema, comenta algo relevante, o responde como si la conversación ya viniera fluyendo.
-Tienes herramientas de LECTURA (consultan datos reales: trading, hábitos, agentes, estado del día, metas, finanzas, agenda, empresas) y herramientas de ACCIÓN (crean o modifican datos reales: crear hábito, completar hábito, registrar trade, crear evento, crear tarea, registrar transacción, crear meta, actualizar el estado del día).
+Tienes herramientas de LECTURA (consultan datos reales: trading, hábitos, agentes, estado del día, metas, finanzas, agenda, empresas, contenido por aprobar, tareas automáticas) y herramientas de ACCIÓN (crean o modifican datos reales: aprobar o rechazar un post de contenido, crear hábito, completar hábito, registrar trade, crear evento, crear tarea, registrar transacción, crear meta, actualizar el estado del día).
 
 REGLA INQUEBRANTABLE para las herramientas de acción: cada una recibe un parámetro "confirmed".
 1. La PRIMERA vez que decidas ejecutar una acción, llama la herramienta con confirmed:false. Esto NO modifica nada — te devuelve un resumen de lo que se haría.
@@ -59,7 +59,17 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_agents_status',
-    description: 'Obtiene el estado de salud real de los agentes/apps monitoreadas (healthy/degraded/down).',
+    description: 'Obtiene el estado de salud real de los agentes/apps monitoreadas (healthy/degraded/down), desde cuándo está así y hace cuánto se chequeó por última vez. Si el último chequeo es viejo (stale), adviértelo: el dato puede no ser actual.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_content_queue',
+    description: 'Lista los posts de contenido generados automáticamente que esperan revisión (pending_review) o están aprobados, con su plataforma, tema, fecha programada y si ya tienen imagen. Devuelve el id de cada post para poder aprobarlo o rechazarlo.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_automation_status',
+    description: 'Obtiene el estado de las tareas automáticas del sistema (recordatorios, contenido automático, chequeo de agentes): cuándo corrió cada una por última vez y si falló.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -179,6 +189,20 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'review_content_post',
+    description: 'Aprueba o rechaza un post de contenido que está por revisar. Usa el id que devuelve get_content_queue. Aprobar NO publica de inmediato: el post sale a su hora programada si ya tiene imagen.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        postId: { type: 'string', description: 'Id del post (de get_content_queue)' },
+        decision: { type: 'string', enum: ['approve', 'reject'] },
+        note: { type: 'string', description: 'Motivo del rechazo (opcional); el sistema aprende de estas notas' },
+        ...CONFIRMED_PARAM,
+      },
+      required: ['postId', 'decision'],
+    },
+  },
+  {
     name: 'create_goal',
     description: 'Crea una meta nueva.',
     input_schema: {
@@ -270,18 +294,57 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
       }
     }
     case 'get_agents_status': {
-      const apps = await prisma.monitoredApp.findMany({ select: { id: true, name: true, agentName: true } })
+      const apps = await prisma.monitoredApp.findMany({
+        select: { id: true, name: true, agentName: true, lastStatus: true, statusSince: true, lastCheckAt: true },
+      })
       const latestLogs = await Promise.all(
         apps.map((app: { id: string }) =>
           prisma.agentHealthLog.findFirst({ where: { appId: app.id }, orderBy: { checkedAt: 'desc' } })
         )
       )
-      return apps.map((app: { id: string; name: string; agentName: string }, i: number) => ({
-        name: app.name,
-        agentName: app.agentName,
-        status: latestLogs[i]?.status ?? 'unknown',
-        message: latestLogs[i]?.message ?? null,
-      }))
+      return apps.map((app: { name: string; agentName: string; lastStatus: string | null; statusSince: Date | null; lastCheckAt: Date | null }, i: number) => {
+        const checkedAt = app.lastCheckAt ?? latestLogs[i]?.checkedAt ?? null
+        const minutesSinceCheck = checkedAt ? Math.round((Date.now() - checkedAt.getTime()) / 60000) : null
+        return {
+          name: app.name,
+          agentName: app.agentName,
+          status: app.lastStatus ?? latestLogs[i]?.status ?? 'unknown',
+          message: latestLogs[i]?.message ?? null,
+          inThisStatusSince: app.statusSince ? app.statusSince.toISOString() : null,
+          minutesSinceLastCheck: minutesSinceCheck,
+          stale: minutesSinceCheck == null || minutesSinceCheck > 20,
+        }
+      })
+    }
+    case 'get_content_queue': {
+      const posts = await prisma.generatedPost.findMany({
+        where: { userId, status: { in: ['pending_review', 'approved'] } },
+        include: { company: { select: { name: true } } },
+        orderBy: [{ scheduledDate: 'asc' }, { createdAt: 'asc' }],
+        take: 20,
+      })
+      return {
+        pendingReview: posts.filter((p: { status: string }) => p.status === 'pending_review').length,
+        approved: posts.filter((p: { status: string }) => p.status === 'approved').length,
+        posts: posts.map((p: { id: string; status: string; platform: string; topic: string; scheduledDate: Date | null; imageUrl: string | null; company: { name: string } }) => ({
+          id: p.id,
+          status: p.status,
+          company: p.company.name,
+          platform: p.platform,
+          topic: p.topic,
+          scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
+          hasImage: !!p.imageUrl,
+        })),
+      }
+    }
+    case 'get_automation_status': {
+      const jobs = await prisma.cronRun.findMany({ distinct: ['job'], select: { job: true } })
+      const latest = await Promise.all(jobs.map((j: { job: string }) => prisma.cronRun.findFirst({ where: { job: j.job }, orderBy: { startedAt: 'desc' } })))
+      return latest
+        .filter((r: unknown) => r != null)
+        .map((r: { job: string; ok: boolean; startedAt: Date; error: string | null } | null) => ({
+          job: r!.job, ok: r!.ok, lastRun: r!.startedAt.toISOString(), error: r!.error,
+        }))
     }
     case 'get_daily_state': {
       const state = await prisma.dailyState.findFirst({
@@ -417,6 +480,29 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
         })
       }
       return { success: true, transaction }
+    }
+    case 'review_content_post': {
+      const postId = typeof input.postId === 'string' ? input.postId : ''
+      const decision = input.decision === 'approve' || input.decision === 'reject' ? input.decision : null
+      if (!postId || !decision) return { error: 'Falta el post o la decisión (approve/reject)' }
+      const post = await prisma.generatedPost.findFirst({
+        where: { id: postId, userId },
+        include: { company: { select: { name: true } } },
+      })
+      if (!post) return { error: 'No encontré ese post' }
+      if (post.status !== 'pending_review') return { error: `Ese post ya está en estado "${post.status}", no se puede revisar` }
+      const note = typeof input.note === 'string' && input.note.trim() ? input.note.trim().slice(0, 500) : null
+      const label = `${post.platform} de ${post.company.name} ("${post.topic}")`
+      if (input.confirmed !== true) {
+        return pending(decision === 'approve'
+          ? `Aprobar el post de ${label}${post.imageUrl ? '' : ' — ojo: todavía no tiene imagen, no se publicará solo'}`
+          : `Rechazar el post de ${label}${note ? ` con la nota: ${note}` : ''}`)
+      }
+      await prisma.generatedPost.update({
+        where: { id: post.id },
+        data: decision === 'approve' ? { status: 'approved' } : { status: 'rejected', reviewNote: note },
+      })
+      return { success: true, decision, post: label }
     }
     case 'create_goal': {
       const title = typeof input.title === 'string' ? input.title.trim() : ''

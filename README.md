@@ -120,6 +120,16 @@ Los cron jobs se manejan desde `.github/workflows/cron-reminders.yml` (Railway n
 | Evening Reminder | 6:00 PM | `/api/corporate-tasks/cron/evening` |
 | Generate Recurring Instances | cada 6 horas | `/api/corporate-tasks/cron/generate` |
 | Weekly Content Angles | lunes 8:00 AM | `/api/ceo/cron/weekly-angles` |
+| Auto Content | domingo 9:00 AM | `/api/ceo/cron/auto-content` |
+| Publish Due Posts | L-V, 1:10–6:10 PM, cada hora | `/api/ceo/cron/publish-due` |
+
+Cada corrida queda registrada en la tabla `CronRun` (se ve en `/agentes` → "Tareas automáticas") y, si falla, avisa por correo a `ALERT_EMAIL_TO`.
+
+### Monitoreo de agentes
+
+El servidor chequea los agentes solo, cada 5 minutos (`src/lib/agent-scheduler.ts`, arrancado desde `src/instrumentation.ts`), sin necesidad de tener `/agentes` abierto. Avisa por correo tras 2 chequeos consecutivos caídos (3 si está degradado), no repite antes de 4 horas y avisa cuando se recupera. El estado vive en la base de datos, así que un reinicio no lo pierde.
+
+Si el propio proceso se cae no puede avisar: para eso, apunta un monitor externo gratuito (cron-job.org, UptimeRobot) a `POST /api/agents/cron/check` con el header `Authorization: Bearer <CRON_SECRET>` cada 5 minutos. `AGENT_MONITOR_INTERVAL_MIN=0` desactiva el scheduler interno.
 
 ## Desarrollo local
 
@@ -221,6 +231,9 @@ prisma/
 | `SENDGRID_API_KEY` | Clave de SendGrid | Solo si se usan Corporate Tasks / alertas |
 | `SENDGRID_FROM_EMAIL` | Remitente verificado en SendGrid | Solo si se usan Corporate Tasks / alertas |
 | `ALERT_EMAIL_TO` | Destinatario de alertas de agentes down/degraded | Solo si se usa monitoreo de Agentes |
+| `PUBLISH_WEBHOOK_URL` | Webhook (Make/Zapier/n8n) que publica los posts aprobados; sin él los posts quedan para subir a mano | Opcional |
+| `PUBLISH_WEBHOOK_SECRET` | Se envía como header `X-Webhook-Secret` al webhook de publicación | Opcional |
+| `AGENT_MONITOR_INTERVAL_MIN` | Minutos entre chequeos del monitor interno de agentes (default 5, `0` lo desactiva) | Opcional |
 | `CRON_SECRET` | Token compartido con GitHub Actions para autorizar los endpoints `/cron/*` | ✅ (si se usan los cron jobs) |
 
 ## Solución de problemas
