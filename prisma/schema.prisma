@@ -413,6 +413,9 @@ model BrandProfile {
   bestHours      Json?
   voiceSamples   Json?
   forbiddenWords Json?
+  // Piloto automático: un cron genera posts en 'pending_review' cada ~2 días.
+  autoEnabled    Boolean         @default(false)
+  autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "tiktok"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -435,6 +438,13 @@ model GeneratedPost {
   hashtags       String[]
   cta            String
   contentNotes   String?
+  // Prompt para generar/buscar la imagen del post, y la URL final cuando exista.
+  imagePrompt    String?
+  imageUrl       String?
+  // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).
+  source         String       @default("manual")
+  reviewNote     String?
+  // draft | pending_review | approved | rejected | ready | published
   status         String       @default("draft")
   scheduledDate  DateTime?
   publishedAt    DateTime?

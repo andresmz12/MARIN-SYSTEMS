@@ -98,3 +98,38 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Error al obtener el perfil de marca' }, { status: 500 })
   }
 }
+
+const AutoSchema = z.object({
+  companyId: z.string().min(1),
+  autoEnabled: z.boolean().optional(),
+  autoPlatforms: z.array(z.enum(['instagram', 'facebook', 'linkedin', 'tiktok'])).min(1).optional(),
+})
+
+// Activa/desactiva el piloto automático de una marca sin tocar el resto del perfil.
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const parsed = AutoSchema.safeParse(await req.json())
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
+    }
+    const { companyId, autoEnabled, autoPlatforms } = parsed.data
+
+    const profile = await prisma.brandProfile.findFirst({ where: { companyId, userId: session.user.id } })
+    if (!profile) return NextResponse.json({ error: 'Configura primero el perfil de marca de esta empresa' }, { status: 400 })
+
+    const updated = await prisma.brandProfile.update({
+      where: { id: profile.id },
+      data: {
+        ...(autoEnabled !== undefined ? { autoEnabled } : {}),
+        ...(autoPlatforms !== undefined ? { autoPlatforms } : {}),
+      },
+    })
+    return NextResponse.json(updated)
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Error al actualizar el piloto automático' }, { status: 500 })
+  }
+}

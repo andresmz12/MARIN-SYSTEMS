@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const Schema = z.object({
-  status: z.enum(['draft', 'ready', 'published']).optional(),
+  status: z.enum(['draft', 'pending_review', 'approved', 'rejected', 'ready', 'published']).optional(),
+  reviewNote: z.string().max(500).nullable().optional(),
+  imageUrl: z.string().url().max(2000).nullable().optional(),
+  imagePrompt: z.string().max(1000).optional(),
   copy: z.string().min(1).optional(),
   scheduledDate: z.string().nullable().optional(),
   publishedAt: z.string().nullable().optional(),
@@ -27,12 +30,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     if (!existing) return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 })
 
-    const { status, copy, scheduledDate, publishedAt } = parsed.data
+    const { status, copy, scheduledDate, publishedAt, reviewNote, imageUrl, imagePrompt } = parsed.data
     const post = await prisma.generatedPost.update({
       where: { id: params.id },
       data: {
         ...(status !== undefined ? { status } : {}),
         ...(copy !== undefined ? { copy } : {}),
+        ...(reviewNote !== undefined ? { reviewNote } : {}),
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+        ...(imagePrompt !== undefined ? { imagePrompt } : {}),
         ...(scheduledDate !== undefined ? { scheduledDate: scheduledDate ? new Date(scheduledDate) : null } : {}),
         ...(publishedAt !== undefined ? { publishedAt: publishedAt ? new Date(publishedAt) : null } : {}),
         ...(status === 'published' ? { publishedAt: new Date() } : {}),

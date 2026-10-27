@@ -141,7 +141,7 @@ export interface MarketingCampaign {
   updatedAt: string
 }
 
-export type PostPlatform = 'instagram' | 'tiktok' | 'email' | 'whatsapp'
+export type PostPlatform = 'instagram' | 'tiktok' | 'facebook' | 'linkedin' | 'email' | 'whatsapp'
 export type PostContentType = 'reel' | 'post' | 'story' | 'caption' | 'email'
 export type PostStatus = 'draft' | 'ready' | 'published'
 
@@ -170,6 +170,10 @@ export interface GeneratedPost {
   hashtags: string[]
   cta: string
   contentNotes: string | null
+  imagePrompt?: string | null
+  imageUrl?: string | null
+  source?: string
+  reviewNote?: string | null
   status: string
   scheduledDate: string | null
   publishedAt: string | null

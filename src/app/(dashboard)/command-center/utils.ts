@@ -176,6 +176,8 @@ export const DOW_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie']
 export const PLATFORM_CONFIG: Record<string, { label: string; emoji: string; cls: string }> = {
   instagram: { label: 'Instagram', emoji: '📸', cls: 'bg-pink-500/20 text-pink-400 border-pink-500/40' },
   tiktok: { label: 'TikTok', emoji: '🎵', cls: 'bg-zinc-600/30 text-zinc-300 border-zinc-600' },
+  facebook: { label: 'Facebook', emoji: '👍', cls: 'bg-blue-600/20 text-blue-400 border-blue-600/40' },
+  linkedin: { label: 'LinkedIn', emoji: '💼', cls: 'bg-sky-500/20 text-sky-400 border-sky-500/40' },
   email: { label: 'Email', emoji: '📧', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
   whatsapp: { label: 'WhatsApp', emoji: '💬', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
 }
@@ -192,6 +194,9 @@ export const CONTENT_TYPE_CONFIG: Record<string, { label: string; cls: string }>
 /** Post status config. */
 export const POST_STATUS_CONFIG: Record<string, { label: string; dot: string }> = {
   draft: { label: 'Borrador', dot: 'bg-zinc-500' },
+  pending_review: { label: 'Por revisar', dot: 'bg-amber-400' },
+  approved: { label: 'Aprobado', dot: 'bg-sky-400' },
+  rejected: { label: 'Rechazado', dot: 'bg-red-400' },
   ready: { label: 'Listo', dot: 'bg-green-400' },
   published: { label: 'Publicado', dot: 'bg-emerald-400' },
 }

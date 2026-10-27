@@ -291,6 +291,8 @@ export interface GeneratedContent {
   hashtags: string[]
   cta: string
   contentNotes: string
+  /** Descripción visual para generar o buscar la imagen del post. */
+  imagePrompt: string
 }
 
 function fallbackContent(input: ContentGenerationInput): GeneratedContent {
@@ -300,6 +302,7 @@ function fallbackContent(input: ContentGenerationInput): GeneratedContent {
     hashtags: [`#${input.companyName.replace(/\s+/g, '')}`, '#negocios', '#latinos', '#emprendimiento'],
     cta: 'Escríbenos por DM o deja tu comentario 👇',
     contentNotes: `Crear ${input.contentType} para ${input.platform}. Tono: ${input.tone}.`,
+    imagePrompt: `Imagen limpia y profesional para ${input.companyName}, estilo de marca ${input.tone}.`,
   }
 }
 
@@ -318,6 +321,7 @@ function coerceContent(parsed: unknown, input: ContentGenerationInput): Generate
     hashtags,
     cta: str(obj.cta, fb.cta),
     contentNotes: str(obj.contentNotes, fb.contentNotes),
+    imagePrompt: str(obj.imagePrompt, fb.imagePrompt),
   }
 }
 
@@ -351,6 +355,8 @@ Pilares de contenido: ${input.contentPillars.join(', ')}
 
 Instrucciones específicas por plataforma:
 - Instagram/TikTok: usa emojis, copy corto y punchy (máximo 2200 chars), hashtags relevantes
+- Facebook: tono cercano y conversacional, 1-3 párrafos cortos, pregunta que invite a comentar, máximo 3 hashtags
+- LinkedIn: tono profesional y de autoridad, abre con un gancho de una línea, párrafos de 1-2 frases, aporta una idea o dato útil, sin exceso de emojis, máximo 3 hashtags
 - Email: asunto + cuerpo formal pero cálido, sin hashtags
 - WhatsApp: mensaje directo y personal, máximo 500 chars
 
@@ -360,7 +366,8 @@ Responde ÚNICAMENTE con este JSON:
   "copy": "copy completo listo para publicar, con saltos de línea naturales y emojis apropiados",
   "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
   "cta": "llamada a la acción específica y directa",
-  "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado"
+  "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado",
+  "imagePrompt": "descripción visual detallada (en inglés) de la imagen del post: sujeto, composición, estilo, paleta y ambiente, sin texto incrustado"
 }`
 
   try {

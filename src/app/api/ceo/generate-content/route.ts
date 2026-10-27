@@ -8,7 +8,7 @@ import { generateMarketingContent } from '@/lib/ai'
 const Schema = z.object({
   companyId: z.string().min(1),
   workBlockId: z.string().optional(),
-  platform: z.enum(['instagram', 'tiktok', 'email', 'whatsapp']),
+  platform: z.enum(['instagram', 'tiktok', 'facebook', 'linkedin', 'email', 'whatsapp']),
   contentType: z.enum(['reel', 'post', 'story', 'caption', 'email']),
   topic: z.string().max(200).optional().default(''),
   weekNumber: z.number().int().min(1).max(53),
@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
         hashtags: generated.hashtags,
         cta: generated.cta,
         contentNotes: generated.contentNotes,
+        imagePrompt: generated.imagePrompt,
         status: 'draft',
         weekNumber,
         dayOfWeek,
