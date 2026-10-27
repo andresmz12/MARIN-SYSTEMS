@@ -102,6 +102,9 @@ export interface BrandProfile {
   bestHours: Record<string, string> | null
   voiceSamples: string[] | null
   forbiddenWords: string[] | null
+  autoEnabled?: boolean
+  autoPlatforms?: string[]
+  references?: { type: 'link' | 'text'; value: string; note?: string }[] | null
   createdAt: string
   updatedAt: string
   // Extra fields returned by the API after AI analysis

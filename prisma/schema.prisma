@@ -415,6 +415,8 @@ model BrandProfile {
   forbiddenWords Json?
   // Piloto automático: un cron genera posts en 'pending_review' cada ~2 días.
   autoEnabled    Boolean         @default(false)
+  // Referencias de estilo: [{ type: 'link' | 'text', value, note? }]
+  references     Json?
   autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "tiktok"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt

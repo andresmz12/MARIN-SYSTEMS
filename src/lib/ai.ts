@@ -283,6 +283,10 @@ export interface ContentGenerationInput {
   forbiddenWords?: string[]
   angles?: { angle: string; hook: string }[]
   pillar?: string
+  /** Referencias de estilo de la marca (links o textos de posts que le gustan al dueño). */
+  references?: string[]
+  /** Notas de posts rechazados/ajustados, para no repetir los mismos errores. */
+  feedback?: string[]
 }
 
 export interface GeneratedContent {
@@ -338,11 +342,17 @@ export async function generateMarketingContent(input: ContentGenerationInput): P
   const anglesLine = input.angles?.length
     ? `\nBasa el contenido en uno de estos ángulos diferenciadores (elige el más relevante y NO repitas los ya usados):\n${input.angles.map((a, i) => `${i + 1}. Ángulo: ${a.angle} — Gancho: "${a.hook}"`).join('\n')}`
     : ''
+  const referencesLine = input.references?.length
+    ? `\nReferencias de estilo que le gustan al dueño (inspírate en su estilo, estructura y ritmo; NO las copies):\n${input.references.map((r, i) => `${i + 1}. ${r}`).join('\n')}`
+    : ''
+  const feedbackLine = input.feedback?.length
+    ? `\nEl dueño rechazó o corrigió posts anteriores con estas notas, evita repetir esos errores:\n${input.feedback.map((f) => `- ${f}`).join('\n')}`
+    : ''
   const pillarLine = input.pillar
     ? `\nPilar de contenido de esta pieza (enfócala aquí): ${input.pillar}`
     : ''
 
-  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}
+  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}${referencesLine}${feedbackLine}
 
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}

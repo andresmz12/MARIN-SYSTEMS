@@ -241,6 +241,29 @@ export async function sendAgentAlertEmail({
   return sendEmail(to, subject, html, text)
 }
 
+export async function sendContentReadyEmail({
+  companyName,
+  count,
+  pendingTotal,
+}: {
+  companyName: string
+  count: number
+  pendingTotal: number
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
+  const subject = `[Marin Systems] ${count} post${count > 1 ? 's' : ''} de ${companyName} por aprobar`
+  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
+  <h2 style="margin:0 0 8px;">✅ Contenido listo para revisar</h2>
+  <p style="margin:0 0 16px;color:#a1a1aa;">Se generaron ${count} post${count > 1 ? 's' : ''} nuevo${count > 1 ? 's' : ''} para <strong>${companyName}</strong>. Tienes ${pendingTotal} por aprobar en total.</p>
+  <a href="${appUrl}/command-center" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Revisar y aprobar →</a>
+</div>`
+  const text = `${count} post(s) de ${companyName} por aprobar (${pendingTotal} en total).\n\nRevisar: ${appUrl}/command-center`
+  return sendEmail(to, subject, html, text)
+}
+
 export async function sendEveningReminder(
   to: string,
   tasks: TaskEmailData[],

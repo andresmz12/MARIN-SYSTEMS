@@ -103,6 +103,11 @@ const AutoSchema = z.object({
   companyId: z.string().min(1),
   autoEnabled: z.boolean().optional(),
   autoPlatforms: z.array(z.enum(['instagram', 'facebook', 'linkedin', 'tiktok'])).min(1).optional(),
+  references: z.array(z.object({
+    type: z.enum(['link', 'text']),
+    value: z.string().min(1).max(1500),
+    note: z.string().max(300).optional(),
+  })).max(15).optional(),
 })
 
 // Activa/desactiva el piloto automático de una marca sin tocar el resto del perfil.
@@ -115,7 +120,7 @@ export async function PATCH(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
     }
-    const { companyId, autoEnabled, autoPlatforms } = parsed.data
+    const { companyId, autoEnabled, autoPlatforms, references } = parsed.data
 
     const profile = await prisma.brandProfile.findFirst({ where: { companyId, userId: session.user.id } })
     if (!profile) return NextResponse.json({ error: 'Configura primero el perfil de marca de esta empresa' }, { status: 400 })
@@ -125,6 +130,7 @@ export async function PATCH(req: NextRequest) {
       data: {
         ...(autoEnabled !== undefined ? { autoEnabled } : {}),
         ...(autoPlatforms !== undefined ? { autoPlatforms } : {}),
+        ...(references !== undefined ? { references } : {}),
       },
     })
     return NextResponse.json(updated)

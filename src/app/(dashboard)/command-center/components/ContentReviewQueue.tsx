@@ -14,6 +14,8 @@ interface AutoState {
   autoPlatforms: string[]
 }
 
+interface Reference { type: 'link' | 'text'; value: string; note?: string }
+
 export function ContentReviewQueue({ companies }: Props) {
   const { showToast } = useToast()
   const [posts, setPosts] = useState<GeneratedPost[]>([])
@@ -23,6 +25,9 @@ export function ContentReviewQueue({ companies }: Props) {
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? '')
   const [auto, setAuto] = useState<AutoState | null>(null)
+  const [refs, setRefs] = useState<Reference[]>([])
+  const [refInput, setRefInput] = useState('')
+  const [refNote, setRefNote] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -43,8 +48,10 @@ export function ContentReviewQueue({ companies }: Props) {
     setAuto(null)
     fetch(`/api/ceo/brand-profile?companyId=${companyId}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((p: (AutoState & { id: string }) | null) =>
-        setAuto(p ? { autoEnabled: p.autoEnabled, autoPlatforms: p.autoPlatforms } : null))
+      .then((p: (AutoState & { id: string; references?: Reference[] | null }) | null) => {
+        setAuto(p ? { autoEnabled: p.autoEnabled, autoPlatforms: p.autoPlatforms } : null)
+        setRefs(Array.isArray(p?.references) ? p.references : [])
+      })
       .catch(() => setAuto(null))
   }, [companyId])
 
@@ -62,6 +69,25 @@ export function ContentReviewQueue({ companies }: Props) {
     } else {
       showToast('No se pudo cambiar el piloto automático', 'error')
     }
+  }
+
+  async function saveRefs(next: Reference[]) {
+    const res = await fetch('/api/ceo/brand-profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, references: next }),
+    })
+    if (res.ok) setRefs(next)
+    else showToast('No se pudieron guardar las referencias', 'error')
+  }
+
+  function addRef() {
+    const value = refInput.trim()
+    if (!value) return
+    const type = /^https?:\/\//i.test(value) ? 'link' : 'text'
+    saveRefs([...refs, { type, value, ...(refNote.trim() ? { note: refNote.trim() } : {}) }])
+    setRefInput('')
+    setRefNote('')
   }
 
   async function patch(id: string, body: Record<string, unknown>, okMsg: string) {
@@ -133,6 +159,41 @@ export function ContentReviewQueue({ companies }: Props) {
           {auto?.autoEnabled ? 'Activado ✓' : 'Activar'}
         </button>
       </div>
+
+      {auto && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-100">📎 Referencias de estilo</p>
+            <p className="text-xs text-zinc-400">
+              Links a posts que te gustan, o texto de ejemplos. Se usan como guía de estilo en cada generación (máx. 15).
+            </p>
+          </div>
+          {refs.map((r, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-zinc-300">
+              <span>{r.type === 'link' ? '🔗' : '📝'}</span>
+              <span className="flex-1 truncate">{r.value}{r.note ? ` — ${r.note}` : ''}</span>
+              <button onClick={() => saveRefs(refs.filter((_, j) => j !== i))} className="text-red-300 hover:text-red-200">Quitar</button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={refInput}
+              onChange={(e) => setRefInput(e.target.value)}
+              placeholder="Link o texto de ejemplo"
+              className="flex-1 min-w-[200px] bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200"
+            />
+            <input
+              value={refNote}
+              onChange={(e) => setRefNote(e.target.value)}
+              placeholder="Qué te gusta de esto (opcional)"
+              className="flex-1 min-w-[200px] bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200"
+            />
+            <button onClick={addRef} className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-200 border border-zinc-700 hover:border-zinc-500">
+              Agregar
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading && <p className="text-sm text-zinc-500">Cargando…</p>}
       {!loading && pending.length === 0 && (

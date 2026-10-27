@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
+import { recentFeedback, referenceLines } from '@/lib/auto-content'
 
 export const maxDuration = 60
 
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ? `Reescribe este post: "${post.topic}". Ajuste pedido por el dueño: ${note.trim().slice(0, 300)}.`
       : `Reescribe este post con un enfoque distinto sobre: "${post.topic}".`
 
+    const references = referenceLines(profile.references)
+    const feedback = await recentFeedback(post.companyId)
+
     const generated = await generateMarketingContent({
       companyName: post.company.name,
       platform: post.platform,
@@ -37,6 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       tone: profile.tone,
       targetAudience: profile.targetAudience,
       contentPillars: Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : [],
+      references: references.length > 0 ? references : undefined,
+      feedback: feedback.length > 0 ? feedback : undefined,
       voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
       forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
     })

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getISODay, getISOWeek } from 'date-fns'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
+import { recentFeedback, referenceLines } from '@/lib/auto-content'
+import { sendContentReadyEmail } from '@/lib/sendgrid-client'
 
 export const maxDuration = 300
 
@@ -68,6 +70,9 @@ export async function POST(req: Request) {
         const weekNumber = getISOWeek(scheduledDate)
         const dayOfWeek = Math.min(5, getISODay(scheduledDate))
 
+        const references = referenceLines(profile.references)
+        const feedback = await recentFeedback(profile.companyId)
+
         const usedTopics: string[] = []
         let created = 0
         for (const platform of platforms) {
@@ -82,6 +87,8 @@ export async function POST(req: Request) {
             targetAudience: profile.targetAudience,
             contentPillars: pillars,
             pillar,
+            references: references.length > 0 ? references : undefined,
+            feedback: feedback.length > 0 ? feedback : undefined,
             angles: angle ? [{ angle: angle.angle, hook: angle.hook }] : undefined,
             voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
             forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
@@ -113,6 +120,10 @@ export async function POST(req: Request) {
 
         if (angle) {
           await prisma.contentAngle.update({ where: { id: angle.id }, data: { status: 'used' } })
+        }
+        if (created > 0) {
+          const notify = await sendContentReadyEmail({ companyName: name, count: created, pendingTotal: pending + created })
+          if (!notify.success) console.error('[cron/auto-content] aviso por correo falló:', notify.error)
         }
         summary.push({ company: name, created })
       } catch (err) {
