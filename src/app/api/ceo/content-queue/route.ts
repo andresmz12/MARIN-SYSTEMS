@@ -22,7 +22,7 @@ export async function GET() {
           { status: 'published', publishedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
         ],
       },
-      include: { company: true, brandProfile: { select: { visualStyle: true } } },
+      include: { company: true, metric: true, brandProfile: { select: { visualStyle: true } } },
       orderBy: [{ scheduledDate: 'asc' }, { createdAt: 'asc' }],
     })
     return NextResponse.json({ posts, publishConfigured: publishConfigured(), publishPlatforms: publishablePlatforms() })

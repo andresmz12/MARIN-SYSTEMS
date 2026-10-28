@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { withCronLog } from '@/lib/cron-run'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
-import { buildGroupDrafts, recentFeedback, referenceLines } from '@/lib/auto-content'
+import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
+import { knowledgeFor } from '@/lib/knowledge'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { fetchFeed, newsFeedUrls, type NewsItem } from '@/lib/news'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
@@ -89,7 +90,7 @@ async function handler(req: Request) {
         const platforms: string[] = selected.length > 0 ? selected : [...AUTO_PLATFORMS]
         const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
         const references = referenceLines(profile.references)
-        const feedback = await recentFeedback(profile.companyId)
+        const feedback = [...(await recentFeedback(profile.companyId)), ...(await latestInsights(profile.companyId))]
         let created = 0
 
         for (const item of todo) {
@@ -103,6 +104,7 @@ async function handler(req: Request) {
               `Fuente: ${item.link}.`,
               'Usa SOLO los datos que aparecen en este texto; no inventes montos, fechas ni requisitos. Explícalo simple y di qué debe hacer la persona. Si algo importante no está en el texto, no lo afirmes. Pon en "facts" cada dato concreto (montos, fechas, formularios) para que el dueño lo verifique contra la fuente.',
             ].filter(Boolean).join(' '),
+            knowledge: await knowledgeFor(profile.userId, profile.companyId, `${item.title} ${item.summary}`),
             tone: profile.tone,
             targetAudience: profile.targetAudience,
             contentPillars: pillars,
@@ -113,8 +115,7 @@ async function handler(req: Request) {
           })
           if (generated.copy.includes('[Contenido de ')) throw new Error('La IA no devolvió contenido válido')
 
-          await prisma.generatedPost.createMany({
-            data: buildGroupDrafts({
+          const drafts = buildGroupDrafts({
               userId: profile.userId,
               companyId: profile.companyId,
               brandProfileId: profile.id,
@@ -123,8 +124,10 @@ async function handler(req: Request) {
               scheduledDate: nextPublishSlot(new Date()),
               source: 'news',
               sourceUrl: item.link,
-            }),
-          })
+            })
+          await prisma.generatedPost.createMany({ data: drafts })
+          const gid = drafts[0]?.groupId
+          if (gid) await factCheckGroup(gid).catch((e) => console.error('[cron/news-watch] verificación falló:', e))
           created += platforms.length
           const pending = await prisma.generatedPost.count({ where: { companyId: profile.companyId, status: 'pending_review' } })
           const notify = await sendContentReadyEmail({ companyName: name, count: 1, pendingTotal: pending, newsTitle: item.title })

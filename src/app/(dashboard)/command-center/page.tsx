@@ -5,8 +5,10 @@ import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany } from './types'
 import { CompanyManager } from './components/CompanyManager'
 import { ContentReviewQueue } from './components/ContentReviewQueue'
+import { KnowledgeLibrary } from './components/KnowledgeLibrary'
 
 const MANAGE = '__manage__'
+const LIBRARY = '__library__'
 
 export default function CommandCenterPage() {
   const { showToast } = useToast()
@@ -27,7 +29,8 @@ export default function CommandCenterPage() {
   useEffect(() => { loadCompanies() }, [loadCompanies])
 
   const active = companies.filter((c) => c.isActive)
-  const current = tab === MANAGE ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
+  const current = tab === MANAGE || tab === LIBRARY ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
+  const showLibrary = tab === LIBRARY
   const showManage = tab === MANAGE || (!loading && active.length === 0)
 
   if (loading) {
@@ -43,7 +46,7 @@ export default function CommandCenterPage() {
 
       <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3">
         {active.map((c) => {
-          const on = !showManage && current?.id === c.id
+          const on = !showManage && !showLibrary && current?.id === c.id
           return (
             <button
               key={c.id}
@@ -57,6 +60,14 @@ export default function CommandCenterPage() {
           )
         })}
         <button
+          onClick={() => setTab(LIBRARY)}
+          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            showLibrary ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          📚 Biblioteca
+        </button>
+        <button
           onClick={() => setTab(MANAGE)}
           className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
             showManage ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50' : 'text-zinc-400 hover:text-zinc-200'
@@ -66,7 +77,9 @@ export default function CommandCenterPage() {
         </button>
       </div>
 
-      {showManage ? (
+      {showLibrary ? (
+        <KnowledgeLibrary companies={active} />
+      ) : showManage ? (
         <CompanyManager companies={companies} onChanged={loadCompanies} />
       ) : (
         current && <ContentReviewQueue key={current.id} company={current} onOpenCompanies={() => setTab(MANAGE)} />

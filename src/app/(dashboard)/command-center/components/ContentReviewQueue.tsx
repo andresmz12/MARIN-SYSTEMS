@@ -5,6 +5,9 @@ import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany, GeneratedPost } from '../types'
 import { PLATFORM_CONFIG, POST_STATUS_CONFIG } from '../utils'
 import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
+import { FactCheckPanel } from './FactCheckPanel'
+import { MetricsForm } from './MetricsForm'
+import { AgentReportsPanel } from './AgentReportsPanel'
 import { IMAGE_SPECS, buildImagePrompt, imagePlatformOf, parseImageText, parseVisualStyle, type ImageText } from '@/lib/image-prompt'
 
 interface Props {
@@ -424,6 +427,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         </button>
       </div>
 
+      <AgentReportsPanel companyId={companyId} />
+
       <details open={settingsOpen ?? !setupDone} className="rounded-xl border border-zinc-800 bg-zinc-900/30">
         {/* Solo cuenta el clic del usuario: así se abre sola mientras falta configurar y se cierra cuando todo está listo. */}
         <summary
@@ -676,6 +681,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   <p className="text-[11px] text-zinc-500 mt-1">Confirma estos datos en IRS.gov o con tu contador.</p>
                 </div>
               )}
+              <FactCheckPanel key={`${post.id}-${post.factCheckedAt ?? ''}`} post={post} onDone={load} />
               <div className="rounded-lg border border-dashed border-zinc-700 p-2.5 space-y-2">
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen · {IMAGE_SPECS[specPlatform]?.width}×{IMAGE_SPECS[specPlatform]?.height} ({IMAGE_SPECS[specPlatform]?.ratio}){post.groupId ? ' · la misma imagen para todas las redes' : ''}</p>
                 {post.imageUrl ? (
@@ -904,12 +910,15 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         <div className="space-y-1.5">
           <h3 className="text-sm font-semibold text-zinc-300">Publicados esta semana</h3>
           {published.map((post) => (
-            <div key={post.id} className="flex items-center gap-2 text-xs text-zinc-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="flex-1 truncate">{PLATFORM_CONFIG[post.platform]?.emoji} {post.topic}</span>
-              {post.externalUrl && (
-                <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
-              )}
+            <div key={post.id} className="space-y-1">
+              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="flex-1 truncate">{PLATFORM_CONFIG[post.platform]?.emoji} {post.topic}</span>
+                {post.externalUrl && (
+                  <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
+                )}
+              </div>
+              <MetricsForm key={`${post.id}-${post.metric?.source ?? ''}`} post={post} onSaved={load} />
             </div>
           ))}
         </div>

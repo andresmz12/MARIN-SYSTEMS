@@ -182,6 +182,9 @@ export interface GeneratedPost {
   brandProfile?: { visualStyle?: unknown } | null
   imageUrl?: string | null
   groupId?: string | null
+  factCheck?: { verdict: 'ok' | 'revisar' | 'error'; summary: string; items: { claim: string; status: string; note: string; source?: string }[] } | null
+  factCheckedAt?: string | null
+  metric?: { reach: number | null; impressions: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null; clicks: number | null; source: string } | null
   sourceUrl?: string | null
   source?: string
   reviewNote?: string | null

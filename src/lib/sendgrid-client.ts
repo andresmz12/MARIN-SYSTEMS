@@ -374,3 +374,30 @@ export async function sendEveningReminder(
   if (result.success) console.log(`[SendGrid] Recordatorio nocturno enviado a ${to} con ${tasks.length} pendiente(s)`)
   return result
 }
+
+/** Informe de un agente programado (métricas, temas...) por correo. */
+export async function sendAgentReportEmail({
+  title,
+  intro,
+  sections,
+}: {
+  title: string
+  intro: string
+  sections: { heading: string; items: string[] }[]
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
+  const body = sections
+    .filter((s) => s.items.length > 0)
+    .map((s) => `<h3 style="margin:16px 0 6px;color:#e4e4e7;">${esc(s.heading)}</h3><ul style="margin:0;padding-left:20px;color:#d4d4d8;">${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`)
+    .join('')
+  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
+  <h2 style="margin:0 0 8px;">${esc(title)}</h2>
+  <p style="margin:0 0 8px;color:#a1a1aa;">${esc(intro)}</p>${body}
+  <p style="margin-top:20px;"><a href="${appUrl}/command-center" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Abrir Command Center →</a></p>
+</div>`
+  const text = `${title}\n\n${intro}\n\n${sections.map((s) => `${s.heading}\n${s.items.map((i) => `- ${i}`).join('\n')}`).join('\n\n')}\n\n${appUrl}/command-center`
+  return sendEmail(to, `[Corporación Marin] ${title}`, html, text)
+}

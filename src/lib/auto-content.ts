@@ -3,6 +3,9 @@ import { getISOWeek } from 'date-fns'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { GeneratedContent } from '@/lib/ai'
+import { factCheckPost } from '@/lib/agents-ai'
+import { knowledgeFor } from '@/lib/knowledge'
+import { parseImageText } from '@/lib/image-prompt'
 
 interface BrandReference { type: string; value: string; note?: string }
 
@@ -66,4 +69,45 @@ export function buildGroupDrafts(input: {
     weekNumber: getISOWeek(input.scheduledDate),
     dayOfWeek: Math.min(5, Math.max(1, input.scheduledDate.getUTCDay())),
   }))
+}
+
+/** Lo que mostraron las métricas la última semana, como líneas para la generación (cierra el ciclo). */
+export async function latestInsights(companyId: string): Promise<string[]> {
+  const r = await prisma.agentReport.findFirst({
+    where: { companyId, kind: 'metrics' },
+    orderBy: { createdAt: 'desc' },
+    select: { content: true, createdAt: true },
+  })
+  if (!r || Date.now() - r.createdAt.getTime() > 21 * 24 * 60 * 60 * 1000) return []
+  const c = r.content as { worked?: string[]; change?: string[] } | null
+  return [
+    ...(c?.worked ?? []).map((w) => `Funcionó: ${w}`),
+    ...(c?.change ?? []).map((w) => `Cambiar: ${w}`),
+  ].slice(0, 5)
+}
+
+/**
+ * Verificador de datos sobre un grupo de posts ya creado: guarda el resultado en todas las filas
+ * del grupo. Es de mejor esfuerzo: si falla, el post sigue su camino y el dueño lo ve sin verificar.
+ */
+export async function factCheckGroup(groupId: string): Promise<void> {
+  const post = await prisma.generatedPost.findFirst({
+    where: { groupId },
+    include: { company: { select: { name: true } } },
+  })
+  if (!post) return
+  const library = await knowledgeFor(post.userId, post.companyId, `${post.topic} ${post.copy}`)
+  const result = await factCheckPost({
+    companyName: post.company.name,
+    copy: post.copy,
+    facts: post.facts,
+    imageHeadline: parseImageText(post.imageText)?.headline,
+    sourceUrl: post.sourceUrl,
+    library,
+  })
+  if (!result) return
+  await prisma.generatedPost.updateMany({
+    where: { groupId },
+    data: { factCheck: result as never, factCheckedAt: new Date() },
+  })
 }

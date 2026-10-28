@@ -21,6 +21,8 @@ const JOB_LABELS: Record<string, string> = {
   'weekly-angles': 'Ángulos de contenido (lunes)',
   'auto-content': 'Contenido automático (domingo)',
   'news-watch': 'Noticias automáticas (diario)',
+  'topic-research': 'Investigador de temas (diario)',
+  'metrics-report': 'Analista de métricas (semanal)',
   'publish-due': 'Publicación programada',
 }
 

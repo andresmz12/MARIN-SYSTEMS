@@ -458,6 +458,9 @@ model GeneratedPost {
   reviewNote     String?
   // Posts hermanos: el mismo contenido para varias redes comparten groupId y se revisan juntos.
   groupId        String?
+  // Resultado del verificador de datos: { verdict, items: [{ claim, status, note, source }] }
+  factCheck      Json?
+  factCheckedAt  DateTime?
   // Noticia de la que nace el post (para no repetirla y para citar la fuente).
   sourceUrl      String?
   // Publicación automática: intentos, último error y enlace al post ya publicado.
@@ -477,6 +480,7 @@ model GeneratedPost {
   company        CEOCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
   image          PostImage?
+  metric         PostMetric?
 
   @@index([userId])
   @@index([companyId])
@@ -828,4 +832,52 @@ model MeetingTask {
   title     String
   done      Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+// Resultados de un post publicado (una fila por post, se va actualizando).
+model PostMetric {
+  id          String        @id @default(cuid())
+  postId      String        @unique
+  post        GeneratedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reach       Int?
+  impressions Int?
+  likes       Int?
+  comments    Int?
+  shares      Int?
+  saves       Int?
+  clicks      Int?
+  // 'manual' (escrito por el dueño) o 'make' (traído automáticamente)
+  source      String        @default("manual")
+  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime      @default(now())
+}
+
+// Informes que dejan los agentes programados (métricas, investigación de temas...).
+model AgentReport {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String?
+  kind      String
+  title     String
+  content   Json
+  createdAt DateTime @default(now())
+
+  @@index([userId, kind, createdAt])
+  @@index([companyId, kind, createdAt])
+}
+
+// Biblioteca de conocimiento (impuestos, guías, documentos propios): lo único que la IA
+// puede citar para datos concretos. companyId null = vale para todas las empresas.
+model KnowledgeDoc {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String?
+  title     String
+  kind      String   @default("tax")
+  sourceUrl String?
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
 }

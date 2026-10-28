@@ -1,8 +1,8 @@
 import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { AI_BLOCK_TYPES } from './ceo'
 
-const AI_MODEL = 'claude-haiku-4-5-20251001'
-const AI_MODEL_SMART = 'claude-sonnet-4-6'
+export const AI_MODEL = 'claude-haiku-4-5-20251001'
+export const AI_MODEL_SMART = 'claude-sonnet-4-6'
 
 // ──────────────────────── Shared helpers ────────────────────────
 
@@ -287,6 +287,8 @@ export interface ContentGenerationInput {
   references?: string[]
   /** Notas de posts rechazados/ajustados, para no repetir los mismos errores. */
   feedback?: string[]
+  /** Fragmentos de la biblioteca de conocimiento (impuestos, guías): única fuente permitida para datos concretos. */
+  knowledge?: string[]
 }
 
 import { parseImageText, type ImageText } from './image-prompt'
@@ -360,11 +362,14 @@ export async function generateMarketingContent(input: ContentGenerationInput): P
   const feedbackLine = input.feedback?.length
     ? `\nEl dueño rechazó o corrigió posts anteriores con estas notas, evita repetir esos errores:\n${input.feedback.map((f) => `- ${f}`).join('\n')}`
     : ''
+  const knowledgeLine = input.knowledge?.length
+    ? `\nBIBLIOTECA DE CONOCIMIENTO (fuente confiable del dueño). Para montos, fechas, formularios y requisitos usa SOLO lo que dice esta biblioteca o el texto del tema; si algo no está aquí, no lo afirmes:\n${input.knowledge.map((k, i) => `[${i + 1}] ${k}`).join('\n')}`
+    : ''
   const pillarLine = input.pillar
     ? `\nPilar de contenido de esta pieza (enfócala aquí): ${input.pillar}`
     : ''
 
-  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}${referencesLine}${feedbackLine}
+  const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}${knowledgeLine}${referencesLine}${feedbackLine}
 
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}

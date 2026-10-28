@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -58,6 +59,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       facts: generated.facts,
       status: 'pending_review',
       reviewNote: null,
+      // El contenido cambió: la verificación anterior ya no vale.
+      factCheck: Prisma.DbNull,
+      factCheckedAt: null,
     }
     if (post.groupId) {
       await prisma.generatedPost.updateMany({

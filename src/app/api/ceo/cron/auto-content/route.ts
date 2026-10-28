@@ -3,7 +3,8 @@ import { withCronLog } from '@/lib/cron-run'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
-import { buildGroupDrafts, recentFeedback, referenceLines } from '@/lib/auto-content'
+import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
+import { knowledgeFor } from '@/lib/knowledge'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
@@ -17,6 +18,8 @@ const POST_DAYS = [1, 3, 5]
 const POST_HOUR_UTC = 18
 // No acumular más borradores de los que el dueño alcanza a revisar.
 const MAX_PENDING = 24
+// Tiempo máximo de la corrida (maxDuration = 300 s) antes de dejar de verificar posts.
+const FACT_CHECK_BUDGET_MS = 200_000
 
 /** Próximas fechas de publicación (L/X/V a las 1 PM COL), estrictamente futuras. */
 function nextSlots(from: Date): Date[] {
@@ -42,6 +45,7 @@ async function handler(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) as { force?: boolean }
   const force = body.force === true
+  const startedAt = Date.now()
 
   try {
     const profiles = await prisma.brandProfile.findMany({
@@ -78,7 +82,7 @@ async function handler(req: Request) {
         const platforms: string[] = selected.length > 0 ? selected : [...AUTO_PLATFORMS]
         const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
         const references = referenceLines(profile.references)
-        const feedback = await recentFeedback(profile.companyId)
+        const feedback = [...(await recentFeedback(profile.companyId)), ...(await latestInsights(profile.companyId))]
 
         // Un ángulo nuevo por día; si no quedan, se rota por pilar.
         const angles = await prisma.contentAngle.findMany({
@@ -106,6 +110,7 @@ async function handler(req: Request) {
             platform: GROUP_IMAGE_PLATFORM,
             contentType: 'post',
             topic: avoid.trim(),
+            knowledge: await knowledgeFor(profile.userId, profile.companyId, `${pillar ?? ''} ${angle?.angle ?? ''} ${angle?.hook ?? ''}`),
             tone: profile.tone,
             targetAudience: profile.targetAudience,
             contentPillars: pillars,
@@ -140,6 +145,13 @@ async function handler(req: Request) {
           prisma.contentAngle.updateMany({ where: { id: { in: usedAngleIds } }, data: { status: 'used' } }),
         ])
         const created = drafts.length
+
+        // Verificador de datos (mejor esfuerzo, con tope de tiempo para no pasar del límite de la corrida).
+        const groups = Array.from(new Set(drafts.map((d) => d.groupId).filter((g): g is string => !!g)))
+        for (const g of groups) {
+          if (Date.now() - startedAt > FACT_CHECK_BUDGET_MS) break
+          await factCheckGroup(g).catch((e) => console.error('[cron/auto-content] verificación falló:', e))
+        }
 
         if (created > 0) {
           const notify = await sendContentReadyEmail({ companyName: name, count: created, pendingTotal: pending + created })
