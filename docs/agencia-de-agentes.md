@@ -28,3 +28,8 @@ La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra
 - Estado real: monitoreo = último chequeo de salud; marketing = última corrida registrada (CronRun); rojo si la última corrida falló. Se refresca cada minuto.
 - "Ver un día en demostración" reproduce los horarios en un reloj rápido.
 - Para sumar un agente nuevo: agregarlo en `buildOffice()` (`src/lib/office.ts`); si aún no existe, va como puesto reservado (`ghost`).
+
+### Oficina 3D: piso abierto y robots
+- Todos los departamentos comparten un piso abierto (zonas de luz, sin paredes) y el CEO tiene una oficina de cristal elevada con la pantalla central (por aprobar, con problemas, trabajando). Los agentes son robots animados: sentados trabajando, quietos fuera de horario, de pie saludando cuando necesitan atención.
+- Modelo del robot: `public/models/robot.glb` (RobotExpressive, three.js examples, licencia CC0, de Tomás Laulhé). Si falla la carga, se ven figuras simples.
+- La luz sigue la hora del reloj (día y noche); las líneas de luz van de agente a agente hasta el escritorio del CEO.

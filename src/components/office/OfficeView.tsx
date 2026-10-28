@@ -118,6 +118,12 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const shown = focusedDept ?? dept
 
   const status = statusOf(agent.id)
+  const ceoSelected = selected === 'ceo'
+  const ceoStats = {
+    pending: departments.filter((d) => d.kind === 'marketing').reduce((n, d) => n + (d.stats[0]?.value ?? 0), 0),
+    problems: everyone.filter((x) => statusOf(x.a.id) === 'alert').length,
+    working: everyone.filter((x) => statusOf(x.a.id) === 'work').length,
+  }
   const alerts = (d: OfficeDepartment) => d.agents.filter((a) => a.status === 'alert').length
 
   return (
@@ -130,19 +136,19 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
       )}
 
       <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3" role="tablist" aria-label="Enfocar un departamento">
-        {[{ id: 'all', label: '🏢 Todo el edificio', n: 0, pending: 0 }, ...departments.map((d) => ({
+        {[{ id: 'all', label: '🏢 Todo el piso', n: 0, pending: 0 }, ...departments.map((d) => ({
           id: d.id,
           label: `${d.kind === 'monitoring' ? '🛰️' : d.kind === 'direction' ? '🧭' : '📣'} ${d.name}`,
           n: alerts(d),
           pending: d.kind === 'marketing' ? d.stats[0]?.value ?? 0 : 0,
-        }))].map((t) => {
+        })), { id: 'ceo', label: '👑 Mi oficina', n: 0, pending: 0 }].map((t) => {
           const on = t.id === focus
           return (
             <button
               key={t.id}
               role="tab"
               aria-selected={on}
-              onClick={() => { setFocus(t.id); setSelected(null) }}
+              onClick={() => { setFocus(t.id); setSelected(t.id === 'ceo' ? 'ceo' : null) }}
               className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all ${on ? 'border border-indigo-500/50 bg-indigo-500/20 text-indigo-300' : 'text-zinc-400 hover:text-zinc-200'}`}
             >
               {t.label}
@@ -158,20 +164,40 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           <OfficeScene
             departments={departments}
             focus={focus}
-            selectedId={agent.id}
+            selectedId={ceoSelected ? 'ceo' : agent.id}
             statusOf={statusOf}
             minutes={clockMin}
-            onSelect={(id, d) => { setSelected(id); if (focus !== 'all') setFocus(d) }}
+            ceo={ceoStats}
+            onSelect={(id, d) => {
+              setSelected(id)
+              if (id === 'ceo') setFocus('ceo')
+              else if (focus !== 'all') setFocus(d ?? 'all')
+            }}
           />
           <div className="absolute right-3 top-3 rounded-lg border border-zinc-700 bg-[#0d1220]/85 px-3 py-1.5 text-right font-mono text-xl font-bold text-zinc-100">
             {hh(clockMin)}
             <small className="block text-[10px] font-normal text-zinc-400">{DAY_NAMES[clockDay]}{demo ? ' · demostración' : ' · hora Colombia'}</small>
           </div>
-          <p className="absolute bottom-2 left-3 rounded bg-[#0d1220]/80 px-2 py-1 text-[11px] text-zinc-400">Arrastra para girar · rueda o pellizco para acercar · toca a un agente</p>
+          <p className="absolute bottom-2 left-3 rounded bg-[#0d1220]/80 px-2 py-1 text-[11px] text-zinc-400">Arrastra para girar · rueda o pellizco para acercar · toca a un agente o a tu oficina</p>
         </div>
 
         <aside className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+          {ceoSelected && (
+            <div className="rounded-xl border border-amber-500/30 bg-zinc-900/70 p-4">
+              <h2 className="flex items-center gap-2 text-[15px] font-bold text-white"><span className="h-3 w-3 rounded-sm bg-amber-400" />Tú · CEO</h2>
+              <p className="mb-2 text-xs text-zinc-400">Oficina de cristal con vista a todo el piso</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div><b className="block font-mono text-xl text-amber-300">{ceoStats.pending}</b><span className="text-[11px] text-zinc-500">por aprobar</span></div>
+                <div><b className="block font-mono text-xl text-red-300">{ceoStats.problems}</b><span className="text-[11px] text-zinc-500">con problemas</span></div>
+                <div><b className="block font-mono text-xl text-emerald-300">{ceoStats.working}</b><span className="text-[11px] text-zinc-500">trabajando</span></div>
+              </div>
+              <p className="mt-3 rounded-lg bg-zinc-800/70 p-2.5 text-xs leading-relaxed text-zinc-300">
+                La pantalla central muestra lo que necesita tu decisión. Las líneas de luz del piso son el trabajo de los agentes viajando hacia ti.
+              </p>
+              <Link href="/dashboard" className="mt-3 inline-block rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:border-indigo-400">Abrir el Dashboard →</Link>
+            </div>
+          )}
+          <div className={`rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 ${ceoSelected ? 'hidden' : ''}`}>
             <h2 className="flex items-center gap-2 text-[15px] font-bold text-white">
               <span className="h-3 w-3 rounded-sm" style={{ background: agent.color }} />
               {agent.name}
