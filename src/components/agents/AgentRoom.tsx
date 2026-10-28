@@ -8,7 +8,7 @@ import { useAgentPolling, refreshAgentsNow } from '@/hooks/useAgentPolling';
 import { useAgentHistoryPolling } from '@/hooks/useAgentHistoryPolling';
 import { AgentPanel } from './AgentPanel';
 import { AgentGrid } from './AgentGrid';
-import { AgentOffice } from './AgentOffice';
+import { OfficeView } from '@/components/office/OfficeView';
 import { ManageAgentsModal } from './ManageAgentsModal';
 
 interface AgentRoomProps {
@@ -60,7 +60,7 @@ export function AgentRoom({ initialApps }: AgentRoomProps) {
           <h1 className="text-3xl font-bold text-white">Agent Monitoring</h1>
           <p className="text-slate-400 mt-1">
             {view === 'office'
-              ? 'Tu equipo de agentes trabajando en la oficina'
+              ? 'Todos tus agentes, cada uno en su departamento'
               : 'Real-time health monitoring of external applications'}
           </p>
         </div>
@@ -135,15 +135,15 @@ export function AgentRoom({ initialApps }: AgentRoomProps) {
       )}
 
       {/* Content */}
-      {initialApps.length === 0 ? (
+      {view === 'office' ? (
+        <OfficeView embedded />
+      ) : initialApps.length === 0 ? (
         <div className="text-center py-12 space-y-3">
           <p className="text-slate-400">Aún no has configurado ningún agente.</p>
           <button type="button" onClick={() => setManageOpen(true)} className="btn-primary">
             + Agregar mi primer agente
           </button>
         </div>
-      ) : view === 'office' ? (
-        <AgentOffice apps={initialApps} />
       ) : (
         <AgentGrid>
           {initialApps.map((app) => (

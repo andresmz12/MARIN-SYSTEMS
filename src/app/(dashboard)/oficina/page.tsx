@@ -1,11 +1,6 @@
-import type { Metadata } from 'next'
-import { OfficeView } from '@/components/office/OfficeView'
+import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Oficina | Corporación Marin',
-  description: 'Todos los agentes de la corporación, cada uno en su departamento',
-}
-
+// La oficina vive ahora dentro de Agentes.
 export default function OficinaPage() {
-  return <OfficeView />
+  redirect('/agentes')
 }

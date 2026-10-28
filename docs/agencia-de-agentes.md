@@ -23,8 +23,8 @@ Pestaña **📚 Biblioteca**: textos que la IA puede citar para datos concretos.
 ## Variables
 `ANTHROPIC_API_KEY`, `CRON_SECRET`, `ALERT_EMAIL_TO`, `SENDGRID_API_KEY` (ya existentes) y `NEWS_FEED_URLS` (feeds RSS/Atom https, separados por coma).
 
-## Oficina (pantalla 3D)
-`/oficina` muestra cada departamento como un cuarto: **Monitoreo** (un agente por app vigilada, como Ángela), **un departamento de marketing por empresa activa** (Investigador, Redactor, Verificador, Analista + puestos reservados para Video y Comunidad) y **Dirección** (Jarvis y agentes generales).
+## Oficina (pantalla 3D, dentro de Agentes)
+La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra todo el edificio, con un cuarto por departamento: **Monitoreo** (un agente por app vigilada, como Ángela), **un departamento de marketing por empresa activa** (Investigador, Redactor, Verificador, Analista + puestos reservados para Video y Comunidad) y **Dirección** (Jarvis y agentes generales).
 - Estado real: monitoreo = último chequeo de salud; marketing = última corrida registrada (CronRun); rojo si la última corrida falló. Se refresca cada minuto.
 - "Ver un día en demostración" reproduce los horarios en un reloj rápido.
 - Para sumar un agente nuevo: agregarlo en `buildOffice()` (`src/lib/office.ts`); si aún no existe, va como puesto reservado (`ghost`).

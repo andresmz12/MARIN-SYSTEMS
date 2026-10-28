@@ -26,7 +26,6 @@ const negociosItems = [
   { label: 'Reuniones', href: '/reuniones' },
   { label: 'Corp. Tasks', href: '/corporate-tasks' },
   { label: 'Command Center', href: '/command-center' },
-  { label: 'Oficina', href: '/oficina' },
 ]
 
 const contenidoItems = [
