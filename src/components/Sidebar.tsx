@@ -228,7 +228,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l4-4 4 4 4-6" />
             </svg>
           </div>
-          <span className="font-display font-bold text-white text-sm">Corporación Marine</span>
+          <span className="font-display font-bold text-white text-sm">Corporación Marin</span>
         </div>
       </header>
 
@@ -258,8 +258,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 </svg>
               </div>
               <div className="min-w-0">
-                <p className="font-display font-bold gradient-text text-sm tracking-tight truncate">Corporación Marine</p>
-                <p className="text-[10px] text-gray-500">Trading & Productividad</p>
+                <p className="font-display font-bold gradient-text text-sm tracking-tight truncate">Corporación Marin</p>
               </div>
             </div>
           )}

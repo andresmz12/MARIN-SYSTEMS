@@ -34,10 +34,10 @@ export async function GET(request: NextRequest) {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Corporación Marine//Agenda//ES',
+    'PRODID:-//Corporación Marin//Agenda//ES',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:Corporación Marine',
+    'X-WR-CALNAME:Corporación Marin',
     'X-WR-TIMEZONE:America/Bogota',
     'X-WR-CALDESC:Agenda de trading y productividad',
   ]

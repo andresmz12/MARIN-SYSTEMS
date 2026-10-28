@@ -3,7 +3,7 @@ import './globals.css'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: 'Corporación Marine',
+  title: 'Corporación Marin',
   description: 'Sistema personal de productividad y trading',
 }
 

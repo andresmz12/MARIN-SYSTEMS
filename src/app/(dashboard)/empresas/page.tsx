@@ -80,7 +80,7 @@ export default function EmpresasPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const [centerLabel, setCenterLabel] = useState('CORPORACIÓN MARINE')
+  const [centerLabel, setCenterLabel] = useState('CORPORACIÓN MARIN')
   const [dims, setDims] = useState({ w: 800, h: 580 })
   const [positions, setPositions] = useState<Positions>({})
   const [centerPos, setCenterPos] = useState({ x: 400, y: 290 })
@@ -106,7 +106,7 @@ export default function EmpresasPage() {
     loadCompanies()
     setCanvasNotes(ls<CanvasNote[]>(NOTES_KEY, []))
     setConnections(ls<Connection[]>(CONNS_KEY, []))
-    setCenterLabel(ls<string>(CLABEL_KEY, 'CORPORACIÓN MARINE'))
+    setCenterLabel(ls<string>(CLABEL_KEY, 'CORPORACIÓN MARIN'))
     const onResize = () => { setIsMobile(window.innerWidth < 768); updateDims() }
     onResize()
     window.addEventListener('resize', onResize)
@@ -762,7 +762,7 @@ function CenterNode({ x, y, containerRef, onDragEnd, connectMode, isConnectFrom,
   const line2 = parts.slice(1).join(' ').toUpperCase()
 
   function handleSave(val: string) {
-    const clean = val.trim() || 'CORPORACIÓN MARINE'
+    const clean = val.trim() || 'CORPORACIÓN MARIN'
     onLabelSave(clean)
     setEditing(false)
   }

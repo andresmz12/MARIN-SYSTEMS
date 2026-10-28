@@ -6,7 +6,7 @@ import { Metadata } from 'next';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Agent Monitoring | Corporación Marine',
+  title: 'Agent Monitoring | Corporación Marin',
   description: 'Real-time monitoring of external applications',
 };
 

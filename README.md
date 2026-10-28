@@ -1,4 +1,4 @@
-# Corporación Marine
+# Corporación Marin
 
 Sistema personal de productividad, trading (Forex en cuenta demo) y gestión de negocios propios, con generación de contenido asistida por IA.
 

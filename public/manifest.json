@@ -1,7 +1,6 @@
 {
-  "name": "Corporación Marine",
-  "short_name": "Marine",
-  "description": "Trading & Productividad",
+  "name": "Corporación Marin",
+  "short_name": "Marin",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0f0f0f",
