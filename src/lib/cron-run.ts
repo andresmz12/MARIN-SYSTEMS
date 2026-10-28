@@ -80,3 +80,27 @@ async function logHttp(job: string, startedAt: Date, ok: boolean, summary: unkno
     console.error(`[cron-run] no se pudo registrar la corrida de "${job}":`, err)
   }
 }
+
+// Trabajos largos (generar posts, verificar datos, leer noticias) tardan más de un minuto y los
+// proxies cortan la conexión a ese tiempo: GitHub marcaba "falló" aunque el trabajo sí terminaba.
+// Estos responden 202 al instante y siguen por detrás; el resultado (o el error) queda en CronRun y,
+// si falla, llega por correo. Con el encabezado `x-wait: 1` se espera el resultado completo
+// (lo usa el botón "Generar tanda ahora" de la pantalla).
+const runningJobs = new Set<string>()
+
+export function backgroundCron(job: string, handler: CronHandler): CronHandler {
+  const logged = withCronLog(job, handler)
+  return async (req) => {
+    if (!process.env.CRON_SECRET || req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (req.headers.get('x-wait') === '1') return logged(req)
+    if (runningJobs.has(job)) return NextResponse.json({ accepted: false, running: true, job }, { status: 202 })
+    runningJobs.add(job)
+    const copy = req.clone()
+    void logged(copy)
+      .catch((err) => console.error(`[cron/${job}] falló en segundo plano:`, err))
+      .finally(() => runningJobs.delete(job))
+    return NextResponse.json({ accepted: true, job }, { status: 202 })
+  }
+}

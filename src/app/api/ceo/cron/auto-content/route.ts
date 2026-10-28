@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { withCronLog } from '@/lib/cron-run'
+import { backgroundCron } from '@/lib/cron-run'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
@@ -173,4 +173,4 @@ async function handler(req: Request) {
   }
 }
 
-export const POST = withCronLog('auto-content', handler)
+export const POST = backgroundCron('auto-content', handler)

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { withCronLog } from '@/lib/cron-run'
+import { backgroundCron } from '@/lib/cron-run'
 import { prisma } from '@/lib/prisma'
 import { analyzeMetrics, type MetricRow } from '@/lib/agents-ai'
 import { sendAgentReportEmail } from '@/lib/sendgrid-client'
@@ -83,4 +83,4 @@ async function handler(req: Request) {
   }
 }
 
-export const POST = withCronLog('metrics-report', handler)
+export const POST = backgroundCron('metrics-report', handler)

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const res = await runAutoContent(new Request(req.url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}`, 'Content-Type': 'application/json', 'x-wait': '1' },
     body: JSON.stringify({ companyId }),
   }))
   const data = (await res.json().catch(() => ({}))) as { summary?: { created: number; skipped?: string; error?: string }[]; error?: string }
