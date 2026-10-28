@@ -8,7 +8,8 @@ import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
 import { IMAGE_SPECS, buildImagePrompt, parseImageText, parseVisualStyle, type ImageText } from '@/lib/image-prompt'
 
 interface Props {
-  companies: CEOCompany[]
+  /** La empresa que se está viendo: todo en esta pantalla es de ella. */
+  company: CEOCompany
   /** Lleva a la pestaña Empresas (donde se crea el perfil de marca). */
   onOpenCompanies?: () => void
 }
@@ -26,14 +27,14 @@ function localImagePath(url: string): string {
   try { return new URL(url).pathname } catch { return url }
 }
 
-export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
+export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const { showToast } = useToast()
   const [posts, setPosts] = useState<GeneratedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? '')
+  const companyId = company.id
   const [auto, setAuto] = useState<AutoState | null>(null)
   const [refs, setRefs] = useState<Reference[]>([])
   const [refInput, setRefInput] = useState('')
@@ -54,7 +55,7 @@ export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
       const res = await fetch('/api/ceo/content-queue')
       if (res.ok) {
         const d = (await res.json()) as { posts: GeneratedPost[]; publishConfigured: boolean; publishPlatforms: string[] }
-        setPosts(d.posts)
+        setPosts(d.posts.filter((p) => p.companyId === companyId))
         setPublishOn(d.publishConfigured)
         setPublishPlatforms(d.publishPlatforms ?? [])
       }
@@ -63,7 +64,7 @@ export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [showToast, companyId])
 
   useEffect(() => { load() }, [load])
 
@@ -284,7 +285,9 @@ export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
   }
 
   const pending = posts.filter((p) => p.status === 'pending_review')
-  const scheduled = posts.filter((p) => p.status === 'approved' || p.status === 'publishing')
+  const scheduledAll = posts.filter((p) => p.status === 'approved' || p.status === 'publishing')
+  const manualTikTok = scheduledAll.filter((p) => p.platform === 'tiktok')
+  const scheduled = scheduledAll.filter((p) => p.platform !== 'tiktok')
   const failed = posts.filter((p) => p.status === 'failed')
   const published = posts.filter((p) => p.status === 'published')
   // Asistente de configuración: lo mínimo para que el sistema trabaje solo.
@@ -367,13 +370,6 @@ export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
             Cada domingo genera los posts de lunes, miércoles y viernes (solo imágenes). Los videos los subes tú. Nada se publica sin tu aprobación.
           </p>
         </div>
-        <select
-          value={companyId}
-          onChange={(e) => setCompanyId(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200"
-        >
-          {companies.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
-        </select>
         <button
           onClick={toggleAuto}
           disabled={!auto}
@@ -728,6 +724,33 @@ export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
           )
         })}
       </div>
+
+      {manualTikTok.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-pink-500/30 bg-pink-500/5 p-4">
+          <h3 className="text-sm font-semibold text-pink-200">🎵 TikTok — lo subes tú</h3>
+          <p className="text-xs text-zinc-400">Copia el texto, descarga la imagen (o tu video) y súbelo en TikTok. Luego pulsa "Ya lo subí".</p>
+          {manualTikTok.map((post) => (
+            <div key={post.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
+              <span className="text-sm text-zinc-200 flex-1 min-w-[160px] truncate">{post.topic}</span>
+              {post.imageUrl && (
+                <a href={localImagePath(post.imageUrl)} download className="text-xs text-zinc-200 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500">Descargar imagen</a>
+              )}
+              <button
+                onClick={() => copyText(composePostText(post.platform, post.copy, post.hashtags), 'Texto copiado')}
+                className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
+              >
+                Copiar texto
+              </button>
+              <button
+                onClick={() => patch(post.id, { status: 'published' }, 'Marcado como publicado')}
+                className="text-xs text-emerald-300 border border-emerald-500/40 rounded-md px-2 py-1 hover:bg-emerald-500/10"
+              >
+                Ya lo subí
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {scheduled.length > 0 && (
         <div className="space-y-2">
