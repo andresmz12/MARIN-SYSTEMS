@@ -7,6 +7,19 @@ export const RETRY_AFTER_MS = 30 * 60 * 1000
 /** Un post "publishing" que lleva más de esto quedó colgado (caída a mitad de envío). */
 export const STUCK_AFTER_MS = 15 * 60 * 1000
 
+/**
+ * Headers para el webhook de publicación. La clave viaja en `X-Webhook-Secret` (genérico) y
+ * también en `x-make-apikey`, que es el header que usa la autenticación por API key nativa de
+ * Make: así Make rechaza lo no autorizado ANTES de ejecutar el escenario (sin gastar créditos).
+ */
+export function webhookHeaders(): Record<string, string> {
+  const secret = process.env.PUBLISH_WEBHOOK_SECRET
+  return {
+    'Content-Type': 'application/json',
+    ...(secret ? { 'X-Webhook-Secret': secret, 'x-make-apikey': secret } : {}),
+  }
+}
+
 export function publishConfigured(): boolean {
   return !!process.env.PUBLISH_WEBHOOK_URL
 }
@@ -50,10 +63,7 @@ export async function publishPost(postId: string, opts: { userId?: string } = {}
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(process.env.PUBLISH_WEBHOOK_SECRET ? { 'X-Webhook-Secret': process.env.PUBLISH_WEBHOOK_SECRET } : {}),
-      },
+      headers: webhookHeaders(),
       body: JSON.stringify({
         postId: post.id,
         idempotencyKey: post.id,

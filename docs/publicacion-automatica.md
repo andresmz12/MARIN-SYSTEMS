@@ -86,7 +86,7 @@ X-Webhook-Secret: <PUBLISH_WEBHOOK_SECRET>      (o Authorization: Bearer <CRON_S
 Los nombres exactos de los módulos pueden variar; busca el equivalente.
 
 1. **Webhooks → Custom webhook**: crea el webhook y copia su URL a `PUBLISH_WEBHOOK_URL`.
-2. Primer filtro: el header `X-Webhook-Secret` debe ser igual a tu secreto; si no, detener. Segundo filtro: si `test` es `true`, responder 200 y detener (así pruebas la conexión sin publicar).
+2. **Seguridad:** en la ventana del webhook, sección *API Key authentication* → **Add API key** y usa como valor el mismo secreto que pondrás en `PUBLISH_WEBHOOK_SECRET`. El sistema envía esa clave en el header `x-make-apikey` (y también en `X-Webhook-Secret`), y Make rechaza lo que no la traiga sin ejecutar el escenario. Filtro: si `test` es `true`, responder 200 y detener (así pruebas la conexión sin publicar).
 3. **Router** con una ruta por `platform`:
    - `instagram`: módulo de Instagram for Business para publicar una foto (URL = `imageUrl`, texto = `text`).
    - `facebook`: módulo de Facebook Pages para publicar una foto en la página.

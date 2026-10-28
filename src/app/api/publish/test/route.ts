@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { webhookHeaders } from '@/lib/publisher'
 
 export const maxDuration = 30
 
@@ -18,10 +19,7 @@ export async function POST() {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(process.env.PUBLISH_WEBHOOK_SECRET ? { 'X-Webhook-Secret': process.env.PUBLISH_WEBHOOK_SECRET } : {}),
-      },
+      headers: webhookHeaders(),
       body: JSON.stringify({
         test: true,
         postId: 'test',
