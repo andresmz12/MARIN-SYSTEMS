@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { withCronLog } from '@/lib/cron-run'
-import { AUTO_PLATFORMS } from '@/lib/platforms'
+import { publishablePlatforms } from '@/lib/platforms'
 import { MAX_PUBLISH_ATTEMPTS, RETRY_AFTER_MS, STUCK_AFTER_MS, publishConfigured, publishPost } from '@/lib/publisher'
 
 export const maxDuration = 120
@@ -33,7 +33,7 @@ async function handler(req: Request) {
       where: {
         status: 'approved',
         imageUrl: { not: null },
-        platform: { in: [...AUTO_PLATFORMS] },
+        platform: { in: publishablePlatforms() },
         scheduledDate: { lte: new Date(now), gte: new Date(now - STALE_AFTER_MS) },
         publishAttempts: { lt: MAX_PUBLISH_ATTEMPTS },
         OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(now - RETRY_AFTER_MS) } }],

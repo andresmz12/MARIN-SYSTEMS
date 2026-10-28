@@ -378,7 +378,7 @@ Responde ÚNICAMENTE con este JSON:
   "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
   "cta": "llamada a la acción específica y directa",
   "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado",
-  "imagePrompt": "prompt listo para pegar en un generador de imágenes (en inglés): sujeto, composición, estilo, paleta y ambiente, sin texto incrustado; termina con la proporción para la plataforma (Instagram: 4:5 vertical; Facebook: 1:1 cuadrada; LinkedIn: 1.91:1 horizontal; Twitter/X: 16:9 horizontal)"
+  "imagePrompt": "prompt listo para pegar en un generador de imágenes (en inglés): sujeto, composición, estilo, paleta y ambiente, sin texto incrustado; termina con la proporción para la plataforma (Instagram: 4:5 vertical; Facebook: 1:1 cuadrada; LinkedIn: 1.91:1 horizontal; Twitter/X: 16:9 horizontal; TikTok: 9:16 vertical)"
 }`
 
   try {

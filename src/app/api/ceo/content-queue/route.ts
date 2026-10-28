@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { publishConfigured } from '@/lib/publisher'
+import { publishablePlatforms } from '@/lib/platforms'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,7 @@ export async function GET() {
       include: { company: true },
       orderBy: [{ scheduledDate: 'asc' }, { createdAt: 'asc' }],
     })
-    return NextResponse.json({ posts, publishConfigured: publishConfigured() })
+    return NextResponse.json({ posts, publishConfigured: publishConfigured(), publishPlatforms: publishablePlatforms() })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Error al obtener la bandeja' }, { status: 500 })

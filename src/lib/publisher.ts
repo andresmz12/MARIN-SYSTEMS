@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { composePostText, isAutoPlatform } from '@/lib/platforms'
+import { composePostText, publishablePlatforms } from '@/lib/platforms'
 
 export const MAX_PUBLISH_ATTEMPTS = 3
 /** Espera mínima entre intentos de un mismo post. */
@@ -37,7 +37,7 @@ export async function publishPost(postId: string, opts: { userId?: string } = {}
   })
   if (!post) return { ok: false, error: 'Post no encontrado' }
   if (post.status === 'published') return { ok: false, error: 'Ya está publicado' }
-  if (!isAutoPlatform(post.platform)) return { ok: false, error: `${post.platform} no se publica automáticamente` }
+  if (!publishablePlatforms().includes(post.platform)) return { ok: false, error: `${post.platform} no se publica automáticamente: súbelo a mano` }
   if (!post.imageUrl) return { ok: false, error: 'El post no tiene imagen' }
 
   const claimed = await prisma.generatedPost.updateMany({

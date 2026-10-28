@@ -4,7 +4,7 @@ El sistema decide **qué** publicar y **cuándo**; un servicio intermedio (Make,
 agregador de redes) se encarga de **subirlo** a cada red. Así no dependemos de aprobar una app propia
 en Meta, LinkedIn y X, y se puede cambiar de servicio sin tocar el código.
 
-Solo se publican **imágenes** en Instagram, Facebook, LinkedIn y X. Los videos los subes tú a mano.
+Solo se publican **imágenes** en Instagram, Facebook, LinkedIn y X. Los videos los subes tú a mano. **TikTok** se genera y se aprueba aquí, pero se sube a mano (su API exige auditoría); si algún día lo conectas, agrégalo a `PUBLISH_PLATFORMS`.
 
 ## Flujo
 
@@ -21,6 +21,7 @@ Solo se publican **imágenes** en Instagram, Facebook, LinkedIn y X. Los videos 
 | Variable | Para qué |
 |---|---|
 | `PUBLISH_WEBHOOK_URL` | URL del webhook que publica. Sin ella no se publica nada (todo queda para subir a mano). |
+| `PUBLISH_PLATFORMS` | Opcional. Redes que el escenario cubre, separadas por coma. Por defecto `instagram,facebook,linkedin,twitter`. |
 | `PUBLISH_WEBHOOK_SECRET` | Se envía como header `X-Webhook-Secret`; el escenario debe verificarlo. También autentica el callback. |
 
 ## Lo que recibe el webhook

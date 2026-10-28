@@ -1,10 +1,22 @@
-// Redes a las que el sistema publica imágenes automáticamente. Los videos los sube
-// el dueño a mano (TikTok incluido), así que no están aquí.
-export const AUTO_PLATFORMS = ['instagram', 'facebook', 'linkedin', 'twitter'] as const
+// Redes para las que el sistema genera posts de imagen. Los videos los sube el dueño a mano.
+export const AUTO_PLATFORMS = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok'] as const
 export type AutoPlatform = (typeof AUTO_PLATFORMS)[number]
 
 export function isAutoPlatform(p: string): p is AutoPlatform {
   return (AUTO_PLATFORMS as readonly string[]).includes(p)
+}
+
+/**
+ * Redes que realmente se envían al webhook de publicación. TikTok queda fuera por defecto:
+ * su API exige auditoría para publicar, así que se sube a mano. Si el escenario del webhook
+ * ya cubre más redes, se listan en PUBLISH_PLATFORMS (separadas por coma).
+ */
+export function publishablePlatforms(): string[] {
+  const fromEnv = (process.env.PUBLISH_PLATFORMS ?? '')
+    .split(',')
+    .map((p) => p.trim().toLowerCase())
+    .filter(isAutoPlatform)
+  return fromEnv.length > 0 ? fromEnv : ['instagram', 'facebook', 'linkedin', 'twitter']
 }
 
 /** X/Twitter: el texto publicado (copy + hashtags) no puede pasar de 280 caracteres. */

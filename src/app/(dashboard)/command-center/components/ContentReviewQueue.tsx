@@ -36,6 +36,7 @@ export function ContentReviewQueue({ companies }: Props) {
   const [refInput, setRefInput] = useState('')
   const [refNote, setRefNote] = useState('')
   const [publishOn, setPublishOn] = useState(false)
+  const [publishPlatforms, setPublishPlatforms] = useState<string[]>([])
   const [autoLoaded, setAutoLoaded] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; status: number | null; ms: number; body: string } | null>(null)
@@ -45,9 +46,10 @@ export function ContentReviewQueue({ companies }: Props) {
     try {
       const res = await fetch('/api/ceo/content-queue')
       if (res.ok) {
-        const d = (await res.json()) as { posts: GeneratedPost[]; publishConfigured: boolean }
+        const d = (await res.json()) as { posts: GeneratedPost[]; publishConfigured: boolean; publishPlatforms: string[] }
         setPosts(d.posts)
         setPublishOn(d.publishConfigured)
+        setPublishPlatforms(d.publishPlatforms ?? [])
       }
     } catch {
       showToast('Error al cargar la bandeja', 'error')
@@ -281,7 +283,7 @@ export function ContentReviewQueue({ companies }: Props) {
         </div>
         {publishOn ? (
           <p className="text-xs text-zinc-400">
-            Lo aprobado con imagen se envía solo a su hora al webhook que publica en tus redes. El botón manda un mensaje de prueba
+            Lo aprobado con imagen se envía solo a su hora al webhook que publica en tus redes. Redes automáticas: {publishPlatforms.map((p) => PLATFORM_CONFIG[p]?.label ?? p).join(', ')}; las demás se suben a mano. El botón manda un mensaje de prueba
             (<code>test: true</code>) que no publica nada.
           </p>
         ) : (
@@ -532,7 +534,10 @@ export function ContentReviewQueue({ companies }: Props) {
                 {post.publishError && post.status === 'approved' && (
                   <span className="text-xs text-amber-300" title={post.publishError}>reintento {post.publishAttempts}/3</span>
                 )}
-                {publishOn && post.imageUrl && post.status === 'approved' && (
+                {publishOn && !publishPlatforms.includes(post.platform) && (
+                  <span className="text-xs text-zinc-400">súbelo a mano</span>
+                )}
+                {publishOn && publishPlatforms.includes(post.platform) && post.imageUrl && post.status === 'approved' && (
                   <button
                     disabled={busy}
                     onClick={() => publishNow(post.id)}
@@ -569,7 +574,7 @@ export function ContentReviewQueue({ companies }: Props) {
               <div key={post.id} className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-zinc-200 flex-1 min-w-[160px] truncate">{plat?.emoji} {post.topic}</span>
-                  {publishOn && post.imageUrl && (
+                  {publishOn && publishPlatforms.includes(post.platform) && post.imageUrl && (
                     <button
                       disabled={busy}
                       onClick={() => publishNow(post.id)}
