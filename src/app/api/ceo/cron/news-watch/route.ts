@@ -5,7 +5,7 @@ import { generateMarketingContent } from '@/lib/ai'
 import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
 import { knowledgeFor } from '@/lib/knowledge'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
-import { fetchFeed, newsFeedUrls, type NewsItem } from '@/lib/news'
+import { fetchArticleText, fetchFeed, newsFeedUrls, type NewsItem } from '@/lib/news'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
 
@@ -48,8 +48,11 @@ async function handler(req: Request) {
     if (feedErrors.length === feeds.length) throw new Error(`No se pudo leer ninguna fuente: ${feedErrors.join(' | ')}`)
 
     const cutoff = Date.now() - MAX_AGE_MS
+    // Una página de listado sin fecha en cada noticia ("comunicados del mes"): se toman como nuevas
+    // y la deduplicación por enlace evita repetirlas.
     const fresh = items
-      .filter((i) => i.publishedAt && i.publishedAt.getTime() >= cutoff)
+      .map((i) => ({ ...i, publishedAt: i.publishedAt ?? new Date() }))
+      .filter((i) => i.publishedAt.getTime() >= cutoff)
       .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
 
     const profiles = await prisma.brandProfile.findMany({
@@ -94,6 +97,7 @@ async function handler(req: Request) {
         let created = 0
 
         for (const item of todo) {
+          if (!item.summary) item.summary = await fetchArticleText(item.link)
           const generated = await generateMarketingContent({
             companyName: name,
             platform: GROUP_IMAGE_PLATFORM,
