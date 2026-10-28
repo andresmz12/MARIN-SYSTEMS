@@ -2,9 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
-import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils'
 import type { AgentStatus, OfficeAgent, OfficeDepartment } from '@/lib/office'
+import { animatePerson, buildPerson, specFor, type Person, type PersonPose } from './person'
 
 export interface CeoStats {
   pending: number
@@ -19,20 +18,19 @@ interface Props {
   /** Id de un agente o 'ceo'. */
   selectedId: string | null
   statusOf: (agentId: string) => AgentStatus
-  /** Hora del reloj (real o de la demostración), en minutos desde 00:00: manda sobre el día y la noche. */
+  /** Hora del reloj (real o de la demostración), en minutos desde 00:00. */
   minutes: number
   ceo: CeoStats
-  /** Oficina clara (siempre de día) o noche cerrada con neón; la oscura sigue el reloj. */
-  bright?: boolean
   onSelect: (id: string, departmentId: string | null) => void
 }
 
 // ───────────────────────── Distribución ─────────────────────────
 const DESK_DX = 3.0
 const DESK_DZ = 3.8
-const ZONE_GAP = 2.4
+const ZONE_GAP = 2.6
 const CEO_W = 9.6
 const CEO_D = 6.4
+const PLATFORM_H = 0.35
 
 interface ZonePlan {
   dept: OfficeDepartment
@@ -45,7 +43,6 @@ interface ZonePlan {
 interface Plan {
   zones: ZonePlan[]
   ceo: { x: number; z: number }
-  radar: { x: number; z: number }
   floor: { minX: number; maxX: number; minZ: number; maxZ: number }
 }
 
@@ -61,7 +58,6 @@ export function planOffice(depts: OfficeDepartment[]): Plan {
   const colW = Array.from({ length: nCols }, () => 0)
   const colH = Array.from({ length: nCols }, () => 0)
   const colOf = depts.map((_, i) => {
-    // Cada zona va a la columna más baja: así queda parejo, sin dejar huecos.
     const c = nCols === 1 ? 0 : colH[0] <= colH[1] ? 0 : 1
     colW[c] = Math.max(colW[c], sizes[i].w)
     colH[c] += sizes[i].d + ZONE_GAP
@@ -89,19 +85,17 @@ export function planOffice(depts: OfficeDepartment[]): Plan {
   const maxZ = Math.max(0, ...zones.map((z) => z.cz + z.d / 2))
   const maxX = Math.max(CEO_W / 2, ...zones.map((z) => z.cx + z.w / 2))
   const minX = Math.min(-CEO_W / 2, ...zones.map((z) => z.cx - z.w / 2))
-  const ceo = { x: maxX - CEO_W / 2, z: maxZ + 1.6 + CEO_D / 2 }
-  const radar = { x: minX + (maxX - minX) * 0.28, z: ceo.z }
+  const ceo = { x: maxX - CEO_W / 2, z: maxZ + 1.8 + CEO_D / 2 }
   return {
     zones,
     ceo,
-    radar,
-    floor: { minX: minX - 2.5, maxX: maxX + 2.5, minZ: -2.5, maxZ: ceo.z + CEO_D / 2 + 2.5 },
+    floor: { minX: minX - 2.2, maxX: maxX + 2.2, minZ: -2.2, maxZ: ceo.z + CEO_D / 2 + 1.6 },
   }
 }
 
 // ───────────────────────── Utilidades 3D ─────────────────────────
 const hex = (s: string) => parseInt(s.replace('#', ''), 16)
-const mat = (c: number, o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, metalness: 0.1, ...o })
+const mat = (c: number, o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.78, metalness: 0.04, ...o })
 function box(w: number, h: number, d: number, c: number, o: THREE.MeshStandardMaterialParameters = {}) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c, o))
   m.castShadow = true
@@ -113,9 +107,10 @@ function put<T extends THREE.Object3D>(o: T, x: number, y: number, z: number, pa
   parent?.add(o)
   return o
 }
-function neon(color: number, w: number, h: number, d: number) {
-  return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }))
-}
+/** Mezcla un color con blanco: para las alfombras suaves de cada área. */
+const soft = (c: number, k: number) => new THREE.Color(c).lerp(new THREE.Color(0xffffff), k).getHex()
+const deep = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex()
+
 function textSprite(text: string, color: string, size = 84) {
   const c = document.createElement('canvas')
   c.width = 128
@@ -129,182 +124,93 @@ function textSprite(text: string, color: string, size = 84) {
     g.fillText(text, 64, 70)
   }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }))
-  s.scale.set(0.9, 0.9, 1)
+  s.scale.set(0.8, 0.8, 1)
   return s
 }
-function gridTexture(repX: number, repY: number, bright = false) {
+function floorTexture(repX: number, repY: number) {
   const c = document.createElement('canvas')
   c.width = 256
   c.height = 256
   const g = c.getContext('2d')
   if (g) {
-    g.fillStyle = bright ? '#e9eef4' : '#0a1020'
+    g.fillStyle = '#e8e2d6'
     g.fillRect(0, 0, 256, 256)
-    g.strokeStyle = bright ? 'rgba(70,110,160,0.30)' : 'rgba(90,215,255,0.28)'
+    g.strokeStyle = 'rgba(120,105,85,0.20)'
     g.lineWidth = 2
     g.strokeRect(1, 1, 254, 254)
-    g.strokeStyle = bright ? 'rgba(70,110,160,0.12)' : 'rgba(90,215,255,0.10)'
-    g.lineWidth = 1
-    g.beginPath()
-    g.moveTo(128, 0)
-    g.lineTo(128, 256)
-    g.moveTo(0, 128)
-    g.lineTo(256, 128)
-    g.stroke()
   }
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.repeat.set(repX, repY)
   return t
 }
-function wrapText(g: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lh: number, maxLines: number) {
-  const words = text.split(' ')
-  let line = ''
-  let n = 0
-  for (const w of words) {
-    const t = `${line}${w} `
-    if (g.measureText(t).width > maxW && line) {
-      g.fillText(line.trim(), x, y)
-      line = `${w} `
-      y += lh
-      if (++n >= maxLines) return
-    } else line = t
-  }
-  g.fillText(line.trim(), x, y)
+
+function plant(x: number, z: number, parent: THREE.Object3D, s = 1) {
+  const g = new THREE.Group()
+  put(new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.17 * s, 0.38 * s, 12), mat(0xc2754a)), 0, 0.19 * s, 0, g)
+  ;[[0, 0.62, 0, 0.3], [0.15, 0.85, 0.05, 0.22], [-0.14, 0.78, -0.06, 0.24]].forEach((p) => {
+    const l = new THREE.Mesh(new THREE.SphereGeometry(p[3] * s, 12, 10), mat(0x3f9b5a))
+    l.castShadow = true
+    put(l, p[0] * s, p[1] * s, p[2] * s, g)
+  })
+  g.position.set(x, 0, z)
+  parent.add(g)
 }
 
-// ───────────────────────── Robot (modelo animado) ─────────────────────────
-// Un solo archivo (public/models/robot.glb, RobotExpressive: CC0, Tomás Laulhé) para todos los agentes.
-let robotPromise: Promise<THREE.Group | null> | null = null
-function loadRobot(): Promise<THREE.Group | null> {
-  if (!robotPromise) {
-    robotPromise = new Promise((resolve) => {
-      new GLTFLoader().load(
-        '/models/robot.glb',
-        (gltf) => {
-          const root = gltf.scene as THREE.Group
-          root.userData.clips = gltf.animations
-          resolve(root)
-        },
-        undefined,
-        () => resolve(null),
-      )
-    })
-  }
-  return robotPromise
-}
-
-/** Lo que hace falta para sentar a un robot: un asiento, la figura simple de relleno y su color. */
-interface Seatable {
-  seat: THREE.Group
-  fallback: THREE.Group
-  color: number
-  ghost: boolean
-  mixer?: THREE.AnimationMixer
-  actions?: Record<string, THREE.AnimationAction>
-  playing?: string
-  robot?: THREE.Group
-}
-
-interface Actor extends Seatable {
+// ───────────────────────── Escritorio con su persona ─────────────────────────
+interface Actor {
   id: string
   deptId: string
   a: OfficeAgent
   wrap: THREE.Group
-  glow: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
-  lamp: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
+  person: Person
+  screen: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
   zz: THREE.Sprite
   ex: THREE.Sprite
+  ghost: boolean
 }
 
-function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string): Actor {
+function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent: number): Actor {
   const ghost = a.status === 'ghost'
-  const color = hex(a.color)
   const desk = new THREE.Group()
-  put(box(2.0, 0.12, 1.0, ghost ? 0x1c2440 : 0x2a3558), 0, 0.78, 0, desk)
-  ;[[-0.9, -0.4], [0.9, -0.4], [-0.9, 0.4], [0.9, 0.4]].forEach((p) => put(box(0.08, 0.78, 0.08, 0x151c34), p[0], 0.39, p[1], desk))
-  put(box(0.9, 0.55, 0.06, 0x05080f), 0, 1.3, -0.25, desk)
-  put(box(0.1, 0.25, 0.1, 0x151c34), 0, 0.95, -0.25, desk)
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.45), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0 }))
-  put(glow, 0, 1.3, -0.215, desk)
-  put(neon(ghost ? 0x3a4468 : color, 2.0, 0.025, 0.025), 0, 0.72, 0.5, desk)
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: 0x5a6483 }))
-  put(lamp, 0.8, 0.9, -0.3, desk)
-  put(box(0.55, 0.06, 0.55, 0x151c34), 0, 0.5, 0.95, desk)
-  put(box(0.55, 0.55, 0.06, 0x151c34), 0, 0.82, 1.22, desk)
-  put(box(0.08, 0.5, 0.08, 0x151c34), 0, 0.25, 0.95, desk)
+  const wood = ghost ? 0xd8d2c6 : 0xe8d9bd
+  put(box(2.0, 0.08, 1.0, wood), 0, 0.8, 0, desk)
+  ;[[-0.92, -0.42], [0.92, -0.42], [-0.92, 0.42], [0.92, 0.42]].forEach((p) => put(box(0.06, 0.78, 0.06, 0xf6f6f4), p[0], 0.39, p[1], desk))
+  // Monitor con el encendido según el estado
+  put(box(0.1, 0.22, 0.08, 0x2a2e38), 0, 0.95, -0.28, desk)
+  const screen = box(0.92, 0.55, 0.05, 0x14171d, { emissive: new THREE.Color(0x000000), emissiveIntensity: 1 }) as THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
+  put(screen, 0, 1.3, -0.3, desk)
+  put(box(0.62, 0.025, 0.2, 0xcfd3da), 0, 0.85, 0.2, desk)
+  if (!ghost) {
+    put(box(0.1, 0.1, 0.1, 0xf4f4f4), 0.75, 0.9, 0.05, desk) // taza
+    put(box(0.34, 0.012, 0.24, 0xf6efe0), -0.7, 0.845, 0.1, desk) // cuaderno
+  }
+  // Silla con el color del área
+  const chairColor = ghost ? 0x9aa3b4 : deep(accent, 0.78)
+  put(box(0.55, 0.07, 0.55, chairColor), 0, 0.5, 0.95, desk)
+  put(box(0.55, 0.55, 0.07, chairColor), 0, 0.82, 1.23, desk)
+  put(box(0.07, 0.46, 0.07, 0x3a3f4a), 0, 0.24, 0.95, desk)
+  put(box(0.5, 0.04, 0.5, 0x3a3f4a), 0, 0.03, 0.95, desk)
 
-  // Asiento del agente: aquí entra el robot (o la figura simple mientras carga).
   const seat = new THREE.Group()
   seat.position.set(0, 0, 0.95)
-  seat.rotation.y = Math.PI
+  seat.rotation.y = Math.PI // mira hacia el monitor
   desk.add(seat)
-  const fallback = new THREE.Group()
-  const fade = ghost ? { transparent: true, opacity: 0.35 } : {}
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.27, 0.62, 16), mat(ghost ? 0x4a5370 : color, fade))
-  body.castShadow = true
-  put(body, 0, 0.95, 0, fallback)
-  put(new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 18), mat(ghost ? 0x4a5370 : 0xf1d3b8, fade)), 0, 1.5, 0, fallback)
-  seat.add(fallback)
+  const person = buildPerson(specFor(a.id, hex(a.color), ghost), (a.id.length * 7) % 13)
+  person.group.scale.multiplyScalar(1.15)
+  seat.add(person.group)
 
-  const zz = put(textSprite('z', '#8d9ac0'), 0.25, 1.95, 0.95, desk)
-  const ex = put(textSprite('!', '#f0645c'), 0, 2.1, 0.95, desk)
+  const zz = put(textSprite('z', '#7f8aa3'), 0.25, 1.95, 0.95, desk)
+  const ex = put(textSprite('!', '#e5484d'), 0, 2.15, 0.95, desk)
   ex.visible = false
   const wrap = new THREE.Group()
   wrap.add(desk)
   wrap.position.set(x, 0, z)
-  return { id: a.id, deptId, a, wrap, seat, fallback, glow, lamp, zz, ex, color, ghost }
-}
-
-/** Mete el robot animado en el asiento, con el color del agente. */
-function seatRobot(o: Seatable, template: THREE.Group, gold = false) {
-  // Los tipos de SkeletonUtils de esta versión no incluyen clone(), pero el módulo sí lo trae.
-  const robot = (SkeletonUtils as unknown as { clone: (o: THREE.Object3D) => THREE.Object3D }).clone(template) as THREE.Group
-  const tint = gold ? 0xd9a93a : o.ghost ? 0x4a5370 : o.color
-  robot.traverse((n) => {
-    const m = n as THREE.Mesh
-    if (!m.isMesh) return
-    m.castShadow = true
-    const old = m.material as THREE.MeshStandardMaterial
-    const mt = old.clone()
-    if (old.name === 'Main') {
-      mt.color.setHex(tint)
-      if (!o.ghost) { mt.emissive.setHex(tint); mt.emissiveIntensity = 0.18 }
-    }
-    if (o.ghost) { mt.transparent = true; mt.opacity = 0.32 }
-    m.material = mt
-  })
-  // Escala: el modelo de pie mide ~3.5 unidades; en la oficina un adulto sentado ronda 1.2.
-  const box3 = new THREE.Box3().setFromObject(robot)
-  const h = box3.max.y - box3.min.y || 3.5
-  const s = 1.75 / h
-  robot.scale.setScalar(s)
-  robot.position.y = -box3.min.y * s + 0.28
-  o.seat.add(robot)
-  o.fallback.visible = false
-  o.robot = robot
-  const mixer = new THREE.AnimationMixer(robot)
-  const clips = (template.userData.clips ?? []) as THREE.AnimationClip[]
-  const actions: Record<string, THREE.AnimationAction> = {}
-  clips.forEach((c) => { actions[c.name] = mixer.clipAction(c) })
-  o.mixer = mixer
-  o.actions = actions
-}
-
-function playClip(o: Seatable, name: string, speed = 1) {
-  if (!o.actions || !o.actions[name]) return
-  const next = o.actions[name]
-  next.timeScale = speed
-  if (o.playing !== name) {
-    const prev = o.playing ? o.actions[o.playing] : null
-    next.reset().fadeIn(0.3).play()
-    prev?.fadeOut(0.3)
-    o.playing = name
-  }
+  return { id: a.id, deptId, a, wrap, person, screen, zz, ex, ghost }
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, bright = false, onSelect }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, onSelect }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -313,25 +219,23 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   live.current = { statusOf, minutes, selectedId, focus, ceo }
 
   // La escena se reconstruye solo si cambia la estructura (zonas y agentes), no por el estado.
-  const structure = departments.map((d) => `${d.id}:${d.name}:${d.accent}:${d.agents.map((a) => `${a.id}${a.status === 'ghost' ? 'g' : ''}${a.color}`).join(',')}`).join('|') + (bright ? '|bright' : '|dark')
+  const structure = departments.map((d) => `${d.id}:${d.name}:${d.accent}:${d.agents.map((a) => `${a.id}${a.name}${a.status === 'ghost' ? 'g' : ''}${a.color}`).join(',')}`).join('|')
 
   useEffect(() => {
     const host = hostRef.current
     const canvas = canvasRef.current
     if (!host || !canvas) return
-    let disposed = false
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(bright ? 0xcfe3f5 : 0x070b16)
+    scene.background = new THREE.Color(0xdfe9f2)
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 250)
-    const hemi = new THREE.HemisphereLight(bright ? 0xffffff : 0x9bb2ff, bright ? 0xb9c6d8 : 0x10152a, bright ? 0.72 : 0.6)
-    scene.add(hemi)
-    const sun = new THREE.DirectionalLight(0xfff1dc, 0.7)
-    sun.position.set(14, 26, 16)
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xcdd5e0, 0.8))
+    const sun = new THREE.DirectionalLight(0xfff4e0, 0.75)
+    sun.position.set(-14, 26, -10)
     sun.castShadow = true
     sun.shadow.mapSize.set(2048, 2048)
     Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 90 })
@@ -346,259 +250,158 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const root = new THREE.Group()
     scene.add(root)
 
-    // Piso con cuadrícula, borde de luz y ciudad al fondo
-    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.3, fd), new THREE.MeshStandardMaterial({ map: gridTexture(fw / 2.1, fd / 2.1, bright), color: bright ? 0xd9e0e9 : 0xffffff, roughness: 0.6, metalness: 0.2 }))
+    // Piso cálido y paredes del fondo con ventanales (un solo espacio abierto)
+    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.3, fd), new THREE.MeshStandardMaterial({ map: floorTexture(fw / 2.4, fd / 2.4), roughness: 0.85 }))
     floorMesh.receiveShadow = true
     put(floorMesh, fcx, -0.15, fcz, root)
-    const edges: THREE.Mesh[] = []
-    ;[
-      put(neon(0x5ad7ff, fw, 0.04, 0.06), fcx, 0.01, floor.minZ, root),
-      put(neon(0x5ad7ff, 0.06, 0.04, fd), floor.minX, 0.01, fcz, root),
-    ].forEach((m) => edges.push(m))
-    put(box(fw, 0.9, 0.3, 0x141c38), fcx, 0.45, floor.maxZ, root)
-    const windows: THREE.Mesh[] = []
-    const count = Math.ceil(fw / 1.3)
-    for (let i = 0; i < count; i++) {
-      const h = 3 + Math.abs(Math.sin(i * 7.3)) * 9
-      const w = 1.1 + Math.abs(Math.cos(i * 3.1)) * 1.4
-      const x = floor.minX + i * 1.3
-      put(box(w, h, 1, 0x0d1328), x, h / 2, floor.maxZ + 2.4 + (i % 3) * 0.8, root)
-      for (let r = 0; r < Math.floor(h / 1.1); r++) {
-        if (Math.sin(i * 12.9 + r * 4.1) > -0.2) {
-          const win = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.4), new THREE.MeshBasicMaterial({ color: bright ? 0x8fb4de : 0xffd98a }))
-          win.position.set(x + (r % 2 ? 0.2 : -0.2), 0.8 + r * 1.05, floor.maxZ + 1.9 + (i % 3) * 0.8)
-          win.rotation.y = Math.PI // mira hacia la cámara
-          win.userData.id = i * 31 + r
-          root.add(win)
-          windows.push(win)
-        }
-      }
+    const wallColor = 0xf3f0e9
+    put(box(fw, 3.8, 0.2, wallColor), fcx, 1.9, floor.maxZ, root) // pared del fondo
+    put(box(0.2, 3.8, fd, wallColor), floor.maxX, 1.9, fcz, root) // pared derecha
+    const glass = new THREE.MeshBasicMaterial({ color: 0xc4e1f6 })
+    const winFrame = (w: number, h: number, d: number) => box(w, h, d, 0xffffff)
+    const backWins = Math.max(2, Math.floor(fw / 4.6))
+    for (let i = 0; i < backWins; i++) {
+      const wx = floor.minX + ((i + 0.5) * fw) / backWins
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.0), glass)
+      pane.rotation.y = Math.PI
+      put(pane, wx, 2.2, floor.maxZ - 0.11, root)
+      put(winFrame(3.0, 0.1, 0.12), wx, 3.25, floor.maxZ - 0.1, root)
+      put(winFrame(3.0, 0.1, 0.12), wx, 1.15, floor.maxZ - 0.1, root)
+      put(winFrame(0.08, 2.1, 0.12), wx, 2.2, floor.maxZ - 0.1, root)
     }
+    const sideWins = Math.max(2, Math.floor(fd / 4.6))
+    for (let i = 0; i < sideWins; i++) {
+      const wz = floor.minZ + ((i + 0.5) * fd) / sideWins
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.0), glass)
+      pane.rotation.y = -Math.PI / 2
+      put(pane, floor.maxX - 0.11, 2.2, wz, root)
+      put(winFrame(0.12, 0.1, 3.0), floor.maxX - 0.1, 3.25, wz, root)
+      put(winFrame(0.12, 0.1, 3.0), floor.maxX - 0.1, 1.15, wz, root)
+      put(winFrame(0.12, 2.1, 0.08), floor.maxX - 0.1, 2.2, wz, root)
+    }
+    // Zócalo y plantas grandes en las esquinas
+    put(box(fw, 0.18, 0.12, 0xd9d2c3), fcx, 0.09, floor.maxZ - 0.15, root)
+    put(box(0.12, 0.18, fd, 0xd9d2c3), floor.maxX - 0.15, 0.09, fcz, root)
+    plant(floor.maxX - 0.9, floor.maxZ - 0.9, root, 1.5)
+    plant(floor.minX + 0.9, floor.maxZ - 0.9, root, 1.4)
 
-    // Zonas de luz por departamento
-    const zoneLines: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>[] = []
+    // Áreas: alfombra suave del color del departamento y mamparas de vidrio en los lados del fondo
+    const partition = new THREE.MeshStandardMaterial({ color: 0xe6f3fb, transparent: true, opacity: 0.38, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide })
     plan.zones.forEach((z) => {
       const c = hex(z.dept.accent)
-      const pad = new THREE.Mesh(new THREE.PlaneGeometry(z.w, z.d), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: bright ? 0.16 : 0.07 }))
-      pad.rotation.x = -Math.PI / 2
-      put(pad, z.cx, 0.02, z.cz, root)
-      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map((s) => new THREE.Vector3(z.cx + (s[0] * z.w) / 2, 0.04, z.cz + (s[1] * z.d) / 2))
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.8 }))
-      root.add(line)
-      zoneLines.push(line)
-      ;[[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach((s) => put(neon(c, 0.5, 0.06, 0.5), z.cx + (s[0] * z.w) / 2, 0.05, z.cz + (s[1] * z.d) / 2, root))
+      const rug = box(z.w - 0.5, 0.03, z.d - 0.5, soft(c, 0.78))
+      rug.castShadow = false
+      put(rug, z.cx, 0.015, z.cz, root)
+      // Mampara trasera y lateral: dividen sin encerrar
+      const backLen = z.w * 0.82
+      put(new THREE.Mesh(new THREE.BoxGeometry(backLen, 1.1, 0.05), partition), z.cx, 0.62, z.cz + z.d / 2 - 0.1, root)
+      put(box(backLen, 0.06, 0.09, 0xc9a77a), z.cx, 1.18, z.cz + z.d / 2 - 0.1, root)
+      const sideLen = z.d * 0.62
+      put(new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.1, sideLen), partition), z.cx + z.w / 2 - 0.1, 0.62, z.cz + (z.d - sideLen) / 2 - 0.1, root)
+      put(box(0.09, 0.06, sideLen, 0xc9a77a), z.cx + z.w / 2 - 0.1, 1.18, z.cz + (z.d - sideLen) / 2 - 0.1, root)
+      plant(z.cx + z.w / 2 - 0.7, z.cz + z.d / 2 - 0.7, root)
+      plant(z.cx - z.w / 2 + 0.7, z.cz + z.d / 2 - 0.7, root, 0.85)
     })
 
-    // Radar central
-    const radar = new THREE.Group()
-    radar.position.set(plan.radar.x, 0.05, plan.radar.z)
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x5ad7ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
-    const ring = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.1, 64), ringMat)
-    ring.rotation.x = -Math.PI / 2
-    radar.add(ring)
-    const ring2 = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.25, 64), new THREE.MeshBasicMaterial({ color: 0x5ad7ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide }))
-    ring2.rotation.x = -Math.PI / 2
-    radar.add(ring2)
-    const sweep = new THREE.Mesh(new THREE.CircleGeometry(2.0, 32, 0, 0.6), new THREE.MeshBasicMaterial({ color: 0x5ad7ff, transparent: true, opacity: 0.22, side: THREE.DoubleSide }))
-    sweep.rotation.x = -Math.PI / 2
-    radar.add(sweep)
-    root.add(radar)
-
-    // Agentes en sus escritorios
+    // Personas en sus escritorios
     const actors: Actor[] = []
     plan.zones.forEach((z) => z.desks.forEach((d) => {
-      const o = buildDesk(d.agent, d.x, d.z, z.dept.id)
+      const o = buildDesk(d.agent, d.x, d.z, z.dept.id, hex(z.dept.accent))
       actors.push(o)
       root.add(o.wrap)
     }))
 
-    // Oficina del CEO: plataforma elevada con vidrio y la pantalla central
+    // Oficina de Andrés: plataforma de madera, vidrio y la pantalla central detrás
     const cg = new THREE.Group()
     cg.position.set(plan.ceo.x, 0, plan.ceo.z)
-    put(box(CEO_W, 0.5, CEO_D, 0x141c38), 0, 0.25, 0, cg)
-    const gold = 0xd6b35a
-    put(neon(gold, CEO_W, 0.05, 0.05), 0, 0.5, -CEO_D / 2, cg)
-    put(neon(gold, 0.05, 0.05, CEO_D), -CEO_W / 2, 0.5, 0, cg)
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x5ad7ff, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.6, side: THREE.DoubleSide })
-    put(new THREE.Mesh(new THREE.BoxGeometry(CEO_W, 3.4, 0.08), glassMat), 0, 2.2, CEO_D / 2, cg)
-    put(new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.4, CEO_D), glassMat), CEO_W / 2, 2.2, 0, cg)
-    ;[[-CEO_W / 2, CEO_D / 2], [CEO_W / 2, CEO_D / 2], [CEO_W / 2, -CEO_D / 2]].forEach((p) => put(neon(gold, 0.07, 3.4, 0.07), p[0], 2.2, p[1], cg))
-    put(neon(gold, CEO_W, 0.06, 0.06), 0, 3.9, CEO_D / 2, cg)
-    put(neon(gold, 0.06, 0.06, CEO_D), CEO_W / 2, 3.9, 0, cg)
-    put(box(4.2, 0.14, 1.3, 0x1b2446), 0, 1.0, 0.3, cg)
-    ;[[-1.9, -0.2], [1.9, -0.2], [-1.9, 0.8], [1.9, 0.8]].forEach((p) => put(box(0.1, 0.5, 0.1, 0x0c1226), p[0], 0.75, p[1], cg))
-    put(neon(gold, 4.2, 0.03, 0.03), 0, 0.93, 0.95, cg)
+    put(box(CEO_W, PLATFORM_H, CEO_D, 0xcdac78), 0, PLATFORM_H / 2, 0, cg)
+    put(box(CEO_W - 0.6, 0.02, CEO_D - 0.6, 0xf1e8d6), 0, PLATFORM_H + 0.01, 0, cg)
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.2, roughness: 0.05, metalness: 0.3, side: THREE.DoubleSide })
+    put(new THREE.Mesh(new THREE.BoxGeometry(CEO_W, 3.0, 0.06), glassMat), 0, PLATFORM_H + 1.5, CEO_D / 2, cg)
+    put(new THREE.Mesh(new THREE.BoxGeometry(0.06, 3.0, CEO_D), glassMat), CEO_W / 2, PLATFORM_H + 1.5, 0, cg)
+    put(box(CEO_W, 0.08, 0.1, 0x8a6a45), 0, PLATFORM_H + 3.0, CEO_D / 2, cg)
+    put(box(0.1, 0.08, CEO_D, 0x8a6a45), CEO_W / 2, PLATFORM_H + 3.0, 0, cg)
+    ;[[-CEO_W / 2, CEO_D / 2], [CEO_W / 2, CEO_D / 2], [CEO_W / 2, -CEO_D / 2]].forEach((p) => put(box(0.1, 3.0, 0.1, 0x8a6a45), p[0], PLATFORM_H + 1.5, p[1], cg))
+    // Panel con la pantalla (por aprobar, con problemas, trabajando)
+    put(box(5.0, 2.6, 0.12, 0xb69362), 0, PLATFORM_H + 2.0, CEO_D / 2 - 0.35, cg)
     const cv = document.createElement('canvas')
     cv.width = 768
     cv.height = 384
     const tex = new THREE.CanvasTexture(cv)
     const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.3), new THREE.MeshBasicMaterial({ map: tex }))
     screenMesh.rotation.y = Math.PI
-    put(screenMesh, 0, 2.5, CEO_D / 2 - 0.1, cg)
-    put(neon(gold, 4.8, 0.04, 0.04), 0, 3.7, CEO_D / 2 - 0.11, cg)
-    put(neon(gold, 4.8, 0.04, 0.04), 0, 1.3, CEO_D / 2 - 0.11, cg)
+    put(screenMesh, 0, PLATFORM_H + 2.0, CEO_D / 2 - 0.42, cg)
+    // Escritorio grande, silla y a Andrés
+    put(box(4.0, 0.1, 1.3, 0x6a4a31), 0, PLATFORM_H + 0.78, 0.2, cg)
+    ;[[-1.8, -0.35], [1.8, -0.35], [-1.8, 0.75], [1.8, 0.75]].forEach((p) => put(box(0.08, 0.74, 0.08, 0x3d2b1c), p[0], PLATFORM_H + 0.37, p[1], cg))
+    put(box(0.9, 0.55, 0.05, 0x14171d), -0.9, PLATFORM_H + 1.2, -0.1, cg)
+    put(box(0.5, 0.025, 0.2, 0xcfd3da), -0.9, PLATFORM_H + 0.85, 0.35, cg)
+    put(box(0.34, 0.012, 0.24, 0xf6efe0), 1.0, PLATFORM_H + 0.835, 0.35, cg)
+    put(box(0.6, 0.07, 0.6, 0x2a2d36), 0, PLATFORM_H + 0.5, 1.5, cg)
+    put(box(0.6, 0.65, 0.07, 0x2a2d36), 0, PLATFORM_H + 0.85, 1.82, cg)
+    put(box(0.08, 0.46, 0.08, 0x1c1e25), 0, PLATFORM_H + 0.24, 1.5, cg)
     const ceoSeat = new THREE.Group()
-    ceoSeat.position.set(0, 0.5, 1.5)
+    ceoSeat.position.set(0, PLATFORM_H, 1.5)
     ceoSeat.rotation.y = Math.PI
     cg.add(ceoSeat)
-    const ceoFallback = new THREE.Group()
-    const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.31, 0.7, 18), mat(0xf2e3b0, { emissive: 0x6a5420, emissiveIntensity: 0.4 }))
-    put(cb, 0, 0.95, 0, ceoFallback)
-    put(new THREE.Mesh(new THREE.SphereGeometry(0.23, 18, 18), mat(0xf1d3b8)), 0, 1.55, 0, ceoFallback)
-    ceoSeat.add(ceoFallback)
-    const crown = neon(gold, 0.5, 0.06, 0.5)
-    put(crown, 0, 2.55, 0, ceoSeat)
-    put(box(0.6, 0.06, 0.6, 0x0c1226), 0, 0.5, 1.5, cg)
-    put(box(0.6, 0.6, 0.06, 0x0c1226), 0, 0.85, 1.78, cg)
-    put(box(1.5, 0.4, 0.6, 0x1b2446), 3.1, 0.7, 2.0, cg)
-    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 12), mat(0x2f9e63, { emissive: 0x0b3a22, emissiveIntensity: 0.5 }))
-    put(leaf, -3.9, 1.1, 2.2, cg)
-    put(box(0.4, 0.5, 0.4, 0x2a3558), -3.9, 0.75, 2.2, cg)
+    const ceoPerson = buildPerson({ skin: 0xd9a77f, hair: 0x2a1d14, hairStyle: 'short', shirt: 0xf4f4f6, pants: 0x1f2433, suit: { jacket: 0x273553, tie: 0xb8863b }, scale: 1.02, ghost: false }, 3)
+    ceoPerson.group.scale.multiplyScalar(1.15)
+    ceoSeat.add(ceoPerson.group)
+    put(box(1.6, 0.42, 0.7, 0x51657f), 3.0, PLATFORM_H + 0.21, -1.6, cg) // sofá
+    put(box(1.6, 0.4, 0.14, 0x51657f), 3.0, PLATFORM_H + 0.6, -1.95, cg)
+    plant(-3.9, -2.3, cg, 1.2)
+    plant(-3.9, 2.0, cg, 0.9)
     root.add(cg)
-    const ceoActor: Seatable = { seat: ceoSeat, fallback: ceoFallback, color: gold, ghost: false }
 
-    // Oficina clara: se repintan los muebles con una paleta de día (blanco, madera, gris azulado).
-    if (bright) {
-      const LIGHT: Record<number, number> = {
-        0x2a3558: 0xf2f4f8, 0x1c2440: 0xdde2ea, 0x151c34: 0x6f7a90, 0x0c1226: 0x7a8499,
-        0x1b2446: 0xc8a770, 0x141c38: 0xcfd6e2, 0x0d1328: 0xc9d7e8, 0x232d4c: 0xdbe3ee, 0x4a3b2a: 0xc8a770,
-      }
-      scene.traverse((o) => {
-        const mt = (o as THREE.Mesh).material
-        if (mt instanceof THREE.MeshStandardMaterial) {
-          const to = LIGHT[mt.color.getHex()]
-          if (to !== undefined) mt.color.setHex(to)
-        }
-      })
-    }
-
-    // Robots animados (cuando el modelo carga reemplazan a las figuras simples)
-    loadRobot().then((tpl) => {
-      if (disposed || !tpl) return
-      actors.forEach((o) => seatRobot(o, tpl))
-      seatRobot(ceoActor, tpl, true)
-      ceoActor.robot?.position.set(0, ceoActor.robot.position.y, 0)
-      playClip(ceoActor, 'Sitting')
-    })
-
-    // Líneas de datos: el trabajo viaja entre agentes y termina en el escritorio del CEO
-    const deskPos = new Map(actors.map((o) => [o.id, o.wrap.position]))
-    const ceoTarget = new THREE.Vector3(plan.ceo.x, 1.8, plan.ceo.z - 1)
-    interface Pulse { cv: THREE.QuadraticBezierCurve3; line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>; ball: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; from: Actor; kind: 'flow' | 'alert'; off: number }
-    const pulses: Pulse[] = []
-    const link = (fromId: string, to: THREE.Vector3, color: number, lift: number, kind: 'flow' | 'alert') => {
-      const from = actors.find((a) => a.id === fromId)
-      const p = deskPos.get(fromId)
-      if (!from || !p) return
-      const p0 = new THREE.Vector3(p.x, 1.8, p.z)
-      const mid = p0.clone().add(to).multiplyScalar(0.5)
-      mid.y += lift
-      const cvv = new THREE.QuadraticBezierCurve3(p0, mid, to)
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(cvv.getPoints(40)), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.15 }))
-      scene.add(line)
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), new THREE.MeshBasicMaterial({ color }))
-      scene.add(ball)
-      pulses.push({ cv: cvv, line, ball, from, kind, off: Math.random() })
-    }
-    plan.zones.forEach((z) => {
-      const find = (suffix: string) => z.dept.agents.find((a) => a.id.endsWith(`-${suffix}`))
-      const r = find('research'), w = find('writer'), c = find('checker'), an = find('analyst')
-      if (r && w) link(r.id, deskPos.get(w.id) ?? ceoTarget, 0x4fb6d9, 1.2, 'flow')
-      if (w && c) link(w.id, deskPos.get(c.id) ?? ceoTarget, 0xb58cff, 1.2, 'flow')
-      if (c) link(c.id, ceoTarget, 0xf2b84b, 3, 'flow')
-      if (an) link(an.id, ceoTarget, 0xf0645c, 4, 'flow')
-      if (z.dept.kind === 'monitoring') z.dept.agents.forEach((a, i) => link(a.id, ceoTarget, 0xf0645c, 4 + i * 0.5, 'alert'))
-    })
-
-    // Holograma del agente elegido
-    const hcv = document.createElement('canvas')
-    hcv.width = 512
-    hcv.height = 256
-    const htex = new THREE.CanvasTexture(hcv)
-    const holo = new THREE.Sprite(new THREE.SpriteMaterial({ map: htex, transparent: true, depthWrite: false, depthTest: false }))
-    holo.scale.set(4.4, 2.2, 1)
-    holo.renderOrder = 10
-    scene.add(holo)
-    let holoKey = ''
-    const paintHolo = (a: OfficeAgent, s: AgentStatus) => {
-      const key = `${a.id}|${s}|${a.lastReport}`
-      if (holoKey === key) return
-      holoKey = key
-      const g = hcv.getContext('2d')
-      if (!g) return
-      g.clearRect(0, 0, 512, 256)
-      g.fillStyle = 'rgba(8,14,34,.82)'
-      g.fillRect(8, 8, 496, 240)
-      g.strokeStyle = a.color
-      g.lineWidth = 3
-      g.strokeRect(8, 8, 496, 240)
-      g.fillStyle = a.color
-      g.fillRect(8, 8, 8, 240)
-      for (let y = 14; y < 242; y += 6) { g.fillStyle = 'rgba(255,255,255,.025)'; g.fillRect(16, y, 480, 2) }
-      g.fillStyle = '#fff'
-      g.font = '800 30px sans-serif'
-      g.fillText(a.name.replace(' (próximamente)', ''), 34, 56)
-      g.fillStyle = '#8d9ac0'
-      g.font = '500 20px sans-serif'
-      g.fillText(a.role.slice(0, 44), 34, 84)
-      g.fillStyle = s === 'work' ? '#4fd18b' : s === 'alert' ? '#f0645c' : '#8d9ac0'
-      g.font = '700 20px sans-serif'
-      g.fillText(s === 'work' ? '● Trabajando' : s === 'alert' ? '● Necesita atención' : s === 'ghost' ? '● Puesto libre' : '● Fuera de horario', 34, 120)
-      g.fillStyle = '#cdd5ea'
-      g.font = '500 19px sans-serif'
-      wrapText(g, s === 'work' && a.doing ? a.doing : a.lastReport, 34, 156, 440, 26, 3)
-      htex.needsUpdate = true
-    }
-
-    // Pantalla central del CEO
+    // Pantalla: ANDRÉS MARÍN · CEO con los tres números
     let screenKey = ''
-    const drawScreen = (c: CeoStats, m: number) => {
-      const key = `${c.pending}|${c.problems}|${c.working}|${Math.floor(m / 5)}`
+    const drawScreen = (c: CeoStats) => {
+      const key = `${c.pending}|${c.problems}|${c.working}`
       if (key === screenKey) return
       screenKey = key
       const g = cv.getContext('2d')
       if (!g) return
       const W = cv.width, H = cv.height
-      const grd = g.createLinearGradient(0, 0, W, H)
-      grd.addColorStop(0, '#0a1330')
-      grd.addColorStop(1, '#10143a')
-      g.fillStyle = grd
+      g.fillStyle = '#10182c'
       g.fillRect(0, 0, W, H)
-      g.strokeStyle = 'rgba(214,179,90,.7)'
-      g.lineWidth = 3
-      g.strokeRect(6, 6, W - 12, H - 12)
-      g.fillStyle = '#d6b35a'
-      g.font = '700 22px monospace'
-      g.fillText('CENTRO DE MANDO · CEO', 28, 44)
+      g.fillStyle = '#e8ecf6'
+      g.font = '700 26px sans-serif'
+      g.fillText('Andrés Marín · CEO', 28, 46)
       g.fillStyle = '#8d9ac0'
-      g.font = '500 20px monospace'
-      g.fillText(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`, W - 110, 44)
-      const items: [string, number, string][] = [['POR APROBAR', c.pending, '#f2b84b'], ['CON PROBLEMAS', c.problems, '#f0645c'], ['TRABAJANDO', c.working, '#4fd18b']]
+      g.font = '500 20px sans-serif'
+      g.fillText('Lo que necesita tu decisión hoy', 28, 74)
+      const items: [string, number, string][] = [['Por aprobar', c.pending, '#f2b84b'], ['Con problemas', c.problems, '#f0645c'], ['Trabajando', c.working, '#4fd18b']]
       items.forEach((it, i) => {
         const x = 28 + i * 242
-        g.fillStyle = 'rgba(255,255,255,.04)'
-        g.fillRect(x, 80, 226, 200)
+        g.fillStyle = 'rgba(255,255,255,.06)'
+        g.fillRect(x, 100, 226, 190)
         g.fillStyle = it[2]
         g.font = '800 96px sans-serif'
-        g.fillText(String(it[1]), x + 18, 190)
+        g.fillText(String(it[1]), x + 18, 205)
         g.fillStyle = '#cdd5ea'
-        g.font = '700 16px sans-serif'
-        g.fillText(it[0], x + 18, 240)
+        g.font = '700 20px sans-serif'
+        g.fillText(it[0], x + 18, 254)
       })
       g.fillStyle = c.problems ? '#f0645c' : '#4fd18b'
-      g.font = '600 20px monospace'
-      g.fillText(c.problems ? '● Hay agentes que necesitan atención' : '● Todo el sistema funciona bien', 28, 330)
+      g.font = '600 22px sans-serif'
+      g.fillText(c.problems ? 'Hay agentes que necesitan atención' : 'Todo el sistema funciona bien', 28, 338)
       tex.needsUpdate = true
     }
 
+    // Anillo bajo el agente seleccionado
+    const selRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 0.95, 40), new THREE.MeshBasicMaterial({ color: 0x5b6cff, transparent: true, opacity: 0.85, side: THREE.DoubleSide }))
+    selRing.rotation.x = -Math.PI / 2
+    selRing.visible = false
+    scene.add(selRing)
+
     // Cámara orbitable con foco suave
     const focusOf = (k: string) => {
-      if (k === 'ceo') return { tx: plan.ceo.x, tz: plan.ceo.z - 1, span: 20 }
+      if (k === 'ceo') return { tx: plan.ceo.x, tz: plan.ceo.z - 0.5, span: 20 }
       const z = plan.zones.find((q) => q.dept.id === k)
       if (z) return { tx: z.cx, tz: z.cz, span: Math.max(z.w, z.d) * 1.35 + 8 }
       return { tx: fcx, tz: fcz, span: Math.max(fw, fd) + Math.min(fw, fd) * 0.5 }
     }
-    let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que los agentes dan la cara
+    let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que las personas dan la cara
     let pitch = 0.6
     let zoom = 1
     const cur = { ...focusOf('all') }
@@ -645,16 +448,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       tmp.set(x, y, z).project(camera)
       return { x: (tmp.x * 0.5 + 0.5) * host.clientWidth, y: (-tmp.y * 0.5 + 0.5) * host.clientHeight, back: tmp.z > 1 }
     }
-    const place = (el: HTMLElement | null, x: number, y: number, z: number) => {
-      if (!el) return
-      const p = project(x, y, z)
-      el.style.left = `${p.x}px`
-      el.style.top = `${p.y}px`
-      el.style.display = p.back ? 'none' : 'flex'
-    }
 
     // Etiquetas sin pisarse: se acomodan de mayor a menor prioridad y las que chocan suben un poco.
-    // La posición se suaviza para que no salten al girar la cámara.
     const labelItems: { el: HTMLElement; x: number; y: number; p: number }[] = []
     const smoothY = new Map<HTMLElement, number>()
     const pushLabel = (el: HTMLElement | null, x: number, y: number, z: number, p: number) => {
@@ -667,7 +462,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       labelItems.sort((a, b) => a.p - b.p)
       const placed: { x0: number; y0: number; x1: number; y1: number }[] = []
       labelItems.forEach((it) => {
-        const w = it.el.offsetWidth || 90
+        const w = it.el.offsetWidth || 70
         const h = 22
         let y = it.y
         for (let n = 0; n < 10; n++) {
@@ -686,24 +481,13 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       labelItems.length = 0
     }
 
-    const clock = new THREE.Clock()
+    const poseOf = (s: AgentStatus): PersonPose => (s === 'work' ? 'type' : s === 'sleep' ? 'rest' : s === 'alert' ? 'help' : 'idle')
+
     let raf = 0
     const frame = (t: number) => {
       raf = requestAnimationFrame(frame)
-      const dt = Math.min(0.1, clock.getDelta())
       const time = t / 1000
-      const { statusOf: st, minutes: m, selectedId: sel, focus: fcs, ceo: cs } = live.current
-
-      // Día y noche según la hora del reloj
-      const day = bright ? 1 : Math.max(0, Math.sin((Math.PI * (m - 360)) / 720))
-      const night = 1 - day
-      if (!bright) {
-        scene.background = (scene.background as THREE.Color).setRGB(0.027 + day * 0.07, 0.043 + day * 0.1, 0.086 + day * 0.2)
-        hemi.intensity = 0.38 + day * 0.5
-        sun.intensity = 0.22 + day * 0.75
-      } else sun.intensity = 0.7
-      zoneLines.forEach((l) => { l.material.opacity = 0.55 + night * 0.4 })
-      windows.forEach((w) => { w.visible = bright ? true : night > 0.25 ? Math.sin(w.userData.id * 9.7) > -0.3 + (1 - night) : Math.sin(w.userData.id * 3.3) > 0.85 })
+      const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
 
       const f = focusOf(fcs)
       cur.tx += (f.tx - cur.tx) * 0.1
@@ -721,70 +505,55 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
 
       actors.forEach((o) => {
         const s = st(o.id)
-        const working = s === 'work'
-        const sleeping = s === 'sleep'
-        o.mixer?.update(dt)
-        if (o.robot) {
-          // Trabaja: sentado y activo; descansa: sentado y quieto; alerta: se levanta y pide ayuda.
-          if (s === 'alert') playClip(o, 'Wave', 1.1)
-          else { playClip(o, 'Sitting', working ? 0.6 : 0.12); o.robot.rotation.x = sleeping ? 0.12 : 0 }
-        } else {
-          o.fallback.position.y = working ? Math.sin(time * 9) * 0.015 : 0
-        }
-        o.glow.material.opacity = working ? 0.6 + Math.sin(time * 6) * 0.15 : s === 'alert' ? 0.4 : 0
-        o.glow.material.color.setHex(s === 'alert' ? 0xf0645c : o.color)
-        o.lamp.material.color.setHex(working ? 0x4fd18b : s === 'alert' ? (Math.sin(time * 8) > 0 ? 0xf0645c : 0x5a1d1a) : 0x5a6483)
-        o.zz.visible = sleeping
+        animatePerson(o.person, poseOf(s), time)
+        // La pantalla se enciende cuando trabaja y parpadea en rojo si algo falla.
+        const em = o.screen.material
+        if (s === 'work') { em.emissive.setHex(0x7ab8ff); em.emissiveIntensity = 0.75 + Math.sin(time * 7) * 0.1 }
+        else if (s === 'alert') { em.emissive.setHex(0xff5b5b); em.emissiveIntensity = Math.sin(time * 6) > 0 ? 0.8 : 0.15 }
+        else { em.emissive.setHex(0x000000); em.emissiveIntensity = 1 }
+        o.zz.visible = s === 'sleep'
         o.zz.position.y = 1.95 + Math.sin(time * 2) * 0.06
         o.ex.visible = s === 'alert'
-        o.ex.position.y = 2.1 + Math.abs(Math.sin(time * 6)) * 0.1
+        o.ex.position.y = 2.15 + Math.abs(Math.sin(time * 6)) * 0.1
         const el = labelRefs.current[o.id]
         if (el) {
-          pushLabel(el, o.wrap.position.x, 2.5, o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
+          pushLabel(el, o.wrap.position.x, 2.2, o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
           el.dataset.status = s
           el.dataset.sel = sel === o.id ? '1' : '0'
           el.style.opacity = fcs === 'all' || fcs === o.deptId ? '' : '0.4'
         }
       })
-      // CEO
-      if (ceoActor.mixer) { ceoActor.mixer.update(dt) }
-      crown.position.y = 2.55 + Math.sin(time * 2) * 0.03
+      animatePerson(ceoPerson, cs.problems > 0 ? 'type' : 'type', time + 4)
       const ceoEl = labelRefs.current.ceo
-      if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, 3.9, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
-      flushLabels()
+      if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
       plan.zones.forEach((z) => {
         const el = zoneRefs.current[z.dept.id]
         if (!el) return
-        place(el, z.cx, 0.2, z.cz + z.d / 2 + 0.9)
-        el.style.opacity = fcs === 'all' || fcs === z.dept.id ? '1' : '0.35'
+        const p = project(z.cx - z.w / 2 + 2.2, 0.1, z.cz - z.d / 2 + 0.2)
+        el.style.left = `${p.x}px`
+        el.style.top = `${p.y}px`
+        el.style.display = p.back ? 'none' : 'flex'
+        el.style.opacity = fcs === 'all' || fcs === z.dept.id ? '1' : '0.4'
       })
-      drawScreen(cs, m)
-
-      sweep.rotation.z = -time * 1.4
-      ringMat.opacity = 0.45 + Math.sin(time * 2) * 0.15
-      edges.forEach((e) => { (e.material as THREE.MeshBasicMaterial).color.setHex(night > 0.5 ? 0x5ad7ff : 0x3a9cc0) })
-      pulses.forEach((pl) => {
-        const s = st(pl.from.id)
-        const on = pl.kind === 'alert' ? s === 'alert' : s === 'work'
-        pl.line.material.opacity = on ? 0.75 : 0.1
-        if (pl.kind === 'alert') pl.line.material.color.setHex(0xf0645c)
-        pl.ball.visible = on
-        if (on) pl.ball.position.copy(pl.cv.getPoint((time * 0.45 + pl.off) % 1))
-      })
+      flushLabels()
+      drawScreen(cs)
 
       const selActor = actors.find((a) => a.id === sel)
       if (selActor) {
-        paintHolo(selActor.a, st(selActor.id))
-        holo.visible = true
-        holo.position.set(selActor.wrap.position.x, 4.1 + Math.sin(time * 1.6) * 0.08, selActor.wrap.position.z + 0.95)
-      } else holo.visible = false
+        selRing.visible = true
+        selRing.position.set(selActor.wrap.position.x, 0.06, selActor.wrap.position.z + 0.95)
+        selRing.scale.setScalar(1 + Math.sin(time * 3) * 0.05)
+      } else if (sel === 'ceo') {
+        selRing.visible = true
+        selRing.position.set(plan.ceo.x, PLATFORM_H + 0.06, plan.ceo.z + 1.5)
+        selRing.scale.setScalar(1 + Math.sin(time * 3) * 0.05)
+      } else selRing.visible = false
 
       renderer.render(scene, camera)
     }
     raf = requestAnimationFrame(frame)
 
     return () => {
-      disposed = true
       cancelAnimationFrame(raf)
       ro.disconnect()
       canvas.removeEventListener('pointerdown', onDown)
@@ -792,7 +561,6 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onUp)
       canvas.removeEventListener('wheel', onWheel)
-      actors.forEach((o) => o.mixer?.stopAllAction())
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh
         mesh.geometry?.dispose?.()
@@ -806,15 +574,15 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   }, [structure])
 
   return (
-    <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#070b16]">
-      <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Sala de control 3D con las zonas de cada departamento y la oficina del CEO" />
+    <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#dfe9f2]">
+      <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Oficina con las áreas de cada departamento y la oficina de Andrés Marín" />
       <div className="pointer-events-none absolute inset-0">
         {departments.map((d) => (
           <div
             key={`zone-${d.id}`}
             ref={(el) => { zoneRefs.current[d.id] = el }}
-            className="absolute hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.22em] md:flex"
-            style={bright ? { color: d.accent, filter: 'brightness(0.62)', textShadow: '0 0 6px #fff, 0 0 10px #fff' } : { color: d.accent, textShadow: `0 0 12px ${d.accent}` }}
+            className="absolute hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-white/70 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] md:flex"
+            style={{ color: d.accent, filter: 'brightness(0.62)' }}
           >
             {d.name}
           </div>
@@ -825,20 +593,20 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             ref={(el) => { labelRefs.current[a.id] = el }}
             type="button"
             onClick={() => onSelect(a.id, d.id)}
-            className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-zinc-700 bg-[#0d1220]/90 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-zinc-100 data-[sel='1']:border-cyan-300 data-[sel='1']:shadow-[0_0_12px_-2px_#5ad7ff]"
+            className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-zinc-300 bg-white/95 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-zinc-800 shadow-sm data-[sel='1']:border-indigo-500 data-[sel='1']:ring-2 data-[sel='1']:ring-indigo-300/70"
           >
-            <span className="office-dot h-2 w-2 rounded-full bg-zinc-500" />
-            {a.name.replace(' (próximamente)', '')}
+            <span className="office-dot h-2 w-2 rounded-full bg-zinc-400" />
+            {a.name}
           </button>
         )))}
         <button
           ref={(el) => { labelRefs.current.ceo = el }}
           type="button"
           onClick={() => onSelect('ceo', null)}
-          className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-500/60 bg-[#0d1220]/90 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-amber-200 data-[sel='1']:border-amber-200"
+          className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-500/70 bg-white/95 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-amber-800 shadow-sm data-[sel='1']:ring-2 data-[sel='1']:ring-amber-300"
         >
-          <span className="h-2 w-2 rounded-full bg-amber-400" />
-          Tú · CEO
+          <span className="h-2 w-2 rounded-full bg-amber-500" />
+          Andrés Marín
         </button>
       </div>
     </div>

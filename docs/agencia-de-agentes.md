@@ -29,7 +29,7 @@ La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra
 - "Ver un día en demostración" reproduce los horarios en un reloj rápido.
 - Para sumar un agente nuevo: agregarlo en `buildOffice()` (`src/lib/office.ts`); si aún no existe, va como puesto reservado (`ghost`).
 
-### Oficina 3D: piso abierto y robots
-- Todos los departamentos comparten un piso abierto (zonas de luz, sin paredes) y el CEO tiene una oficina de cristal elevada con la pantalla central (por aprobar, con problemas, trabajando). Los agentes son robots animados: sentados trabajando, quietos fuera de horario, de pie saludando cuando necesitan atención.
-- Modelo del robot: `public/models/robot.glb` (RobotExpressive, three.js examples, licencia CC0, de Tomás Laulhé). Si falla la carga, se ven figuras simples.
-- La luz sigue la hora del reloj (día y noche); las líneas de luz van de agente a agente hasta el escritorio del CEO.
+### Oficina 3D: un solo espacio con áreas
+- Un piso abierto con ventanales, dividido en áreas con alfombra y mamparas de vidrio: Monitoreo, una por empresa (con sus agentes) y Finanzas. La oficina de cristal de Andrés Marín (CEO) va aparte, elevada, con una pantalla de lo que necesita su decisión.
+- Las personas están hechas con código (sin modelos externos), con rasgos propios por agente. Trabajan tecleando con las dos manos, descansan con la cabeza baja y levantan la mano cuando algo falla.
+- Nombres: Monitoreo usa los nombres de cada agente (Luisa, Ángela, Alejandro...); en marketing se asignan de la lista Juan, Fernanda, Felipe, Samantha, Tomás, María e Isabel (ver `PEOPLE` en `src/lib/office.ts`).

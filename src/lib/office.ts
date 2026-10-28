@@ -70,6 +70,10 @@ function ghost(id: string, name: string, role: string, note: string): OfficeAgen
   return { id, name, role, color: COLORS.ghost, status: 'ghost', schedule: 'Aún sin horario', model: 'Por definir', lastReport: note, lastAt: null, nextRun: null, slots: [], doing: '' }
 }
 
+// Nombres de las personas de la oficina. Cada empresa arranca en un punto distinto de la lista para no repetirse.
+const PEOPLE = ['Juan', 'Fernanda', 'Felipe', 'Samantha', 'Tomás', 'María', 'Isabel']
+const personName = (companyIndex: number, slot: number) => PEOPLE[(companyIndex * 6 + slot) % PEOPLE.length]
+
 export async function buildOffice(userId: string, now = new Date()): Promise<OfficeDepartment[]> {
   const departments: OfficeDepartment[] = []
 
@@ -102,7 +106,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
   })
   departments.push({
     id: 'monitoring',
-    name: 'Monitoreo de apps',
+    name: 'Monitoreo',
     kind: 'monitoring',
     accent: '#4fd18b',
     agents: monitoring,
@@ -129,7 +133,8 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     return { status: now.getTime() - r.startedAt.getTime() < RECENT_MS ? 'work' : 'sleep', at: r.startedAt }
   }
 
-  for (const c of companies) {
+  for (let ci = 0; ci < companies.length; ci++) {
+    const c = companies[ci]
     const [pending, queued, published, lastPost, lastChecked, metrics, topics, profile] = await Promise.all([
       prisma.generatedPost.groupBy({ by: ['groupId'], where: { companyId: c.id, status: 'pending_review' } }).then((g) => g.length),
       prisma.generatedPost.count({ where: { companyId: c.id, status: { in: ['approved', 'publishing'] } } }),
@@ -154,16 +159,16 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     const slotsAnalyst: ScheduleSlot[] = [{ day: 0, from: 8 * 60, to: 9 * 60 }]
 
     const agents: OfficeAgent[] = [
-      { id: `${c.id}-research`, name: 'Investigador', role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Todos los días · 7:00 AM', model: 'Haiku + búsqueda web',
+      { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Todos los días · 7:00 AM', model: 'Haiku + búsqueda web',
         lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando fechas límite y noticias del día…' },
-      { id: `${c.id}-writer`, name: 'Redactor', role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Domingo 9:00 AM (semana) · diario 10:00 AM (noticias)', model: 'Sonnet',
+      { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Domingo 9:00 AM (semana) · diario 10:00 AM (noticias)', model: 'Sonnet',
         lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
-      { id: `${c.id}-checker`, name: 'Verificador', role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
+      { id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
         lastReport: fc?.summary ? short(fc.summary) : 'Todavía no ha verificado posts.', lastAt: lastChecked?.factCheckedAt?.toISOString() ?? null, nextRun: nextRunText(slotsChecker, now), slots: slotsChecker, href: '/command-center', doing: 'Comparando montos y fechas con IRS.gov…' },
-      { id: `${c.id}-analyst`, name: 'Analista', role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Domingos · 8:00 AM', model: 'Haiku',
+      { id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Domingos · 8:00 AM', model: 'Haiku',
         lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
-      ghost('video', 'Video (próximamente)', 'Videos con avatar de la marca', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
-      ghost('community', 'Comunidad (próximamente)', 'Responde comentarios y mensajes', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
+      ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
+      ghost(`${c.id}-community`, personName(ci, 5), 'Comunidad: responde comentarios (próximamente)', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
     ]
     departments.push({
       id: `mkt-${c.id}`,
@@ -179,15 +184,15 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
   // ── Dirección: Jarvis y los agentes generales que vengan ──
   departments.push({
     id: 'direction',
-    name: 'Dirección',
+    name: 'Finanzas',
     kind: 'direction',
     accent: '#d6b35a',
     agents: [
       { id: 'jarvis', name: 'Jarvis', role: 'Asistente general', color: '#d6b35a', status: 'sleep', schedule: 'Cuando le hablas', model: 'Sonnet', lastReport: 'Responde cuando lo llamas desde el botón JARVIS.', lastAt: null, nextRun: null, slots: [], doing: '', href: '/dashboard' },
-      ghost('finance', 'Finanzas (próximamente)', 'Revisa gastos y flujo de caja', 'Puesto reservado para un agente de finanzas.'),
+      ghost('finance', 'Isabel', 'Finanzas: gastos y flujo de caja (próximamente)', 'Puesto reservado para un agente de finanzas.'),
     ],
     stats: [],
-    note: 'Agentes que sirven a todas las empresas.',
+    note: 'Jarvis y el agente de finanzas, para todas las empresas.',
   })
 
   return departments

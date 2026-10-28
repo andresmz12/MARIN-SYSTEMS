@@ -48,7 +48,6 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [error, setError] = useState<string | null>(null)
   const [focus, setFocus] = useState<string>('all')
   const [selected, setSelected] = useState<string | null>(null)
-  const [bright, setBright] = useState(true)
   const [demo, setDemo] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [demoDay, setDemoDay] = useState(1)
@@ -68,17 +67,6 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
       setError('No se pudo cargar la oficina. Reintentando…')
     }
   }, [])
-
-  // La preferencia de claro/oscuro se recuerda en este navegador (si el almacenamiento no está disponible, se queda en claro).
-  useEffect(() => {
-    try { if (localStorage.getItem('office-bright') === '0') setBright(false) } catch { /* sin almacenamiento */ }
-  }, [])
-  const toggleBright = () => {
-    setBright((b) => {
-      try { localStorage.setItem('office-bright', b ? '0' : '1') } catch { /* sin almacenamiento */ }
-      return !b
-    })
-  }
 
   useEffect(() => {
     load()
@@ -153,7 +141,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           label: `${d.kind === 'monitoring' ? '🛰️' : d.kind === 'direction' ? '🧭' : '📣'} ${d.name}`,
           n: alerts(d),
           pending: d.kind === 'marketing' ? d.stats[0]?.value ?? 0 : 0,
-        })), { id: 'ceo', label: '👑 Mi oficina', n: 0, pending: 0 }].map((t) => {
+        })), { id: 'ceo', label: '👤 Andrés Marín', n: 0, pending: 0 }].map((t) => {
           const on = t.id === focus
           return (
             <button
@@ -180,7 +168,6 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             statusOf={statusOf}
             minutes={clockMin}
             ceo={ceoStats}
-            bright={bright}
             onSelect={(id, d) => {
               setSelected(id)
               if (id === 'ceo') setFocus('ceo')
@@ -197,15 +184,15 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
         <aside className="space-y-3">
           {ceoSelected && (
             <div className="rounded-xl border border-amber-500/30 bg-zinc-900/70 p-4">
-              <h2 className="flex items-center gap-2 text-[15px] font-bold text-white"><span className="h-3 w-3 rounded-sm bg-amber-400" />Tú · CEO</h2>
-              <p className="mb-2 text-xs text-zinc-400">Oficina de cristal con vista a todo el piso</p>
+              <h2 className="flex items-center gap-2 text-[15px] font-bold text-white"><span className="h-3 w-3 rounded-sm bg-amber-400" />Andrés Marín</h2>
+              <p className="mb-2 text-xs text-zinc-400">CEO · oficina de cristal con vista a todo el piso</p>
               <div className="grid grid-cols-3 gap-2">
                 <div><b className="block font-mono text-xl text-amber-300">{ceoStats.pending}</b><span className="text-[11px] text-zinc-500">por aprobar</span></div>
                 <div><b className="block font-mono text-xl text-red-300">{ceoStats.problems}</b><span className="text-[11px] text-zinc-500">con problemas</span></div>
                 <div><b className="block font-mono text-xl text-emerald-300">{ceoStats.working}</b><span className="text-[11px] text-zinc-500">trabajando</span></div>
               </div>
               <p className="mt-3 rounded-lg bg-zinc-800/70 p-2.5 text-xs leading-relaxed text-zinc-300">
-                La pantalla central muestra lo que necesita tu decisión. Las líneas de luz del piso son el trabajo de los agentes viajando hacia ti.
+                La pantalla de su oficina muestra lo que necesita tu decisión hoy: posts por aprobar, agentes con problemas y quién está trabajando.
               </p>
               <Link href="/dashboard" className="mt-3 inline-block rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:border-indigo-400">Abrir el Dashboard →</Link>
             </div>
@@ -271,14 +258,6 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${demo ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
         >
           {demo ? 'Salir de la demostración' : '▶ Ver un día en demostración'}
-        </button>
-        <button
-          onClick={toggleBright}
-          aria-pressed={bright}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:border-zinc-500"
-          title={bright ? 'Cambiar a la oficina oscura, que sigue la hora del día' : 'Cambiar a la oficina clara'}
-        >
-          {bright ? '☀️ Oficina clara' : '🌙 Oficina oscura'}
         </button>
         {demo && (
           <>
