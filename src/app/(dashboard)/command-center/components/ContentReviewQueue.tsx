@@ -36,6 +36,9 @@ export function ContentReviewQueue({ companies }: Props) {
   const [refInput, setRefInput] = useState('')
   const [refNote, setRefNote] = useState('')
   const [publishOn, setPublishOn] = useState(false)
+  const [autoLoaded, setAutoLoaded] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; status: number | null; ms: number; body: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,6 +61,7 @@ export function ContentReviewQueue({ companies }: Props) {
   useEffect(() => {
     if (!companyId) return
     setAuto(null)
+    setAutoLoaded(false)
     fetch(`/api/ceo/brand-profile?companyId=${companyId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((p: (AutoState & { id: string; references?: Reference[] | null }) | null) => {
@@ -65,6 +69,7 @@ export function ContentReviewQueue({ companies }: Props) {
         setRefs(Array.isArray(p?.references) ? p.references : [])
       })
       .catch(() => setAuto(null))
+      .finally(() => setAutoLoaded(true))
   }, [companyId])
 
   async function toggleAuto() {
@@ -130,6 +135,21 @@ export function ContentReviewQueue({ companies }: Props) {
   function copyText(text: string, msg: string) {
     navigator.clipboard?.writeText(text)
     showToast(msg, 'success')
+  }
+
+  async function testConnection() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/publish/test', { method: 'POST' })
+      const d = await res.json().catch(() => ({})) as { ok?: boolean; status?: number | null; ms?: number; body?: string; error?: string }
+      if (!res.ok) setTestResult({ ok: false, status: null, ms: 0, body: d.error ?? 'Error' })
+      else setTestResult({ ok: !!d.ok, status: d.status ?? null, ms: d.ms ?? 0, body: d.body ?? '' })
+    } catch {
+      setTestResult({ ok: false, status: null, ms: 0, body: 'No se pudo contactar al servidor' })
+    } finally {
+      setTesting(false)
+    }
   }
 
   async function togglePlatform(platform: string) {
@@ -242,6 +262,56 @@ export function ContentReviewQueue({ companies }: Props) {
           {auto?.autoEnabled ? 'Activado ✓' : 'Activar'}
         </button>
       </div>
+
+      <div className={`rounded-xl border p-4 space-y-3 ${publishOn ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm font-semibold text-zinc-100 flex-1">🔌 Conexión de publicación automática</p>
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${publishOn ? 'text-emerald-300 border-emerald-500/40' : 'text-amber-300 border-amber-500/40'}`}>
+            {publishOn ? 'Conectada' : 'No conectada'}
+          </span>
+          {publishOn && (
+            <button
+              onClick={testConnection}
+              disabled={testing}
+              className="text-xs text-zinc-200 border border-zinc-700 rounded-md px-2.5 py-1 hover:border-zinc-500 disabled:opacity-40"
+            >
+              {testing ? 'Probando…' : 'Probar conexión'}
+            </button>
+          )}
+        </div>
+        {publishOn ? (
+          <p className="text-xs text-zinc-400">
+            Lo aprobado con imagen se envía solo a su hora al webhook que publica en tus redes. El botón manda un mensaje de prueba
+            (<code>test: true</code>) que no publica nada.
+          </p>
+        ) : (
+          <div className="text-xs text-zinc-400 space-y-1">
+            <p>Mientras no esté conectada, lo aprobado queda en "Programados" y lo subes tú a mano con el botón Copiar. Para conectarla:</p>
+            <ol className="list-decimal pl-5 space-y-0.5">
+              <li>Crea un escenario en Make (o Zapier/n8n) que reciba un webhook y publique en cada red. Guía paso a paso: <code>docs/publicacion-automatica.md</code> en el repo.</li>
+              <li>En Railway → Variables, agrega <code>PUBLISH_WEBHOOK_URL</code> (la URL del webhook) y <code>PUBLISH_WEBHOOK_SECRET</code> (una clave inventada por ti).</li>
+              <li>Cuando Railway termine de reiniciar, vuelve aquí: el estado cambia a "Conectada" y aparece "Probar conexión".</li>
+            </ol>
+          </div>
+        )}
+        {testResult && (
+          <p className={`text-xs ${testResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+            {testResult.ok
+              ? `✓ El webhook respondió ${testResult.status} en ${testResult.ms} ms.`
+              : `✗ Falló${testResult.status ? ` (HTTP ${testResult.status})` : ''}: ${testResult.body || 'sin detalle'}`}
+          </p>
+        )}
+      </div>
+
+      {autoLoaded && !auto && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-xs text-zinc-300 space-y-1">
+          <p className="text-sm font-semibold text-zinc-100">Esta empresa todavía no tiene perfil de marca</p>
+          <p>
+            El piloto automático, las redes y las referencias aparecen cuando existe el perfil. Ve a la pestaña <strong>🏢 Empresas</strong>,
+            abre la empresa y completa su perfil de marca (tono, audiencia y pilares de contenido).
+          </p>
+        </div>
+      )}
 
       {auto && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-2">

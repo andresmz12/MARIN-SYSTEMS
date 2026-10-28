@@ -41,6 +41,7 @@ Solo se publican **imágenes** en Instagram, Facebook, LinkedIn y X. Los videos 
 }
 ```
 
+- Si llega `"test": true` (botón **Probar conexión**), es solo una prueba: el escenario debe responder `200` y **detenerse sin publicar**.
 - `imageUrl` es pública y siempre **JPEG** (Instagram solo acepta JPEG). Úsala tal cual.
 - `idempotencyKey` es estable: si el servicio recibe dos veces el mismo, debe publicar una sola vez.
 - **Respuesta:** cualquier `2xx` cuenta como "enviado". Si el cuerpo es JSON con `url` (o `permalink`),
@@ -66,7 +67,7 @@ X-Webhook-Secret: <PUBLISH_WEBHOOK_SECRET>      (o Authorization: Bearer <CRON_S
 Los nombres exactos de los módulos pueden variar; busca el equivalente.
 
 1. **Webhooks → Custom webhook**: crea el webhook y copia su URL a `PUBLISH_WEBHOOK_URL`.
-2. Primer filtro: el header `X-Webhook-Secret` debe ser igual a tu secreto; si no, detener.
+2. Primer filtro: el header `X-Webhook-Secret` debe ser igual a tu secreto; si no, detener. Segundo filtro: si `test` es `true`, responder 200 y detener (así pruebas la conexión sin publicar).
 3. **Router** con una ruta por `platform`:
    - `instagram`: módulo de Instagram for Business para publicar una foto (URL = `imageUrl`, texto = `text`).
    - `facebook`: módulo de Facebook Pages para publicar una foto en la página.
