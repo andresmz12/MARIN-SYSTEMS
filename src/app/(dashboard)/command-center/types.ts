@@ -105,6 +105,7 @@ export interface BrandProfile {
   autoEnabled?: boolean
   autoPlatforms?: string[]
   references?: { type: 'link' | 'text'; value: string; note?: string }[] | null
+  visualStyle?: unknown
   createdAt: string
   updatedAt: string
   // Extra fields returned by the API after AI analysis
@@ -174,6 +175,11 @@ export interface GeneratedPost {
   cta: string
   contentNotes: string | null
   imagePrompt?: string | null
+  imageText?: unknown
+  facts?: string[]
+  imageWidth?: number | null
+  imageHeight?: number | null
+  brandProfile?: { visualStyle?: unknown } | null
   imageUrl?: string | null
   source?: string
   reviewNote?: string | null

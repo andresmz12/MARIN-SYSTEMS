@@ -90,6 +90,8 @@ export async function POST(req: NextRequest) {
           cta: generated.cta,
           contentNotes: generated.contentNotes,
           imagePrompt: generated.imagePrompt,
+          imageText: (generated.imageText ?? undefined) as never,
+          facts: generated.facts,
           status: 'draft',
           weekNumber,
           dayOfWeek: cell.dayOfWeek,

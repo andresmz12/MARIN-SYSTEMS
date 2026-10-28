@@ -144,6 +144,8 @@ async function handler(req: Request) {
                 cta: generated.cta,
                 contentNotes: generated.contentNotes,
                 imagePrompt: generated.imagePrompt,
+                imageText: (generated.imageText ?? undefined) as never,
+                facts: generated.facts,
                 status: 'pending_review',
                 source: 'auto',
                 scheduledDate,

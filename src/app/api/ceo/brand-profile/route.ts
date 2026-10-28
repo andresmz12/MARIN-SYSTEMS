@@ -104,6 +104,12 @@ const AutoSchema = z.object({
   companyId: z.string().min(1),
   autoEnabled: z.boolean().optional(),
   autoPlatforms: z.array(z.enum(AUTO_PLATFORMS)).min(1).optional(),
+  visualStyle: z.object({
+    palette: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)).max(5).optional(),
+    style: z.string().trim().max(300).optional(),
+    handle: z.string().trim().max(120).optional(),
+    avoid: z.string().trim().max(200).optional(),
+  }).optional(),
   references: z.array(z.object({
     type: z.enum(['link', 'text']),
     value: z.string().min(1).max(1500),
@@ -121,7 +127,7 @@ export async function PATCH(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
     }
-    const { companyId, autoEnabled, autoPlatforms, references } = parsed.data
+    const { companyId, autoEnabled, autoPlatforms, references, visualStyle } = parsed.data
 
     const profile = await prisma.brandProfile.findFirst({ where: { companyId, userId: session.user.id } })
     if (!profile) return NextResponse.json({ error: 'Configura primero el perfil de marca de esta empresa' }, { status: 400 })
@@ -132,6 +138,7 @@ export async function PATCH(req: NextRequest) {
         ...(autoEnabled !== undefined ? { autoEnabled } : {}),
         ...(autoPlatforms !== undefined ? { autoPlatforms } : {}),
         ...(references !== undefined ? { references } : {}),
+        ...(visualStyle !== undefined ? { visualStyle } : {}),
       },
     })
     return NextResponse.json(updated)

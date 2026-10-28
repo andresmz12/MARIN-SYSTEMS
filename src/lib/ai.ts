@@ -289,14 +289,20 @@ export interface ContentGenerationInput {
   feedback?: string[]
 }
 
+import { parseImageText, type ImageText } from './image-prompt'
+
 export interface GeneratedContent {
   topic: string
   copy: string
   hashtags: string[]
   cta: string
   contentNotes: string
-  /** Descripción visual para generar o buscar la imagen del post. */
+  /** Descripción de la ESCENA de la imagen (en inglés, sin texto ni colores). */
   imagePrompt: string
+  /** Texto que debe aparecer escrito EN la imagen (en español). */
+  imageText: ImageText | null
+  /** Datos concretos del post (montos, fechas, formularios) para que el dueño los verifique. */
+  facts: string[]
 }
 
 function fallbackContent(input: ContentGenerationInput): GeneratedContent {
@@ -306,7 +312,9 @@ function fallbackContent(input: ContentGenerationInput): GeneratedContent {
     hashtags: [`#${input.companyName.replace(/\s+/g, '')}`, '#negocios', '#latinos', '#emprendimiento'],
     cta: 'Escríbenos por DM o deja tu comentario 👇',
     contentNotes: `Crear ${input.contentType} para ${input.platform}. Tono: ${input.tone}.`,
-    imagePrompt: `Imagen limpia y profesional para ${input.companyName}, estilo de marca ${input.tone}.`,
+    imagePrompt: `Clean, professional composition for ${input.companyName}, ${input.tone} brand mood.`,
+    imageText: null,
+    facts: [],
   }
 }
 
@@ -326,6 +334,10 @@ function coerceContent(parsed: unknown, input: ContentGenerationInput): Generate
     cta: str(obj.cta, fb.cta),
     contentNotes: str(obj.contentNotes, fb.contentNotes),
     imagePrompt: str(obj.imagePrompt, fb.imagePrompt),
+    imageText: parseImageText(obj.imageText),
+    facts: Array.isArray(obj.facts)
+      ? obj.facts.filter((f): f is string => typeof f === 'string' && f.trim().length > 0).map((f) => f.trim()).slice(0, 6)
+      : [],
   }
 }
 
@@ -378,7 +390,13 @@ Responde ÚNICAMENTE con este JSON:
   "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
   "cta": "llamada a la acción específica y directa",
   "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado",
-  "imagePrompt": "prompt listo para pegar en un generador de imágenes (en inglés): sujeto, composición, estilo, paleta y ambiente, sin texto incrustado; termina con la proporción para la plataforma (Instagram: 4:5 vertical; Facebook: 1:1 cuadrada; LinkedIn: 1.91:1 horizontal; Twitter/X: 16:9 horizontal; TikTok: 9:16 vertical)"
+  "imagePrompt": "SOLO la escena visual de la imagen, en inglés: sujeto, composición, fondo, ambiente e íconos. Sin texto escrito, sin colores y sin proporciones: eso lo agrega el sistema",
+  "imageText": {
+    "headline": "texto principal EN la imagen, en español con acentos correctos, máximo 7 palabras, con el dato o gancho más fuerte",
+    "subheadline": "una línea de apoyo, máximo 14 palabras",
+    "bullets": ["hasta 3 puntos cortos de máximo 8 palabras cada uno"]
+  },
+  "facts": ["cada dato verificable que usaste en el copy o la imagen: montos, fechas, formularios, porcentajes, plazos, para que el dueño los confirme en IRS.gov"]
 }`
 
   try {

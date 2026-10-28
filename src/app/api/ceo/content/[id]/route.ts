@@ -9,6 +9,11 @@ const Schema = z.object({
   reviewNote: z.string().max(500).nullable().optional(),
   imageUrl: z.string().url().max(2000).nullable().optional(),
   imagePrompt: z.string().max(1000).optional(),
+  imageText: z.object({
+    headline: z.string().trim().min(1).max(140),
+    subheadline: z.string().trim().max(240).optional(),
+    bullets: z.array(z.string().trim().min(1).max(100)).max(3).optional(),
+  }).optional(),
   copy: z.string().min(1).optional(),
   scheduledDate: z.string().nullable().optional(),
   publishedAt: z.string().nullable().optional(),
@@ -30,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     if (!existing) return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 })
 
-    const { status, copy, scheduledDate, publishedAt, reviewNote, imageUrl, imagePrompt } = parsed.data
+    const { status, copy, scheduledDate, publishedAt, reviewNote, imageUrl, imagePrompt, imageText } = parsed.data
     const post = await prisma.generatedPost.update({
       where: { id: params.id },
       data: {
@@ -39,6 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(reviewNote !== undefined ? { reviewNote } : {}),
         ...(imageUrl !== undefined ? { imageUrl } : {}),
         ...(imagePrompt !== undefined ? { imagePrompt } : {}),
+        ...(imageText !== undefined ? { imageText } : {}),
         ...(scheduledDate !== undefined ? { scheduledDate: scheduledDate ? new Date(scheduledDate) : null } : {}),
         ...(publishedAt !== undefined ? { publishedAt: publishedAt ? new Date(publishedAt) : null } : {}),
         ...(status === 'published' ? { publishedAt: new Date() } : {}),

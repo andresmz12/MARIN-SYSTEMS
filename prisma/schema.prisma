@@ -417,6 +417,8 @@ model BrandProfile {
   autoEnabled    Boolean         @default(false)
   // Referencias de estilo: [{ type: 'link' | 'text', value, note? }]
   references     Json?
+  // Estilo visual para los prompts de imagen: { palette: string[], style, handle, avoid }
+  visualStyle    Json?
   autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "twitter", "tiktok"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -442,7 +444,13 @@ model GeneratedPost {
   contentNotes   String?
   // Prompt para generar/buscar la imagen del post, y la URL final cuando exista.
   imagePrompt    String?
+  // Texto que debe aparecer EN la imagen: { headline, subheadline?, bullets?: string[] }
+  imageText      Json?
+  // Datos concretos del post (montos, fechas, formularios) para que el dueño los verifique.
+  facts          String[]     @default([])
   imageUrl       String?
+  imageWidth     Int?
+  imageHeight    Int?
   // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).
   source         String       @default("manual")
   reviewNote     String?

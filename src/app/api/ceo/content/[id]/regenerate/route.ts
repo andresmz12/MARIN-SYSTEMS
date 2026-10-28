@@ -55,6 +55,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         cta: generated.cta,
         contentNotes: generated.contentNotes,
         imagePrompt: generated.imagePrompt,
+        imageText: (generated.imageText ?? undefined) as never,
+        facts: generated.facts,
         status: 'pending_review',
         reviewNote: null,
       },

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import sharp from 'sharp'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { IMAGE_SPECS, planFit } from '@/lib/image-prompt'
 
 export const maxDuration = 60
 
@@ -14,8 +15,8 @@ function publicUrl(token: string): string {
   return `${base}/api/public/post-image/${token}`
 }
 
-// Sube la imagen del post. Se convierte siempre a JPEG (Instagram solo acepta JPEG;
-// ChatGPT entrega PNG/WebP) y se limita a 2048px de lado mayor.
+// Sube la imagen del post. Se convierte siempre a JPEG (Instagram solo acepta JPEG; ChatGPT
+// entrega PNG/WebP) y se ajusta al tamaño exacto de la red cuando basta un recorte al centro.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -30,12 +31,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!ALLOWED.includes(file.type)) return NextResponse.json({ error: 'Usa PNG, JPG o WebP' }, { status: 400 })
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'La imagen debe pesar menos de 8 MB' }, { status: 400 })
 
-    const jpeg = await sharp(Buffer.from(await file.arrayBuffer()))
-      .rotate()
-      .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+    // 1) Normalizar orientación EXIF y leer el tamaño real.
+    const base = await sharp(Buffer.from(await file.arrayBuffer())).rotate().toBuffer({ resolveWithObject: true })
+    const from = { width: base.info.width, height: base.info.height }
+
+    // 2) Ajustar a la proporción de la red: ChatGPT entrega 1:1, 2:3 o 3:2, así que se recorta
+    //    al centro (el texto vive en la zona segura del prompt). Si habría que recortar demasiado
+    //    (orientación equivocada), se deja tal cual y se avisa.
+    const plan = planFit(post.platform, from.width, from.height)
+    const spec = IMAGE_SPECS[post.platform]
+    let pipeline = sharp(base.data)
+    if (plan.action === 'crop' && spec) {
+      pipeline = pipeline.resize({ width: spec.width, height: spec.height, fit: 'cover', position: 'centre' })
+    } else {
+      pipeline = pipeline.resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+    }
+    const { data: jpeg, info } = await pipeline
       .flatten({ background: '#ffffff' })
       .jpeg({ quality: 90 })
-      .toBuffer()
+      .toBuffer({ resolveWithObject: true })
 
     const image = await prisma.postImage.upsert({
       where: { postId: post.id },
@@ -45,10 +59,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const updated = await prisma.generatedPost.update({
       where: { id: post.id },
-      data: { imageUrl: publicUrl(image.token) },
+      data: { imageUrl: publicUrl(image.token), imageWidth: info.width, imageHeight: info.height },
       include: { company: true },
     })
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      ...updated,
+      fit: { action: plan.action, from, to: { width: info.width, height: info.height }, target: spec ? `${spec.width}x${spec.height} (${spec.ratio})` : null },
+    })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'No se pudo procesar la imagen' }, { status: 500 })
@@ -66,7 +83,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     await prisma.postImage.deleteMany({ where: { postId: post.id } })
     const updated = await prisma.generatedPost.update({
       where: { id: post.id },
-      data: { imageUrl: null },
+      data: { imageUrl: null, imageWidth: null, imageHeight: null },
       include: { company: true },
     })
     return NextResponse.json(updated)

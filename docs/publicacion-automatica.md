@@ -16,6 +16,24 @@ Solo se publican **imágenes** en Instagram, Facebook, LinkedIn y X. Los videos 
 5. En la bandeja puedes **Publicar ahora**, **Reintentar**, **reprogramar** la hora, o marcarlo como
    subido a mano.
 
+## Cómo se hacen las imágenes (ChatGPT)
+
+El sistema no genera imágenes: arma el **prompt completo** y tú lo pegas en ChatGPT.
+
+1. **Una sola vez por marca:** en `Por aprobar → 🎨 Estilo visual de la marca` guarda estilo, colores
+   y el pie (@usuario · web). Entra en todos los prompts.
+2. Cada post trae el **texto que aparecerá en la imagen** (titular, subtítulo, puntos) en español.
+   Puedes editarlo en la tarjeta; el prompt se actualiza solo (`Ver el prompt completo`).
+3. **Copiar todos los prompts** → pega **cada bloque como un mensaje nuevo** en ChatGPT → descarga
+   cada imagen → **Subir imagen** en su tarjeta.
+4. ChatGPT entrega 1:1, 2:3 o 3:2. El prompt pide el formato más cercano con el texto en una zona
+   segura, y al subir el sistema **recorta al centro** al tamaño exacto de la red (Instagram
+   1080×1350, Facebook 1080×1080, LinkedIn 1200×628, X 1600×900, TikTok 1080×1920) y lo pasa a JPEG.
+   Si la orientación es la contraria (recortaría más del 30 %), no la toca y te avisa.
+5. **Antes de aprobar**, revisa el recuadro **Verifica antes de aprobar**: son los montos, fechas y
+   formularios que usó el post. Confírmalos en IRS.gov o con tu contador, y revisa la ortografía del
+   texto dentro de la imagen.
+
 ## Variables de entorno (Railway)
 
 | Variable | Para qué |
