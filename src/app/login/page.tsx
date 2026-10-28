@@ -42,7 +42,7 @@ export default function LoginPage() {
                 d="M3 3v18h18M7 16l4-4 4 4 4-6" />
             </svg>
           </div>
-          <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">Marin Systems</h1>
+          <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">Corporación Marine</h1>
           <p className="text-sm text-gray-500 mt-1">Sistema de Trading & Productividad</p>
         </div>
 
@@ -98,7 +98,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-gray-600 mt-8">
-          Marin Systems v1.0 — Uso privado
+          Corporación Marine v1.0 — Uso privado
         </p>
       </div>
     </div>

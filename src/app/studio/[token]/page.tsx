@@ -82,7 +82,7 @@ export default function StudioPage({ params }: { params: { token: string } }) {
         <div style={{ textAlign: 'center', padding: 32, maxWidth: 320 }}>
           <p style={{ fontSize: 48, marginBottom: 16 }}>⏱</p>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>Link expirado</h2>
-          <p style={{ fontSize: 14, color: '#64748b' }}>Genera uno nuevo en Marine System.</p>
+          <p style={{ fontSize: 14, color: '#64748b' }}>Genera uno nuevo en Corporación Marine.</p>
         </div>
       </div>
     )

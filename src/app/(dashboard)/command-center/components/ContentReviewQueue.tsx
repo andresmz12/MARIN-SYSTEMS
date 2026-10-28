@@ -9,6 +9,8 @@ import { IMAGE_SPECS, buildImagePrompt, parseImageText, parseVisualStyle, type I
 
 interface Props {
   companies: CEOCompany[]
+  /** Lleva a la pestaña Empresas (donde se crea el perfil de marca). */
+  onOpenCompanies?: () => void
 }
 
 interface AutoState {
@@ -24,7 +26,7 @@ function localImagePath(url: string): string {
   try { return new URL(url).pathname } catch { return url }
 }
 
-export function ContentReviewQueue({ companies }: Props) {
+export function ContentReviewQueue({ companies, onOpenCompanies }: Props) {
   const { showToast } = useToast()
   const [posts, setPosts] = useState<GeneratedPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +44,7 @@ export function ContentReviewQueue({ companies }: Props) {
   const [publishOn, setPublishOn] = useState(false)
   const [publishPlatforms, setPublishPlatforms] = useState<string[]>([])
   const [autoLoaded, setAutoLoaded] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState<boolean | null>(null)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; status: number | null; ms: number; body: string } | null>(null)
 
@@ -284,10 +287,79 @@ export function ContentReviewQueue({ companies }: Props) {
   const scheduled = posts.filter((p) => p.status === 'approved' || p.status === 'publishing')
   const failed = posts.filter((p) => p.status === 'failed')
   const published = posts.filter((p) => p.status === 'published')
+  // Asistente de configuración: lo mínimo para que el sistema trabaje solo.
+  const hasStyle = !!(vs.style || vs.handle || vs.palette.length)
+  const steps: { key: string; done: boolean; optional?: boolean; title: string; help: string; action?: { label: string; run: () => void } }[] = [
+    {
+      key: 'brand',
+      done: !!auto,
+      title: 'Crea el perfil de marca',
+      help: 'En Empresas, pulsa "Configurar marca" y completa tono, público y temas.',
+      action: onOpenCompanies ? { label: 'Ir a Empresas', run: onOpenCompanies } : undefined,
+    },
+    {
+      key: 'style',
+      done: hasStyle,
+      title: 'Elige el estilo visual',
+      help: 'Colores, estilo y @usuario que salen en cada imagen. Está en ⚙️ Configuración.',
+      action: auto ? { label: 'Abrir configuración', run: () => setSettingsOpen(true) } : undefined,
+    },
+    {
+      key: 'auto',
+      done: !!auto?.autoEnabled,
+      title: 'Activa el piloto automático',
+      help: 'Cada domingo genera los posts de la semana. Nada se publica sin que lo apruebes.',
+      action: auto && !auto.autoEnabled ? { label: 'Activar', run: toggleAuto } : undefined,
+    },
+    {
+      key: 'publish',
+      done: publishOn,
+      optional: true,
+      title: 'Conecta la publicación (opcional)',
+      help: 'Sin esto, tú copias el texto y subes cada post. Con esto, sale solo a su hora.',
+      action: { label: 'Ver cómo', run: () => setSettingsOpen(true) },
+    },
+  ]
+  const required = steps.filter((st) => !st.optional)
+  const setupDone = required.every((st) => st.done)
+  const doneCount = required.filter((st) => st.done).length
   const missingImages = posts.filter((p) => !p.imageUrl && (p.imagePrompt || p.imageText))
 
   return (
     <div className="space-y-5">
+      {!setupDone ? (
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-indigo-100">🚀 Empieza aquí · {doneCount} de {required.length} listos</p>
+            <div className="h-1.5 w-32 rounded-full bg-zinc-800 overflow-hidden">
+              <div className="h-full bg-indigo-400 transition-all" style={{ width: `${(doneCount / required.length) * 100}%` }} />
+            </div>
+          </div>
+          <ol className="space-y-2">
+            {steps.map((st, i) => (
+              <li key={st.key} className="flex items-start gap-3">
+                <span className={`mt-0.5 w-5 h-5 shrink-0 rounded-full text-[11px] flex items-center justify-center border ${st.done ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'border-zinc-600 text-zinc-400'}`}>
+                  {st.done ? '✓' : i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${st.done ? 'text-zinc-500 line-through' : 'text-zinc-100 font-medium'}`}>{st.title}</p>
+                  {!st.done && <p className="text-xs text-zinc-400">{st.help}</p>}
+                </div>
+                {!st.done && st.action && (
+                  <button onClick={st.action.run} className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2.5 py-1 hover:bg-indigo-500/10 whitespace-nowrap">
+                    {st.action.label}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <p className="text-xs text-emerald-300/80">
+          ✓ Todo configurado.{!publishOn && ' Publicación automática sin conectar: copia y sube tú los posts aprobados (opcional conectarla en ⚙️ Configuración).'}
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold text-zinc-100">🤖 Piloto automático</p>
@@ -316,6 +388,15 @@ export function ContentReviewQueue({ companies }: Props) {
         </button>
       </div>
 
+      <details open={settingsOpen ?? !setupDone} className="rounded-xl border border-zinc-800 bg-zinc-900/30">
+        {/* Solo cuenta el clic del usuario: así se abre sola mientras falta configurar y se cierra cuando todo está listo. */}
+        <summary
+          onClick={(e) => { e.preventDefault(); setSettingsOpen(!(settingsOpen ?? !setupDone)) }}
+          className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-200"
+        >
+          ⚙️ Configuración de la marca y de la publicación
+        </summary>
+        <div className="space-y-4 p-4 pt-1">
       <div className={`rounded-xl border p-4 space-y-3 ${publishOn ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-semibold text-zinc-100 flex-1">🔌 Conexión de publicación automática</p>
@@ -477,6 +558,8 @@ export function ContentReviewQueue({ companies }: Props) {
           </div>
         </div>
       )}
+        </div>
+      </details>
 
       {missingImages.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">

@@ -309,7 +309,7 @@ export default function CommandCenterPage() {
       )}
 
       {view === 'queue' && (
-        <ContentReviewQueue companies={companies.filter((c) => c.isActive)} />
+        <ContentReviewQueue companies={companies.filter((c) => c.isActive)} onOpenCompanies={() => setView('companies')} />
       )}
 
       {view === 'grid' && (

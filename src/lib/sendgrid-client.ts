@@ -94,7 +94,7 @@ export async function sendTaskEmail(
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
   <tr><td style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#a855f7);border-radius:12px 12px 0 0;padding:28px 36px;">
-    <p style="margin:0 0 4px;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Marin Systems · Nueva Tarea</p>
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Corporación Marine · Nueva Tarea</p>
     <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">📋 ${taskData.title}</h1>
   </td></tr>
   <tr><td style="background:#1a1a1a;padding:28px 36px;">
@@ -115,7 +115,7 @@ export async function sendTaskEmail(
     <p style="margin:20px 0 0;color:#52525b;font-size:11px;">Enviado a <strong style="color:#71717a;">${to}</strong></p>
   </td></tr>
   <tr><td style="background:#111;border-radius:0 0 12px 12px;padding:14px 36px;border-top:1px solid #2a2a2a;">
-    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Marin Systems</p>
+    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Corporación Marine</p>
   </td></tr>
 </table>
 </td></tr>
@@ -141,7 +141,7 @@ export async function sendMorningReminder(
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
   <tr><td style="background:linear-gradient(135deg,#059669,#10b981,#34d399);border-radius:12px 12px 0 0;padding:28px 36px;">
-    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Marin Systems · Recordatorio Matutino</p>
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Corporación Marine · Recordatorio Matutino</p>
     <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">🌅 Tienes ${tasks.length} tarea${tasks.length > 1 ? 's' : ''} para HOY</h1>
   </td></tr>
   <tr><td style="background:#1a1a1a;padding:28px 36px;">
@@ -154,7 +154,7 @@ export async function sendMorningReminder(
     <p style="margin:20px 0 0;color:#52525b;font-size:11px;">Enviado a <strong style="color:#71717a;">${to}</strong></p>
   </td></tr>
   <tr><td style="background:#111;border-radius:0 0 12px 12px;padding:14px 36px;border-top:1px solid #2a2a2a;">
-    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Marin Systems</p>
+    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Corporación Marine</p>
   </td></tr>
 </table>
 </td></tr>
@@ -193,7 +193,7 @@ export async function sendAgentAlertEmail({
   const now = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })
   const sinceLabel = since ? since.toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : null
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
-  const subject = `[Marin Systems] Alerta: ${agentName} está ${statusLabel}`
+  const subject = `[Corporación Marine] Alerta: ${agentName} está ${statusLabel}`
 
   const html = `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"/></head>
@@ -202,7 +202,7 @@ export async function sendAgentAlertEmail({
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
   <tr><td style="background:linear-gradient(135deg,${gradientColors});border-radius:12px 12px 0 0;padding:28px 36px;">
-    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Marin Systems · Monitoreo de Agentes</p>
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Corporación Marine · Monitoreo de Agentes</p>
     <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">⚠️ ${agentName} está ${statusLabel}</h1>
   </td></tr>
   <tr><td style="background:#1a1a1a;padding:28px 36px;">
@@ -238,19 +238,19 @@ export async function sendAgentAlertEmail({
     <p style="margin:20px 0 0;">
       <a href="${appUrl}/agentes"
          style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-        Ver en Marin Systems →
+        Ver en Corporación Marine →
       </a>
     </p>
   </td></tr>
   <tr><td style="background:#111;border-radius:0 0 12px 12px;padding:14px 36px;border-top:1px solid #2a2a2a;">
-    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Marin Systems</p>
+    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Corporación Marine</p>
   </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>`
 
-  const text = `Alerta Marin Systems: ${agentName} está ${statusLabel}\n${appName}\n${reason ? `Motivo: ${reason}\n` : ''}${sinceLabel ? `Desde: ${sinceLabel}\n` : ''}${latency != null ? `Latencia: ${latency}ms\n` : ''}Detectado: ${now}\n\nVer: ${appUrl}/agentes`
+  const text = `Alerta Corporación Marine: ${agentName} está ${statusLabel}\n${appName}\n${reason ? `Motivo: ${reason}\n` : ''}${sinceLabel ? `Desde: ${sinceLabel}\n` : ''}${latency != null ? `Latencia: ${latency}ms\n` : ''}Detectado: ${now}\n\nVer: ${appUrl}/agentes`
   return sendEmail(to, subject, html, text)
 }
 
@@ -277,11 +277,11 @@ export async function sendAgentRecoveredEmail({
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
   const duration = formatDuration(downtimeMs)
-  const subject = `[Marin Systems] ${agentName} se recuperó ✅`
+  const subject = `[Corporación Marine] ${agentName} se recuperó ✅`
   const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
   <h2 style="margin:0 0 8px;">✅ ${agentName} se recuperó</h2>
   <p style="margin:0 0 16px;color:#a1a1aa;"><strong>${appName}</strong> volvió a responder. Duración del problema: <strong>${duration}</strong>.</p>
-  <a href="${appUrl}/agentes" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Marin Systems →</a>
+  <a href="${appUrl}/agentes" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Corporación Marine →</a>
 </div>`
   const text = `${agentName} (${appName}) se recuperó. Duración del problema: ${duration}.\n\nVer: ${appUrl}/agentes`
   return sendEmail(to, subject, html, text)
@@ -297,7 +297,7 @@ export async function sendCronFailureEmail({
   const to = process.env.ALERT_EMAIL_TO ?? ''
   if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
 
-  const subject = `[Marin Systems] Falló la tarea automática "${job}"`
+  const subject = `[Corporación Marine] Falló la tarea automática "${job}"`
   const safe = error.slice(0, 500).replace(/</g, '&lt;')
   const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
   <h2 style="margin:0 0 8px;">⚠️ Falló la tarea "${job}"</h2>
@@ -319,7 +319,7 @@ export async function sendContentReadyEmail({
   if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
-  const subject = `[Marin Systems] ${count} post${count > 1 ? 's' : ''} de ${companyName} por aprobar`
+  const subject = `[Corporación Marine] ${count} post${count > 1 ? 's' : ''} de ${companyName} por aprobar`
   const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
   <h2 style="margin:0 0 8px;">✅ Contenido listo para revisar</h2>
   <p style="margin:0 0 16px;color:#a1a1aa;">Se generaron ${count} post${count > 1 ? 's' : ''} nuevo${count > 1 ? 's' : ''} para <strong>${companyName}</strong>. Tienes ${pendingTotal} por aprobar en total.</p>
@@ -344,7 +344,7 @@ export async function sendEveningReminder(
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
   <tr><td style="background:linear-gradient(135deg,#d97706,#f59e0b,#fbbf24);border-radius:12px 12px 0 0;padding:28px 36px;">
-    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Marin Systems · Recordatorio Nocturno</p>
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:2px;text-transform:uppercase;">Corporación Marine · Recordatorio Nocturno</p>
     <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">🌙 ${tasks.length} tarea${tasks.length > 1 ? 's' : ''} sin completar</h1>
   </td></tr>
   <tr><td style="background:#1a1a1a;padding:28px 36px;">
@@ -357,7 +357,7 @@ export async function sendEveningReminder(
     <p style="margin:20px 0 0;color:#52525b;font-size:11px;">Enviado a <strong style="color:#71717a;">${to}</strong></p>
   </td></tr>
   <tr><td style="background:#111;border-radius:0 0 12px 12px;padding:14px 36px;border-top:1px solid #2a2a2a;">
-    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Marin Systems</p>
+    <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Corporación Marine</p>
   </td></tr>
 </table>
 </td></tr>

@@ -29,7 +29,7 @@ export function HudStatusBar() {
     <div className="hidden sm:flex items-center justify-between px-4 lg:px-6 py-1.5 border-b border-[var(--bg-border)] bg-[var(--bg-sidebar)]/70 backdrop-blur-sm text-[11px] text-slate-500">
       <div className="flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-        <span className="font-display tracking-[0.2em] uppercase text-cyan-300/80">Marin Systems</span>
+        <span className="font-display tracking-[0.2em] uppercase text-cyan-300/80">Corporación Marine</span>
         <span className="opacity-40">·</span>
         <span className="capitalize">
           {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
