@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { analyzeBrand } from '@/lib/ai'
+import { AUTO_PLATFORMS } from '@/lib/platforms'
 
 const Schema = z.object({
   companyId: z.string().min(1),
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
 const AutoSchema = z.object({
   companyId: z.string().min(1),
   autoEnabled: z.boolean().optional(),
-  autoPlatforms: z.array(z.enum(['instagram', 'facebook', 'linkedin', 'tiktok'])).min(1).optional(),
+  autoPlatforms: z.array(z.enum(AUTO_PLATFORMS)).min(1).optional(),
   references: z.array(z.object({
     type: z.enum(['link', 'text']),
     value: z.string().min(1).max(1500),

@@ -231,8 +231,8 @@ prisma/
 | `SENDGRID_API_KEY` | Clave de SendGrid | Solo si se usan Corporate Tasks / alertas |
 | `SENDGRID_FROM_EMAIL` | Remitente verificado en SendGrid | Solo si se usan Corporate Tasks / alertas |
 | `ALERT_EMAIL_TO` | Destinatario de alertas de agentes down/degraded | Solo si se usa monitoreo de Agentes |
-| `PUBLISH_WEBHOOK_URL` | Webhook (Make/Zapier/n8n) que publica los posts aprobados; sin él los posts quedan para subir a mano | Opcional |
-| `PUBLISH_WEBHOOK_SECRET` | Se envía como header `X-Webhook-Secret` al webhook de publicación | Opcional |
+| `PUBLISH_WEBHOOK_URL` | Webhook (Make/Zapier/n8n) que publica las imágenes aprobadas; sin él quedan para subir a mano. Ver `docs/publicacion-automatica.md` | Opcional |
+| `PUBLISH_WEBHOOK_SECRET` | Se envía como header `X-Webhook-Secret` al webhook y autentica `/api/publish/callback` | Opcional |
 | `AGENT_MONITOR_INTERVAL_MIN` | Minutos entre chequeos del monitor interno de agentes (default 5, `0` lo desactiva) | Opcional |
 | `CRON_SECRET` | Token compartido con GitHub Actions para autorizar los endpoints `/cron/*` | ✅ (si se usan los cron jobs) |
 

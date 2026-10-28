@@ -366,7 +366,8 @@ Pilares de contenido: ${input.contentPillars.join(', ')}
 Instrucciones específicas por plataforma:
 - Instagram/TikTok: usa emojis, copy corto y punchy (máximo 2200 chars), hashtags relevantes
 - Facebook: tono cercano y conversacional, 1-3 párrafos cortos, pregunta que invite a comentar, máximo 3 hashtags
-- LinkedIn: tono profesional y de autoridad, abre con un gancho de una línea, párrafos de 1-2 frases, aporta una idea o dato útil, sin exceso de emojis, máximo 3 hashtags
+- LinkedIn: contenido INFORMATIVO y educativo sobre impuestos (taxes), LLC, ITIN y finanzas para negocios latinos en USA. Abre con un dato concreto (monto, fecha, formulario) en una línea; explica en 3-5 párrafos cortos de 1-2 frases; cierra con una pregunta o invitación suave a comentar. Tono profesional y de autoridad, sin promesas ni garantías, casi sin emojis, máximo 3 hashtags. Si das cifras o fechas, indica que son de referencia y que conviene confirmarlas en IRS.gov o con un profesional.
+- Twitter/X: UN solo post de máximo 250 caracteres EN TOTAL contando los hashtags (límite duro de 280). Gancho fuerte en la primera frase, un dato o idea clara, tono directo; máximo 2 hashtags y casi sin emojis.
 - Email: asunto + cuerpo formal pero cálido, sin hashtags
 - WhatsApp: mensaje directo y personal, máximo 500 chars
 
@@ -377,7 +378,7 @@ Responde ÚNICAMENTE con este JSON:
   "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
   "cta": "llamada a la acción específica y directa",
   "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado",
-  "imagePrompt": "prompt listo para pegar en un generador de imágenes (en inglés): sujeto, composición, estilo, paleta y ambiente, sin texto incrustado; termina con la proporción para la plataforma (Instagram: 4:5 vertical; Facebook: 1:1 cuadrada; LinkedIn: 1.91:1 horizontal; TikTok: 9:16 vertical)"
+  "imagePrompt": "prompt listo para pegar en un generador de imágenes (en inglés): sujeto, composición, estilo, paleta y ambiente, sin texto incrustado; termina con la proporción para la plataforma (Instagram: 4:5 vertical; Facebook: 1:1 cuadrada; LinkedIn: 1.91:1 horizontal; Twitter/X: 16:9 horizontal)"
 }`
 
   try {

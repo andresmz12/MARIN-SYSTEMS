@@ -417,7 +417,7 @@ model BrandProfile {
   autoEnabled    Boolean         @default(false)
   // Referencias de estilo: [{ type: 'link' | 'text', value, note? }]
   references     Json?
-  autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "tiktok"])
+  autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "twitter"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -446,7 +446,12 @@ model GeneratedPost {
   // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).
   source         String       @default("manual")
   reviewNote     String?
-  // draft | pending_review | approved | rejected | ready | published
+  // Publicación automática: intentos, último error y enlace al post ya publicado.
+  publishAttempts Int         @default(0)
+  lastAttemptAt   DateTime?
+  publishError    String?
+  externalUrl     String?
+  // draft | pending_review | approved | rejected | failed | ready | published
   status         String       @default("draft")
   scheduledDate  DateTime?
   publishedAt    DateTime?

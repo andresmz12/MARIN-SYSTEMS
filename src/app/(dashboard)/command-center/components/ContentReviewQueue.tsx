@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany, GeneratedPost } from '../types'
 import { PLATFORM_CONFIG, POST_STATUS_CONFIG } from '../utils'
+import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
 
 interface Props {
   companies: CEOCompany[]
@@ -34,12 +35,17 @@ export function ContentReviewQueue({ companies }: Props) {
   const [refs, setRefs] = useState<Reference[]>([])
   const [refInput, setRefInput] = useState('')
   const [refNote, setRefNote] = useState('')
+  const [publishOn, setPublishOn] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch('/api/ceo/content-queue')
-      if (res.ok) setPosts(await res.json())
+      if (res.ok) {
+        const d = (await res.json()) as { posts: GeneratedPost[]; publishConfigured: boolean }
+        setPosts(d.posts)
+        setPublishOn(d.publishConfigured)
+      }
     } catch {
       showToast('Error al cargar la bandeja', 'error')
     } finally {
@@ -126,6 +132,44 @@ export function ContentReviewQueue({ companies }: Props) {
     showToast(msg, 'success')
   }
 
+  async function togglePlatform(platform: string) {
+    if (!auto) return
+    const has = auto.autoPlatforms.includes(platform)
+    const next = has ? auto.autoPlatforms.filter((p) => p !== platform) : [...auto.autoPlatforms, platform]
+    if (next.length === 0) { showToast('Deja al menos una red activa', 'error'); return }
+    const res = await fetch('/api/ceo/brand-profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, autoPlatforms: next }),
+    })
+    if (res.ok) setAuto({ ...auto, autoPlatforms: next })
+    else showToast('No se pudieron cambiar las redes', 'error')
+  }
+
+  async function publishNow(id: string) {
+    setBusyId(id)
+    try {
+      const res = await fetch(`/api/ceo/content/${id}/publish`, { method: 'POST' })
+      const d = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) throw new Error(d.error ?? 'No se pudo publicar')
+      showToast('Enviado a publicar', 'success')
+      await load()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo publicar', 'error')
+      await load()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // <input type="datetime-local"> trabaja en hora local, sin zona: se arma con los componentes locales.
+  function toLocalInput(iso: string | null): string {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
   async function patch(id: string, body: Record<string, unknown>, okMsg: string) {
     setBusyId(id)
     try {
@@ -164,7 +208,9 @@ export function ContentReviewQueue({ companies }: Props) {
   }
 
   const pending = posts.filter((p) => p.status === 'pending_review')
-  const approved = posts.filter((p) => p.status === 'approved')
+  const scheduled = posts.filter((p) => p.status === 'approved' || p.status === 'publishing')
+  const failed = posts.filter((p) => p.status === 'failed')
+  const published = posts.filter((p) => p.status === 'published')
   const missingImages = posts.filter((p) => !p.imageUrl && p.imagePrompt)
 
   return (
@@ -173,7 +219,7 @@ export function ContentReviewQueue({ companies }: Props) {
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold text-zinc-100">🤖 Piloto automático</p>
           <p className="text-xs text-zinc-400">
-            Cada domingo genera los posts de lunes, miércoles y viernes (Instagram, Facebook, LinkedIn y TikTok). Nada se publica sin tu aprobación.
+            Cada domingo genera los posts de lunes, miércoles y viernes (solo imágenes). Los videos los subes tú. Nada se publica sin tu aprobación.
           </p>
         </div>
         <select
@@ -196,6 +242,31 @@ export function ContentReviewQueue({ companies }: Props) {
           {auto?.autoEnabled ? 'Activado ✓' : 'Activar'}
         </button>
       </div>
+
+      {auto && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-2">
+          <p className="text-sm font-semibold text-zinc-100">🌐 Redes donde se publica</p>
+          <div className="flex flex-wrap gap-2">
+            {AUTO_PLATFORMS.map((pl) => {
+              const on = auto.autoPlatforms.includes(pl)
+              return (
+                <button
+                  key={pl}
+                  onClick={() => togglePlatform(pl)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${on ? (PLATFORM_CONFIG[pl]?.cls ?? '') : 'text-zinc-500 border-zinc-700'}`}
+                >
+                  {PLATFORM_CONFIG[pl]?.emoji} {PLATFORM_CONFIG[pl]?.label ?? pl}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-zinc-500">
+            {publishOn
+              ? 'Publicación automática conectada: lo aprobado sale solo a su hora.'
+              : 'Publicación automática NO conectada todavía (falta PUBLISH_WEBHOOK_URL): lo aprobado queda listo para subir a mano.'}
+          </p>
+        </div>
+      )}
 
       {auto && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
@@ -280,6 +351,15 @@ export function ContentReviewQueue({ companies }: Props) {
                 className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 resize-y"
               />
               {post.hashtags.length > 0 && <p className="text-xs text-indigo-300">{post.hashtags.join(' ')}</p>}
+              {post.platform === 'twitter' && (() => {
+                const len = composePostText('twitter', copy, post.hashtags).length
+                const raw = copy.length + (post.hashtags.length ? post.hashtags.slice(0, 2).join(' ').length + 2 : 0)
+                return (
+                  <p className={`text-xs ${raw > TWEET_MAX ? 'text-red-300' : 'text-zinc-400'}`}>
+                    {raw}/{TWEET_MAX} caracteres{raw > TWEET_MAX ? ` — se recortará a ${len} al publicar` : ''}
+                  </p>
+                )
+              })()}
               <p className="text-xs text-zinc-300">CTA: {post.cta}</p>
               <div className="rounded-lg border border-dashed border-zinc-700 p-2.5 space-y-2">
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen</p>
@@ -353,19 +433,46 @@ export function ContentReviewQueue({ companies }: Props) {
         })}
       </div>
 
-      {approved.length > 0 && (
+      {scheduled.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-zinc-200">Aprobados — se publican a su hora (o súbelos a mano)</h3>
-          {approved.map((post) => {
+          <h3 className="text-sm font-semibold text-zinc-200">
+            Programados {publishOn ? '— salen solos a su hora' : '— súbelos a mano (publicación automática sin conectar)'}
+          </h3>
+          {scheduled.map((post) => {
             const plat = PLATFORM_CONFIG[post.platform]
             const cfg = POST_STATUS_CONFIG[post.status]
+            const busy = busyId === post.id
             return (
-              <div key={post.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
+              <div key={post.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
                 <span className={`w-2 h-2 rounded-full ${cfg?.dot ?? ''}`} />
-                <span className="text-sm text-zinc-200 flex-1 truncate">{plat?.emoji} {post.topic}</span>
-                <span className={`text-xs ${post.imageUrl ? 'text-emerald-300' : 'text-amber-300'}`}>{post.imageUrl ? '🖼️ con imagen' : 'sin imagen'}</span>
+                <span className="text-sm text-zinc-200 flex-1 min-w-[160px] truncate">{plat?.emoji} {post.topic}</span>
+                <input
+                  type="datetime-local"
+                  defaultValue={toLocalInput(post.scheduledDate)}
+                  disabled={post.status === 'publishing'}
+                  onBlur={(e) => {
+                    if (e.target.value && e.target.value !== toLocalInput(post.scheduledDate)) {
+                      patch(post.id, { scheduledDate: new Date(e.target.value).toISOString() }, 'Reprogramado')
+                    }
+                  }}
+                  className="bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200"
+                />
+                <span className={`text-xs ${post.imageUrl ? 'text-emerald-300' : 'text-amber-300'}`}>{post.imageUrl ? '🖼️' : 'sin imagen'}</span>
+                {post.status === 'publishing' && <span className="text-xs text-indigo-300">Publicando…</span>}
+                {post.publishError && post.status === 'approved' && (
+                  <span className="text-xs text-amber-300" title={post.publishError}>reintento {post.publishAttempts}/3</span>
+                )}
+                {publishOn && post.imageUrl && post.status === 'approved' && (
+                  <button
+                    disabled={busy}
+                    onClick={() => publishNow(post.id)}
+                    className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
+                  >
+                    {busy ? 'Enviando…' : 'Publicar ahora'}
+                  </button>
+                )}
                 <button
-                  onClick={() => { navigator.clipboard?.writeText(`${post.copy}\n\n${post.hashtags.join(' ')}`); showToast('Copy copiado', 'success') }}
+                  onClick={() => copyText(composePostText(post.platform, post.copy, post.hashtags), 'Texto copiado')}
                   className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
                 >
                   Copiar
@@ -379,6 +486,60 @@ export function ContentReviewQueue({ companies }: Props) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {failed.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-red-300">Fallaron al publicar</h3>
+          {failed.map((post) => {
+            const plat = PLATFORM_CONFIG[post.platform]
+            const busy = busyId === post.id
+            return (
+              <div key={post.id} className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-zinc-200 flex-1 min-w-[160px] truncate">{plat?.emoji} {post.topic}</span>
+                  {publishOn && post.imageUrl && (
+                    <button
+                      disabled={busy}
+                      onClick={() => publishNow(post.id)}
+                      className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
+                    >
+                      {busy ? 'Enviando…' : 'Reintentar'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => copyText(composePostText(post.platform, post.copy, post.hashtags), 'Texto copiado')}
+                    className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
+                  >
+                    Copiar
+                  </button>
+                  <button
+                    onClick={() => patch(post.id, { status: 'published' }, 'Marcado como publicado')}
+                    className="text-xs text-emerald-300 border border-emerald-500/40 rounded-md px-2 py-1 hover:bg-emerald-500/10"
+                  >
+                    Lo subí a mano
+                  </button>
+                </div>
+                {post.publishError && <p className="text-xs text-red-300/80">{post.publishError}</p>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {published.length > 0 && (
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-semibold text-zinc-300">Publicados esta semana</h3>
+          {published.map((post) => (
+            <div key={post.id} className="flex items-center gap-2 text-xs text-zinc-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="flex-1 truncate">{PLATFORM_CONFIG[post.platform]?.emoji} {post.topic}</span>
+              {post.externalUrl && (
+                <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

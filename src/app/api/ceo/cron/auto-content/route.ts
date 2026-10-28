@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
 import { recentFeedback, referenceLines } from '@/lib/auto-content'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
+import { AUTO_PLATFORMS, fitCopy, fitsPlatform, isAutoPlatform } from '@/lib/platforms'
 
 export const maxDuration = 300
 
@@ -73,7 +74,8 @@ async function handler(req: Request) {
           continue
         }
 
-        const platforms = profile.autoPlatforms.length > 0 ? profile.autoPlatforms : ['instagram']
+        const selected = profile.autoPlatforms.filter(isAutoPlatform)
+        const platforms: string[] = selected.length > 0 ? selected : [...AUTO_PLATFORMS]
         const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
         const references = referenceLines(profile.references)
         const feedback = await recentFeedback(profile.companyId)
@@ -104,11 +106,11 @@ async function handler(req: Request) {
             const sameIdea = dayTopics.length
               ? `Misma idea central que estos posts de hoy, adaptada al formato de ${platform}: ${dayTopics.join('; ')}.`
               : ''
-            const generated = await generateMarketingContent({
+            const generate = (extra = '') => generateMarketingContent({
               companyName: name,
               platform,
               contentType: 'post',
-              topic: `${sameIdea}${avoid}`.trim(),
+              topic: `${sameIdea}${avoid}${extra}`.trim(),
               tone: profile.tone,
               targetAudience: profile.targetAudience,
               contentPillars: pillars,
@@ -119,6 +121,11 @@ async function handler(req: Request) {
               voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
               forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
             })
+            let generated = await generate()
+            // X tiene límite duro: un reintento pidiendo más corto; si aun así no cabe, se recorta.
+            if (!fitsPlatform(platform, generated.copy, generated.hashtags) && !generated.copy.includes('[Contenido de ')) {
+              generated = await generate(' IMPORTANTE: el post anterior se pasó del límite; hazlo MÁS CORTO (máximo 220 caracteres en total).')
+            }
             // Claude falló y ai.ts devolvió el texto de relleno: abortar esta marca.
             if (generated.copy.includes('[Contenido de ')) {
               throw new Error('La IA no devolvió contenido válido (se descarta toda la tanda)')
@@ -132,8 +139,8 @@ async function handler(req: Request) {
                 platform,
                 contentType: 'post',
                 topic: generated.topic,
-                copy: generated.copy,
-                hashtags: generated.hashtags,
+                copy: fitCopy(platform, generated.copy, generated.hashtags),
+                hashtags: platform === 'twitter' ? generated.hashtags.slice(0, 2) : generated.hashtags,
                 cta: generated.cta,
                 contentNotes: generated.contentNotes,
                 imagePrompt: generated.imagePrompt,

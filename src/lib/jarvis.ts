@@ -318,7 +318,7 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
     }
     case 'get_content_queue': {
       const posts = await prisma.generatedPost.findMany({
-        where: { userId, status: { in: ['pending_review', 'approved'] } },
+        where: { userId, status: { in: ['pending_review', 'approved', 'failed'] } },
         include: { company: { select: { name: true } } },
         orderBy: [{ scheduledDate: 'asc' }, { createdAt: 'asc' }],
         take: 20,
@@ -326,6 +326,7 @@ async function execTool(userId: string, name: string, input: Record<string, unkn
       return {
         pendingReview: posts.filter((p: { status: string }) => p.status === 'pending_review').length,
         approved: posts.filter((p: { status: string }) => p.status === 'approved').length,
+        failedToPublish: posts.filter((p: { status: string }) => p.status === 'failed').length,
         posts: posts.map((p: { id: string; status: string; platform: string; topic: string; scheduledDate: Date | null; imageUrl: string | null; company: { name: string } }) => ({
           id: p.id,
           status: p.status,

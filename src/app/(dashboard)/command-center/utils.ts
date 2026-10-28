@@ -178,6 +178,7 @@ export const PLATFORM_CONFIG: Record<string, { label: string; emoji: string; cls
   tiktok: { label: 'TikTok', emoji: '🎵', cls: 'bg-zinc-600/30 text-zinc-300 border-zinc-600' },
   facebook: { label: 'Facebook', emoji: '👍', cls: 'bg-blue-600/20 text-blue-400 border-blue-600/40' },
   linkedin: { label: 'LinkedIn', emoji: '💼', cls: 'bg-sky-500/20 text-sky-400 border-sky-500/40' },
+  twitter: { label: 'X (Twitter)', emoji: '𝕏', cls: 'bg-zinc-500/20 text-zinc-200 border-zinc-500/40' },
   email: { label: 'Email', emoji: '📧', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
   whatsapp: { label: 'WhatsApp', emoji: '💬', cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
 }
@@ -197,6 +198,8 @@ export const POST_STATUS_CONFIG: Record<string, { label: string; dot: string }> 
   pending_review: { label: 'Por revisar', dot: 'bg-amber-400' },
   approved: { label: 'Aprobado', dot: 'bg-sky-400' },
   rejected: { label: 'Rechazado', dot: 'bg-red-400' },
+  publishing: { label: 'Publicando…', dot: 'bg-indigo-400' },
+  failed: { label: 'Falló', dot: 'bg-red-500' },
   ready: { label: 'Listo', dot: 'bg-green-400' },
   published: { label: 'Publicado', dot: 'bg-emerald-400' },
 }
