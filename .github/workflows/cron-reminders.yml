@@ -10,12 +10,26 @@ on:
     - cron: "0 14 * * 0"   # auto-content — domingos 9:00 AM COL; genera los posts de L/X/V
     - cron: "10 18-23 * * 1-5"   # publish-due — L-V 1:10-6:10 PM COL, cada hora; publica lo aprobado cuya hora ya llegó
   workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
+    inputs:
+      job:
+        description: 'Qué tarea ejecutar ("all" corre TODAS, incluidos los recordatorios por correo)'
+        type: choice
+        default: auto-content
+        options:
+          - auto-content
+          - publish-due
+          - weekly-angles
+          - generate
+          - morning
+          - midday
+          - evening
+          - all
 
 jobs:
   morning:
     name: Morning Reminder (8:30 AM COL)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 13 * * *'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'morning')) || github.event.schedule == '30 13 * * *'
     steps:
       - name: POST /cron/morning
         run: |
@@ -29,7 +43,7 @@ jobs:
   midday:
     name: Midday Reminder (12:00 PM COL)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 17 * * *'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'midday')) || github.event.schedule == '0 17 * * *'
     steps:
       - name: POST /cron/midday
         run: |
@@ -43,7 +57,7 @@ jobs:
   evening:
     name: Evening Reminder (6:00 PM COL)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 23 * * *'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'evening')) || github.event.schedule == '0 23 * * *'
     steps:
       - name: POST /cron/evening
         run: |
@@ -57,7 +71,7 @@ jobs:
   generate:
     name: Generate Recurring Instances (every 6h)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 */6 * * *'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'generate')) || github.event.schedule == '0 */6 * * *'
     steps:
       - name: POST /cron/generate
         run: |
@@ -71,7 +85,7 @@ jobs:
   weekly-angles:
     name: Weekly Content Angles (Mon 8:00 AM COL)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 13 * * 1'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'weekly-angles')) || github.event.schedule == '0 13 * * 1'
     steps:
       - name: POST /ceo/cron/weekly-angles
         run: |
@@ -85,7 +99,7 @@ jobs:
   auto-content:
     name: Auto Content (Sun 9:00 AM COL, posts for Mon/Wed/Fri)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 14 * * 0'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'auto-content')) || github.event.schedule == '0 14 * * 0'
     steps:
       - name: POST /ceo/cron/auto-content
         run: |
@@ -99,7 +113,7 @@ jobs:
   publish-due:
     name: Publish Due Posts (Mon-Fri evenings)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 18-23 * * 1-5'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'publish-due')) || github.event.schedule == '10 18-23 * * 1-5'
     steps:
       - name: POST /ceo/cron/publish-due
         run: |
