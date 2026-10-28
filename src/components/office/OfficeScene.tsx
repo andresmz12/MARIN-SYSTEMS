@@ -255,8 +255,27 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     floorMesh.receiveShadow = true
     put(floorMesh, fcx, -0.15, fcz, root)
     const wallColor = 0xf3f0e9
-    put(box(fw, 3.8, 0.2, wallColor), fcx, 1.9, floor.maxZ, root) // pared del fondo
-    put(box(0.2, 3.8, fd, wallColor), floor.maxX, 1.9, fcz, root) // pared derecha
+    const WALL_H = 6.4
+    put(box(fw, WALL_H, 0.2, wallColor), fcx, WALL_H / 2, floor.maxZ, root) // pared del fondo
+    put(box(0.2, WALL_H, fd, wallColor), floor.maxX, WALL_H / 2, fcz, root) // pared derecha
+    // Letrero con el nombre de la corporación, sobre los ventanales
+    const signCv = document.createElement('canvas')
+    signCv.width = 1400
+    signCv.height = 260
+    const sg = signCv.getContext('2d')
+    if (sg) {
+      sg.clearRect(0, 0, 1400, 260)
+      sg.fillStyle = '#2f3b5c'
+      sg.font = '800 150px system-ui, -apple-system, sans-serif'
+      sg.textBaseline = 'middle'
+      sg.fillText('Corporación Marin', 10, 120)
+      sg.fillStyle = '#b8863b'
+      sg.fillRect(14, 218, 520, 10)
+    }
+    const signTex = new THREE.CanvasTexture(signCv)
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 1.75), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }))
+    sign.rotation.y = Math.PI
+    put(sign, floor.minX + fw * 0.34, 5.0, floor.maxZ - 0.12, root)
     const glass = new THREE.MeshBasicMaterial({ color: 0xc4e1f6 })
     const winFrame = (w: number, h: number, d: number) => box(w, h, d, 0xffffff)
     const backWins = Math.max(2, Math.floor(fw / 4.6))
