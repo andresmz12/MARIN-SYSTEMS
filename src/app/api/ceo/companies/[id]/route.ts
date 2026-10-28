@@ -47,8 +47,13 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     })
     if (!existing) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
-    // Cascade removes related marketing ideas and work blocks.
-    await prisma.cEOCompany.delete({ where: { id: params.id } })
+    // La empresa arrastra en cascada sus ideas, bloques, posts y perfil de marca; los informes de
+    // los agentes y la biblioteca no tienen relación en la base, así que se limpian aparte.
+    await prisma.$transaction([
+      prisma.agentReport.deleteMany({ where: { companyId: params.id, userId: session.user.id } }),
+      prisma.knowledgeDoc.deleteMany({ where: { companyId: params.id, userId: session.user.id } }),
+      prisma.cEOCompany.delete({ where: { id: params.id } }),
+    ])
 
     return NextResponse.json({ success: true })
   } catch (err) {

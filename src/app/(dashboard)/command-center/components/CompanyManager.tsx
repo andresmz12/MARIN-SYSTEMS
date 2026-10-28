@@ -12,7 +12,7 @@ interface Props {
   onChanged?: () => void
 }
 
-type Patch = Partial<Pick<CEOCompany, 'name' | 'color' | 'emoji' | 'strategicWeight' | 'isActive'>>
+type Patch = Partial<Pick<CEOCompany, 'name' | 'color' | 'emoji' | 'isActive'>>
 
 export function CompanyManager({ companies, onChanged }: Props) {
   const { showToast } = useToast()
@@ -39,6 +39,22 @@ export function CompanyManager({ companies, onChanged }: Props) {
         showToast('Error al guardar cambios', 'error')
       }
     }, 800)
+  }
+
+  async function remove(c: CEOCompany) {
+    const ok = window.confirm(
+      `¿Eliminar "${c.name}"?\n\nSe borran para siempre su perfil de marca, sus posts (por aprobar, programados y publicados), sus ideas, sus ingresos y los informes de sus agentes. Esto no se puede deshacer.\n\nSi solo quieres dejar de usarla, mejor apaga el interruptor verde.`,
+    )
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/ceo/companies/${c.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setList((prev) => prev.filter((x) => x.id !== c.id))
+      showToast(`"${c.name}" eliminada`, 'success')
+      onChanged?.()
+    } catch {
+      showToast('No se pudo eliminar la empresa', 'error')
+    }
   }
 
   function update(id: string, patch: Patch) {
@@ -80,17 +96,6 @@ export function CompanyManager({ companies, onChanged }: Props) {
             </button>
           </div>
 
-          {/* Strategic weight slider */}
-          <div className="mt-3 flex items-center gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">Peso estratégico</span>
-            <input
-              type="range" min={1} max={5} step={1} value={c.strategicWeight}
-              onChange={(e) => update(c.id, { strategicWeight: Number(e.target.value) })}
-              className="flex-1 accent-indigo-500"
-            />
-            <span className="text-sm font-bold text-white w-4 text-center">{c.strategicWeight}</span>
-          </div>
-
           {/* Brand profile + Revenue buttons */}
           <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-2">
             <button
@@ -108,6 +113,12 @@ export function CompanyManager({ companies, onChanged }: Props) {
               }`}
             >
               💰 Ingresos
+            </button>
+            <button
+              onClick={() => remove(c)}
+              className="ml-auto text-xs px-3 py-1.5 rounded-lg text-red-300 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+            >
+              🗑️ Eliminar
             </button>
           </div>
 
@@ -344,7 +355,6 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🏢')
   const [color, setColor] = useState(CEO_COLORS[0])
-  const [strategicWeight, setStrategicWeight] = useState(3)
   const [saving, setSaving] = useState(false)
   const [linkOptions, setLinkOptions] = useState<{ id: string; name: string; emoji: string }[]>([])
   const [linkedCompanyId, setLinkedCompanyId] = useState('')
@@ -373,7 +383,7 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await fetch('/api/ceo/companies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, emoji, color, strategicWeight, companyId: linkedCompanyId || undefined }),
+        body: JSON.stringify({ name, emoji, color, companyId: linkedCompanyId || undefined }),
       })
       if (!res.ok) throw new Error()
       showToast('Empresa creada', 'success')
@@ -422,11 +432,6 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
                   style={{ backgroundColor: c }} />
               ))}
             </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-400 block mb-1">Peso estratégico: {strategicWeight}</label>
-            <input type="range" min={1} max={5} step={1} value={strategicWeight}
-              onChange={(e) => setStrategicWeight(Number(e.target.value))} className="w-full accent-indigo-500" />
           </div>
           {linkOptions.length > 0 && (
             <div>
