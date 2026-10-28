@@ -629,8 +629,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         <p className="text-sm text-zinc-500">No hay posts por revisar. Los nuevos aparecen aquí cuando el piloto automático los genere.</p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {pending.map((post) => {
+      {(() => {
+        const renderPost = (post: GeneratedPost) => {
           const members = membersOf(post).filter((m) => m.status === 'pending_review')
           const specPlatform = imagePlatformOf(post)
           const busy = busyId === post.id
@@ -778,8 +778,45 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
               </div>
             </div>
           )
-        })}
-      </div>
+        }
+        // Los posts se agrupan por día de publicación; los de la tanda anterior (una tarjeta por red)
+        // van aparte de los nuevos (todas las redes en una sola tarjeta).
+        const dayKey = (p: GeneratedPost) => (p.scheduledDate ? p.scheduledDate.slice(0, 10) : 'sin-fecha')
+        const dayLabel = (k: string) => {
+          if (k === 'sin-fecha') return 'Sin fecha'
+          const s = new Date(`${k}T12:00:00Z`).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+          return s.charAt(0).toUpperCase() + s.slice(1)
+        }
+        const byDay = (list: GeneratedPost[]) => {
+          const keys = Array.from(new Set(list.map(dayKey))).sort()
+          return keys.map((k) => ({ key: k, items: list.filter((p) => dayKey(p) === k) }))
+        }
+        const fresh = pending.filter((p) => !!p.groupId)
+        const legacy = pending.filter((p) => !p.groupId)
+        const section = (title: string | null, hint: string | null, list: GeneratedPost[]) => list.length === 0 ? null : (
+          <div className="space-y-4">
+            {title && (
+              <div className="border-b border-zinc-800 pb-2">
+                <h3 className="text-sm font-bold text-zinc-100">{title} <span className="font-normal text-zinc-500">· {list.length}</span></h3>
+                {hint && <p className="text-xs text-zinc-500">{hint}</p>}
+              </div>
+            )}
+            {byDay(list).map((d) => (
+              <div key={d.key} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">📅 {dayLabel(d.key)}</p>
+                <div className="grid gap-4 md:grid-cols-2">{d.items.map(renderPost)}</div>
+              </div>
+            ))}
+          </div>
+        )
+        const both = fresh.length > 0 && legacy.length > 0
+        return (
+          <div className="space-y-8">
+            {section(both ? 'Tanda nueva' : null, 'Un solo post para todas las redes', fresh)}
+            {section(both ? 'Tanda anterior' : null, 'Posts viejos: una tarjeta por red. Apruébalos o recházalos para dejar paso a la tanda nueva.', legacy)}
+          </div>
+        )
+      })()}
 
       {manualTikTok.length > 0 && (
         <div className="space-y-2 rounded-xl border border-pink-500/30 bg-pink-500/5 p-4">
