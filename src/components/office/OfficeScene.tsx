@@ -352,21 +352,22 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     put(floorMesh, fcx, -0.15, fcz, root)
     const edges: THREE.Mesh[] = []
     ;[
-      put(neon(0x5ad7ff, fw, 0.04, 0.06), fcx, 0.01, floor.maxZ, root),
-      put(neon(0x5ad7ff, 0.06, 0.04, fd), floor.maxX, 0.01, fcz, root),
+      put(neon(0x5ad7ff, fw, 0.04, 0.06), fcx, 0.01, floor.minZ, root),
+      put(neon(0x5ad7ff, 0.06, 0.04, fd), floor.minX, 0.01, fcz, root),
     ].forEach((m) => edges.push(m))
-    put(box(fw, 0.9, 0.3, 0x141c38), fcx, 0.45, floor.minZ, root)
+    put(box(fw, 0.9, 0.3, 0x141c38), fcx, 0.45, floor.maxZ, root)
     const windows: THREE.Mesh[] = []
     const count = Math.ceil(fw / 1.3)
     for (let i = 0; i < count; i++) {
       const h = 3 + Math.abs(Math.sin(i * 7.3)) * 9
       const w = 1.1 + Math.abs(Math.cos(i * 3.1)) * 1.4
       const x = floor.minX + i * 1.3
-      put(box(w, h, 1, 0x0d1328), x, h / 2, floor.minZ - 2.4 - (i % 3) * 0.8, root)
+      put(box(w, h, 1, 0x0d1328), x, h / 2, floor.maxZ + 2.4 + (i % 3) * 0.8, root)
       for (let r = 0; r < Math.floor(h / 1.1); r++) {
         if (Math.sin(i * 12.9 + r * 4.1) > -0.2) {
           const win = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.4), new THREE.MeshBasicMaterial({ color: bright ? 0x8fb4de : 0xffd98a }))
-          win.position.set(x + (r % 2 ? 0.2 : -0.2), 0.8 + r * 1.05, floor.minZ - 1.9 - (i % 3) * 0.8)
+          win.position.set(x + (r % 2 ? 0.2 : -0.2), 0.8 + r * 1.05, floor.maxZ + 1.9 + (i % 3) * 0.8)
+          win.rotation.y = Math.PI // mira hacia la cámara
           win.userData.id = i * 31 + r
           root.add(win)
           windows.push(win)
@@ -416,14 +417,14 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     cg.position.set(plan.ceo.x, 0, plan.ceo.z)
     put(box(CEO_W, 0.5, CEO_D, 0x141c38), 0, 0.25, 0, cg)
     const gold = 0xd6b35a
-    put(neon(gold, CEO_W, 0.05, 0.05), 0, 0.5, CEO_D / 2, cg)
+    put(neon(gold, CEO_W, 0.05, 0.05), 0, 0.5, -CEO_D / 2, cg)
     put(neon(gold, 0.05, 0.05, CEO_D), -CEO_W / 2, 0.5, 0, cg)
     const glassMat = new THREE.MeshStandardMaterial({ color: 0x5ad7ff, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.6, side: THREE.DoubleSide })
-    put(new THREE.Mesh(new THREE.BoxGeometry(CEO_W, 3.4, 0.08), glassMat), 0, 2.2, -CEO_D / 2, cg)
-    put(new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.4, CEO_D), glassMat), -CEO_W / 2, 2.2, 0, cg)
-    ;[[-CEO_W / 2, -CEO_D / 2], [CEO_W / 2, -CEO_D / 2], [-CEO_W / 2, CEO_D / 2]].forEach((p) => put(neon(gold, 0.07, 3.4, 0.07), p[0], 2.2, p[1], cg))
-    put(neon(gold, CEO_W, 0.06, 0.06), 0, 3.9, -CEO_D / 2, cg)
-    put(neon(gold, 0.06, 0.06, CEO_D), -CEO_W / 2, 3.9, 0, cg)
+    put(new THREE.Mesh(new THREE.BoxGeometry(CEO_W, 3.4, 0.08), glassMat), 0, 2.2, CEO_D / 2, cg)
+    put(new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.4, CEO_D), glassMat), CEO_W / 2, 2.2, 0, cg)
+    ;[[-CEO_W / 2, CEO_D / 2], [CEO_W / 2, CEO_D / 2], [CEO_W / 2, -CEO_D / 2]].forEach((p) => put(neon(gold, 0.07, 3.4, 0.07), p[0], 2.2, p[1], cg))
+    put(neon(gold, CEO_W, 0.06, 0.06), 0, 3.9, CEO_D / 2, cg)
+    put(neon(gold, 0.06, 0.06, CEO_D), CEO_W / 2, 3.9, 0, cg)
     put(box(4.2, 0.14, 1.3, 0x1b2446), 0, 1.0, 0.3, cg)
     ;[[-1.9, -0.2], [1.9, -0.2], [-1.9, 0.8], [1.9, 0.8]].forEach((p) => put(box(0.1, 0.5, 0.1, 0x0c1226), p[0], 0.75, p[1], cg))
     put(neon(gold, 4.2, 0.03, 0.03), 0, 0.93, 0.95, cg)
@@ -431,9 +432,11 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     cv.width = 768
     cv.height = 384
     const tex = new THREE.CanvasTexture(cv)
-    put(new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.3), new THREE.MeshBasicMaterial({ map: tex })), 0, 2.5, -CEO_D / 2 + 0.1, cg)
-    put(neon(gold, 4.8, 0.04, 0.04), 0, 3.7, -CEO_D / 2 + 0.11, cg)
-    put(neon(gold, 4.8, 0.04, 0.04), 0, 1.3, -CEO_D / 2 + 0.11, cg)
+    const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.3), new THREE.MeshBasicMaterial({ map: tex }))
+    screenMesh.rotation.y = Math.PI
+    put(screenMesh, 0, 2.5, CEO_D / 2 - 0.1, cg)
+    put(neon(gold, 4.8, 0.04, 0.04), 0, 3.7, CEO_D / 2 - 0.11, cg)
+    put(neon(gold, 4.8, 0.04, 0.04), 0, 1.3, CEO_D / 2 - 0.11, cg)
     const ceoSeat = new THREE.Group()
     ceoSeat.position.set(0, 0.5, 1.5)
     ceoSeat.rotation.y = Math.PI
@@ -458,7 +461,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     if (bright) {
       const LIGHT: Record<number, number> = {
         0x2a3558: 0xf2f4f8, 0x1c2440: 0xdde2ea, 0x151c34: 0x6f7a90, 0x0c1226: 0x7a8499,
-        0x1b2446: 0xc8a770, 0x141c38: 0xcfd6e2, 0x0d1328: 0xaec0d6, 0x232d4c: 0xdbe3ee, 0x4a3b2a: 0xc8a770,
+        0x1b2446: 0xc8a770, 0x141c38: 0xcfd6e2, 0x0d1328: 0xc9d7e8, 0x232d4c: 0xdbe3ee, 0x4a3b2a: 0xc8a770,
       }
       scene.traverse((o) => {
         const mt = (o as THREE.Mesh).material
@@ -595,7 +598,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (z) return { tx: z.cx, tz: z.cz, span: Math.max(z.w, z.d) * 1.35 + 8 }
       return { tx: fcx, tz: fcz, span: Math.max(fw, fd) + Math.min(fw, fd) * 0.5 }
     }
-    let yaw = Math.PI / 4
+    let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que los agentes dan la cara
     let pitch = 0.6
     let zoom = 1
     const cur = { ...focusOf('all') }
@@ -650,6 +653,39 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       el.style.display = p.back ? 'none' : 'flex'
     }
 
+    // Etiquetas sin pisarse: se acomodan de mayor a menor prioridad y las que chocan suben un poco.
+    // La posición se suaviza para que no salten al girar la cámara.
+    const labelItems: { el: HTMLElement; x: number; y: number; p: number }[] = []
+    const smoothY = new Map<HTMLElement, number>()
+    const pushLabel = (el: HTMLElement | null, x: number, y: number, z: number, p: number) => {
+      if (!el) return
+      const q = project(x, y, z)
+      if (q.back) { el.style.display = 'none'; return }
+      labelItems.push({ el, x: q.x, y: q.y, p })
+    }
+    const flushLabels = () => {
+      labelItems.sort((a, b) => a.p - b.p)
+      const placed: { x0: number; y0: number; x1: number; y1: number }[] = []
+      labelItems.forEach((it) => {
+        const w = it.el.offsetWidth || 90
+        const h = 22
+        let y = it.y
+        for (let n = 0; n < 10; n++) {
+          const hit = placed.find((r) => it.x - w / 2 < r.x1 && it.x + w / 2 > r.x0 && y - h < r.y1 && y > r.y0)
+          if (!hit) break
+          y = hit.y0 - 2
+        }
+        const prev = smoothY.get(it.el)
+        const ny = prev === undefined || Math.abs(prev - y) > 120 ? y : prev + (y - prev) * 0.3
+        smoothY.set(it.el, ny)
+        placed.push({ x0: it.x - w / 2, y0: ny - h, x1: it.x + w / 2, y1: ny })
+        it.el.style.left = `${it.x}px`
+        it.el.style.top = `${ny}px`
+        it.el.style.display = 'flex'
+      })
+      labelItems.length = 0
+    }
+
     const clock = new THREE.Clock()
     let raf = 0
     const frame = (t: number) => {
@@ -691,7 +727,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         if (o.robot) {
           // Trabaja: sentado y activo; descansa: sentado y quieto; alerta: se levanta y pide ayuda.
           if (s === 'alert') playClip(o, 'Wave', 1.1)
-          else { playClip(o, 'Sitting', working ? 1 : 0.15); o.robot.rotation.x = sleeping ? 0.12 : 0 }
+          else { playClip(o, 'Sitting', working ? 0.6 : 0.12); o.robot.rotation.x = sleeping ? 0.12 : 0 }
         } else {
           o.fallback.position.y = working ? Math.sin(time * 9) * 0.015 : 0
         }
@@ -704,7 +740,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         o.ex.position.y = 2.1 + Math.abs(Math.sin(time * 6)) * 0.1
         const el = labelRefs.current[o.id]
         if (el) {
-          place(el, o.wrap.position.x, 2.5, o.wrap.position.z + 0.95)
+          pushLabel(el, o.wrap.position.x, 2.5, o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
           el.dataset.status = s
           el.dataset.sel = sel === o.id ? '1' : '0'
           el.style.opacity = fcs === 'all' || fcs === o.deptId ? '' : '0.4'
@@ -714,11 +750,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (ceoActor.mixer) { ceoActor.mixer.update(dt) }
       crown.position.y = 2.55 + Math.sin(time * 2) * 0.03
       const ceoEl = labelRefs.current.ceo
-      if (ceoEl) { place(ceoEl, plan.ceo.x, 3.9, plan.ceo.z + 1.5); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
+      if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, 3.9, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
+      flushLabels()
       plan.zones.forEach((z) => {
         const el = zoneRefs.current[z.dept.id]
         if (!el) return
-        place(el, z.cx, 0.2, z.cz - z.d / 2 - 1.1)
+        place(el, z.cx, 0.2, z.cz + z.d / 2 + 0.9)
         el.style.opacity = fcs === 'all' || fcs === z.dept.id ? '1' : '0.35'
       })
       drawScreen(cs, m)
@@ -791,7 +828,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-zinc-700 bg-[#0d1220]/90 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-zinc-100 data-[sel='1']:border-cyan-300 data-[sel='1']:shadow-[0_0_12px_-2px_#5ad7ff]"
           >
             <span className="office-dot h-2 w-2 rounded-full bg-zinc-500" />
-            {a.name}
+            {a.name.replace(' (próximamente)', '')}
           </button>
         )))}
         <button
