@@ -153,3 +153,11 @@ body {
   .badge-loss { @apply bg-red-500/20   text-red-400   border border-red-500/30   text-xs font-bold px-2 py-0.5 rounded; }
   .badge-be   { @apply bg-gray-500/20  text-gray-400  border border-gray-500/30  text-xs font-bold px-2 py-0.5 rounded; }
 }
+
+/* Oficina 3D: color del puntito de cada etiqueta según el estado del agente */
+.office-label[data-status='work'] .office-dot { background: #4fd18b; box-shadow: 0 0 8px #4fd18b; }
+.office-label[data-status='alert'] .office-dot { background: #f0645c; box-shadow: 0 0 8px #f0645c; }
+.office-label[data-status='ghost'] { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) {
+  .office-label .office-dot { box-shadow: none !important; }
+}
