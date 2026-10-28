@@ -43,13 +43,13 @@ async function handler(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
   }
-  const body = (await req.json().catch(() => ({}))) as { force?: boolean }
+  const body = (await req.json().catch(() => ({}))) as { force?: boolean; companyId?: string }
   const force = body.force === true
   const startedAt = Date.now()
 
   try {
     const profiles = await prisma.brandProfile.findMany({
-      where: { autoEnabled: true },
+      where: { autoEnabled: true, ...(body.companyId ? { companyId: body.companyId } : {}) },
       include: { company: { select: { id: true, name: true } } },
     })
 
@@ -61,7 +61,8 @@ async function handler(req: Request) {
         const now = new Date()
         const [upcoming, pending] = await Promise.all([
           prisma.generatedPost.count({
-            where: { companyId: profile.companyId, source: 'auto', scheduledDate: { gt: now } },
+            // Lo rechazado no cuenta: así, descartar una tanda deja generar otra.
+            where: { companyId: profile.companyId, source: 'auto', scheduledDate: { gt: now }, status: { not: 'rejected' } },
           }),
           prisma.generatedPost.count({
             where: { companyId: profile.companyId, status: 'pending_review' },

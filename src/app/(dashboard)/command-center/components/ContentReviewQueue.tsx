@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany, GeneratedPost } from '../types'
 import { PLATFORM_CONFIG, POST_STATUS_CONFIG } from '../utils'
@@ -87,6 +87,48 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       .catch(() => setAuto(null))
       .finally(() => setAutoLoaded(true))
   }, [companyId])
+
+  const [generating, setGenerating] = useState(false)
+
+  async function generateWeek() {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/ceo/content/generate-week', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId }),
+      })
+      const d = await res.json().catch(() => ({})) as { created?: number; skipped?: string | null; error?: string }
+      if (!res.ok) throw new Error(d.error ?? 'No se pudo generar la tanda')
+      if (d.skipped) showToast(`No se generó: ${d.skipped}. Aprueba, rechaza o publica lo pendiente primero.`, 'info')
+      else showToast(`Tanda nueva lista: ${d.created} posts. Revísala abajo.`, 'success')
+      await load()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo generar la tanda', 'error')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function discardAll(list: GeneratedPost[]) {
+    if (!window.confirm(`¿Descartar los ${list.length} posts de la tanda anterior? Quedan rechazados y no se publican.`)) return
+    setBusyId('discard')
+    try {
+      const results = await Promise.all(list.map((p) => fetch(`/api/ceo/content/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected' }),
+      })))
+      if (results.some((r) => !r.ok)) throw new Error()
+      showToast('Tanda anterior descartada', 'success')
+      await load()
+    } catch {
+      showToast('No se pudieron descartar todos', 'error')
+      await load()
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   async function toggleNews() {
     if (!auto) return
@@ -404,6 +446,16 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         >
           {auto?.autoEnabled ? 'Activado ✓' : 'Activar'}
         </button>
+        {auto?.autoEnabled && (
+          <button
+            onClick={generateWeek}
+            disabled={generating}
+            title="Crea ahora la tanda de la semana, sin esperar al domingo"
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-50"
+          >
+            {generating ? 'Generando… (2-3 min)' : '✨ Generar tanda ahora'}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -793,12 +845,15 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         }
         const fresh = pending.filter((p) => !!p.groupId)
         const legacy = pending.filter((p) => !p.groupId)
-        const section = (title: string | null, hint: string | null, list: GeneratedPost[]) => list.length === 0 ? null : (
+        const section = (title: string | null, hint: string | null, list: GeneratedPost[], action?: ReactNode) => list.length === 0 ? null : (
           <div className="space-y-4">
             {title && (
-              <div className="border-b border-zinc-800 pb-2">
-                <h3 className="text-sm font-bold text-zinc-100">{title} <span className="font-normal text-zinc-500">· {list.length}</span></h3>
-                {hint && <p className="text-xs text-zinc-500">{hint}</p>}
+              <div className="flex flex-wrap items-end justify-between gap-2 border-b border-zinc-800 pb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100">{title} <span className="font-normal text-zinc-500">· {list.length}</span></h3>
+                  {hint && <p className="text-xs text-zinc-500">{hint}</p>}
+                </div>
+                {action}
               </div>
             )}
             {byDay(list).map((d) => (
@@ -813,7 +868,15 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         return (
           <div className="space-y-8">
             {section(both ? 'Tanda nueva' : null, 'Un solo post para todas las redes', fresh)}
-            {section(both ? 'Tanda anterior' : null, 'Posts viejos: una tarjeta por red. Apruébalos o recházalos para dejar paso a la tanda nueva.', legacy)}
+            {section('Tanda anterior', 'Posts viejos: una tarjeta por red. Apruébalos o recházalos para dejar paso a la tanda nueva.', legacy, (
+              <button
+                onClick={() => discardAll(legacy)}
+                disabled={busyId === 'discard'}
+                className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+              >
+                {busyId === 'discard' ? 'Descartando…' : '🗑️ Descartar toda la tanda anterior'}
+              </button>
+            ))}
           </div>
         )
       })()}
