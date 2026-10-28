@@ -173,7 +173,7 @@ interface Actor {
 function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent: number): Actor {
   const ghost = a.status === 'ghost'
   const desk = new THREE.Group()
-  const wood = ghost ? 0xd8d2c6 : 0xe8d9bd
+  const wood = 0xe8d9bd
   put(box(2.0, 0.08, 1.0, wood), 0, 0.8, 0, desk)
   ;[[-0.92, -0.42], [0.92, -0.42], [-0.92, 0.42], [0.92, 0.42]].forEach((p) => put(box(0.06, 0.78, 0.06, 0xf6f6f4), p[0], 0.39, p[1], desk))
   // Monitor con el encendido según el estado
@@ -181,12 +181,10 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
   const screen = box(0.92, 0.55, 0.05, 0x14171d, { emissive: new THREE.Color(0x000000), emissiveIntensity: 1 }) as THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
   put(screen, 0, 1.3, -0.3, desk)
   put(box(0.62, 0.025, 0.2, 0xcfd3da), 0, 0.85, 0.2, desk)
-  if (!ghost) {
-    put(box(0.1, 0.1, 0.1, 0xf4f4f4), 0.75, 0.9, 0.05, desk) // taza
-    put(box(0.34, 0.012, 0.24, 0xf6efe0), -0.7, 0.845, 0.1, desk) // cuaderno
-  }
+  put(box(0.1, 0.1, 0.1, 0xf4f4f4), 0.75, 0.9, 0.05, desk) // taza
+  put(box(0.34, 0.012, 0.24, 0xf6efe0), -0.7, 0.845, 0.1, desk) // cuaderno
   // Silla con el color del área
-  const chairColor = ghost ? 0x9aa3b4 : deep(accent, 0.78)
+  const chairColor = deep(accent, 0.78)
   put(box(0.55, 0.07, 0.55, chairColor), 0, 0.5, 0.95, desk)
   put(box(0.55, 0.55, 0.07, chairColor), 0, 0.82, 1.23, desk)
   put(box(0.07, 0.46, 0.07, 0x3a3f4a), 0, 0.24, 0.95, desk)
@@ -482,7 +480,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const placed: { x0: number; y0: number; x1: number; y1: number }[] = []
       labelItems.forEach((it) => {
         const w = it.el.offsetWidth || 70
-        const h = 22
+        const h = 16
         let y = it.y
         for (let n = 0; n < 10; n++) {
           const hit = placed.find((r) => it.x - w / 2 < r.x1 && it.x + w / 2 > r.x0 && y - h < r.y1 && y > r.y0)
@@ -600,7 +598,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           <div
             key={`zone-${d.id}`}
             ref={(el) => { zoneRefs.current[d.id] = el }}
-            className="absolute hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-white/70 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] md:flex"
+            className="absolute hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-white/70 px-1.5 py-px text-[8px] font-extrabold uppercase tracking-[0.14em] md:flex"
             style={{ color: d.accent, filter: 'brightness(0.62)' }}
           >
             {d.name}
@@ -612,19 +610,19 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             ref={(el) => { labelRefs.current[a.id] = el }}
             type="button"
             onClick={() => onSelect(a.id, d.id)}
-            className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-zinc-300 bg-white/95 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-zinc-800 shadow-sm data-[sel='1']:border-indigo-500 data-[sel='1']:ring-2 data-[sel='1']:ring-indigo-300/70"
+            className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-zinc-300 bg-white/95 py-px pl-1.5 pr-2 text-[9px] font-bold leading-tight text-zinc-800 shadow-sm data-[sel='1']:border-indigo-500 data-[sel='1']:ring-2 data-[sel='1']:ring-indigo-300/70"
           >
-            <span className="office-dot h-2 w-2 rounded-full bg-zinc-400" />
-            {a.name}
+            <span className="office-dot h-1.5 w-1.5 rounded-full bg-zinc-400" />
+            {a.name}{a.status === 'ghost' ? ' · pronto' : ''}
           </button>
         )))}
         <button
           ref={(el) => { labelRefs.current.ceo = el }}
           type="button"
           onClick={() => onSelect('ceo', null)}
-          className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-500/70 bg-white/95 py-0.5 pl-2 pr-2.5 text-[11px] font-bold text-amber-800 shadow-sm data-[sel='1']:ring-2 data-[sel='1']:ring-amber-300"
+          className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/70 bg-white/95 py-px pl-1.5 pr-2 text-[9px] font-bold leading-tight text-amber-800 shadow-sm data-[sel='1']:ring-2 data-[sel='1']:ring-amber-300"
         >
-          <span className="h-2 w-2 rounded-full bg-amber-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
           Andrés Marín
         </button>
       </div>

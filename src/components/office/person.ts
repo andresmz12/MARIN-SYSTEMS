@@ -57,10 +57,11 @@ export function specFor(id: string, shirt: number, ghost: boolean): PersonSpec {
   }
 }
 
-function part(geo: THREE.BufferGeometry, color: number, ghost: boolean, rough = 0.85): THREE.Mesh {
+// `ghost` se conserva en la firma (los puestos reservados usan una camisa gris), pero ya no vuelve transparente a nadie.
+function part(geo: THREE.BufferGeometry, color: number, _ghost: boolean, rough = 0.85): THREE.Mesh {
   const m = new THREE.Mesh(
     geo,
-    new THREE.MeshStandardMaterial({ color: ghost ? 0x9aa3b8 : color, roughness: rough, metalness: 0.02, transparent: ghost, opacity: ghost ? 0.38 : 1 }),
+    new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.02 }),
   )
   m.castShadow = true
   return m
