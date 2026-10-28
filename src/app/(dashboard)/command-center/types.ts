@@ -181,6 +181,8 @@ export interface GeneratedPost {
   imageHeight?: number | null
   brandProfile?: { visualStyle?: unknown } | null
   imageUrl?: string | null
+  groupId?: string | null
+  sourceUrl?: string | null
   source?: string
   reviewNote?: string | null
   publishAttempts?: number

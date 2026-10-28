@@ -36,19 +36,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!existing) return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 })
 
     const { status, copy, scheduledDate, publishedAt, reviewNote, imageUrl, imagePrompt, imageText } = parsed.data
+    // Lo que se decide sobre el contenido (aprobar, rechazar, editar, reprogramar) vale para todas
+    // las redes del grupo; marcar publicado y la imagen son de cada post.
+    const shared = {
+      ...(status !== undefined && status !== 'published' ? { status } : {}),
+      ...(copy !== undefined ? { copy } : {}),
+      ...(reviewNote !== undefined ? { reviewNote } : {}),
+      ...(imagePrompt !== undefined ? { imagePrompt } : {}),
+      ...(imageText !== undefined ? { imageText } : {}),
+      ...(scheduledDate !== undefined ? { scheduledDate: scheduledDate ? new Date(scheduledDate) : null } : {}),
+    }
+    const own = {
+      ...(status === 'published' ? { status, publishedAt: new Date() } : {}),
+      ...(imageUrl !== undefined ? { imageUrl } : {}),
+      ...(publishedAt !== undefined && status !== 'published' ? { publishedAt: publishedAt ? new Date(publishedAt) : null } : {}),
+    }
+    if (existing.groupId && Object.keys(shared).length > 0) {
+      await prisma.generatedPost.updateMany({
+        where: {
+          groupId: existing.groupId,
+          userId: session.user.id,
+          id: { not: existing.id },
+          // Lo ya publicado o en envío no se toca.
+          status: { notIn: ['published', 'publishing'] },
+        },
+        data: shared,
+      })
+    }
     const post = await prisma.generatedPost.update({
       where: { id: params.id },
-      data: {
-        ...(status !== undefined ? { status } : {}),
-        ...(copy !== undefined ? { copy } : {}),
-        ...(reviewNote !== undefined ? { reviewNote } : {}),
-        ...(imageUrl !== undefined ? { imageUrl } : {}),
-        ...(imagePrompt !== undefined ? { imagePrompt } : {}),
-        ...(imageText !== undefined ? { imageText } : {}),
-        ...(scheduledDate !== undefined ? { scheduledDate: scheduledDate ? new Date(scheduledDate) : null } : {}),
-        ...(publishedAt !== undefined ? { publishedAt: publishedAt ? new Date(publishedAt) : null } : {}),
-        ...(status === 'published' ? { publishedAt: new Date() } : {}),
-      },
+      data: { ...shared, ...own },
       include: { company: true },
     })
 

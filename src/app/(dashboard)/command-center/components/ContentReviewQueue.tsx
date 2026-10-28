@@ -5,7 +5,7 @@ import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany, GeneratedPost } from '../types'
 import { PLATFORM_CONFIG, POST_STATUS_CONFIG } from '../utils'
 import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
-import { IMAGE_SPECS, buildImagePrompt, parseImageText, parseVisualStyle, type ImageText } from '@/lib/image-prompt'
+import { IMAGE_SPECS, buildImagePrompt, imagePlatformOf, parseImageText, parseVisualStyle, type ImageText } from '@/lib/image-prompt'
 
 interface Props {
   /** La empresa que se está viendo: todo en esta pantalla es de ella. */
@@ -16,6 +16,7 @@ interface Props {
 
 interface AutoState {
   autoEnabled: boolean
+  newsEnabled: boolean
   autoPlatforms: string[]
 }
 
@@ -75,7 +76,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     fetch(`/api/ceo/brand-profile?companyId=${companyId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((p: (AutoState & { id: string; references?: Reference[] | null; visualStyle?: unknown }) | null) => {
-        setAuto(p ? { autoEnabled: p.autoEnabled, autoPlatforms: p.autoPlatforms } : null)
+        setAuto(p ? { autoEnabled: p.autoEnabled, newsEnabled: !!p.newsEnabled, autoPlatforms: p.autoPlatforms } : null)
         setRefs(Array.isArray(p?.references) ? p.references : [])
         const v = parseVisualStyle(p?.visualStyle)
         setVs({ style: v.style ?? '', handle: v.handle ?? '', avoid: v.avoid ?? '', palette: v.palette ?? [] })
@@ -83,6 +84,22 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       .catch(() => setAuto(null))
       .finally(() => setAutoLoaded(true))
   }, [companyId])
+
+  async function toggleNews() {
+    if (!auto) return
+    const next = !auto.newsEnabled
+    const res = await fetch('/api/ceo/brand-profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, newsEnabled: next }),
+    })
+    if (res.ok) {
+      setAuto({ ...auto, newsEnabled: next })
+      showToast(next ? 'Noticias automáticas activadas' : 'Noticias automáticas pausadas', 'success')
+    } else {
+      showToast('No se pudo cambiar el aviso de noticias', 'error')
+    }
+  }
 
   async function toggleAuto() {
     if (!auto) return
@@ -124,7 +141,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const promptFor = (p: GeneratedPost): string => {
     const t = textOf(p)
     return buildImagePrompt({
-      platform: p.platform,
+      platform: imagePlatformOf(p),
       brandName: brandOf(p),
       scene: p.imagePrompt,
       text: t.headline.trim() ? t : null,
@@ -169,10 +186,10 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         const err = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(err.error ?? 'Error')
       }
-      const d = await res.json().catch(() => null) as { platform?: string; fit?: { action: string; from: { width: number; height: number }; to: { width: number; height: number }; target: string | null } } | null
+      const d = await res.json().catch(() => null) as { fit?: { platform?: string; action: string; from: { width: number; height: number }; to: { width: number; height: number }; target: string | null } } | null
       const fit = d?.fit
       if (fit?.action === 'crop') showToast(`Imagen ajustada al formato de la red: ${fit.from.width}×${fit.from.height} → ${fit.to.width}×${fit.to.height}`, 'success')
-      else if (fit?.action === 'mismatch') showToast(`La imagen (${fit.from.width}×${fit.from.height}) no tiene la orientación de ${IMAGE_SPECS[d?.platform ?? '']?.label ?? 'la red'}${fit.target ? ` (${fit.target})` : ''}. Genérala otra vez con el formato que pide el prompt.`, 'error')
+      else if (fit?.action === 'mismatch') showToast(`La imagen (${fit.from.width}×${fit.from.height}) no tiene la orientación de ${IMAGE_SPECS[d?.fit?.platform ?? '']?.label ?? 'la red'}${fit.target ? ` (${fit.target})` : ''}. Genérala otra vez con el formato que pide el prompt.`, 'error')
       else showToast('Imagen subida', 'success')
       await load()
     } catch (e) {
@@ -284,7 +301,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     }
   }
 
-  const pending = posts.filter((p) => p.status === 'pending_review')
+  // Un mismo contenido para varias redes se muestra como UNA tarjeta (la primera del grupo).
+  const membersOf = (p: GeneratedPost) => (p.groupId ? posts.filter((x) => x.groupId === p.groupId) : [p])
+  const pending = posts.filter((p) => p.status === 'pending_review' && (!p.groupId || posts.find((x) => x.groupId === p.groupId && x.status === 'pending_review') === p))
   const scheduledAll = posts.filter((p) => p.status === 'approved' || p.status === 'publishing')
   const manualTikTok = scheduledAll.filter((p) => p.platform === 'tiktok')
   const scheduled = scheduledAll.filter((p) => p.platform !== 'tiktok')
@@ -326,7 +345,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const required = steps.filter((st) => !st.optional)
   const setupDone = required.every((st) => st.done)
   const doneCount = required.filter((st) => st.done).length
-  const missingImages = posts.filter((p) => !p.imageUrl && (p.imagePrompt || p.imageText))
+  const missingImages = pending.filter((p) => !p.imageUrl && (p.imagePrompt || p.imageText))
 
   return (
     <div className="space-y-5">
@@ -381,6 +400,27 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           }`}
         >
           {auto?.autoEnabled ? 'Activado ✓' : 'Activar'}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+        <div className="flex-1 min-w-[200px]">
+          <p className="text-sm font-semibold text-zinc-100">📰 Noticias automáticas</p>
+          <p className="text-xs text-zinc-400">
+            Cada día revisa las noticias oficiales (IRS). Si hay una nueva, te prepara el post y te avisa por correo. Tú lo revisas y apruebas.
+          </p>
+        </div>
+        <button
+          onClick={toggleNews}
+          disabled={!auto}
+          title={auto ? undefined : 'Configura primero el perfil de marca de esta empresa'}
+          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-all disabled:opacity-40 ${
+            auto?.newsEnabled
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+              : 'text-zinc-300 border-zinc-700 hover:border-zinc-500'
+          }`}
+        >
+          {auto?.newsEnabled ? 'Activadas ✓' : 'Activar'}
         </button>
       </div>
 
@@ -568,7 +608,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           <button
             onClick={() => copyText(
               missingImages
-                .map((p, i) => `━━━ IMAGEN ${i + 1} de ${missingImages.length} · ${PLATFORM_CONFIG[p.platform]?.label ?? p.platform} · ${brandOf(p)} ━━━\n${promptFor(p)}`)
+                .map((p, i) => `━━━ IMAGEN ${i + 1} de ${missingImages.length} · ${brandOf(p)} ━━━\n${promptFor(p)}`)
                 .join('\n\n'),
               'Prompts copiados',
             )}
@@ -586,20 +626,30 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {pending.map((post) => {
-          const plat = PLATFORM_CONFIG[post.platform]
+          const members = membersOf(post).filter((m) => m.status === 'pending_review')
+          const specPlatform = imagePlatformOf(post)
           const busy = busyId === post.id
           const copy = edits[post.id] ?? post.copy
           return (
             <div key={post.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${plat?.cls ?? ''}`}>
-                  {plat?.emoji} {plat?.label ?? post.platform}
+                <span className="flex flex-wrap gap-1">
+                  {members.map((m) => (
+                    <span key={m.id} className={`text-xs px-2 py-0.5 rounded-full border ${PLATFORM_CONFIG[m.platform]?.cls ?? ''}`}>
+                      {PLATFORM_CONFIG[m.platform]?.emoji} {PLATFORM_CONFIG[m.platform]?.label ?? m.platform}
+                    </span>
+                  ))}
                 </span>
                 <span className="text-xs text-zinc-500">
                   {post.company?.name}{post.scheduledDate ? ` · ${new Date(post.scheduledDate).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">Tema: {post.topic}</p>
+              <p className="text-xs text-zinc-400">
+                {post.source === 'news' ? '📰 Noticia' : 'Tema'}: {post.topic}
+                {post.sourceUrl && (
+                  <> · <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Fuente ↗</a></>
+                )}
+              </p>
               <textarea
                 value={copy}
                 onChange={(e) => setEdits((x) => ({ ...x, [post.id]: e.target.value }))}
@@ -607,12 +657,12 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 resize-y"
               />
               {post.hashtags.length > 0 && <p className="text-xs text-indigo-300">{post.hashtags.join(' ')}</p>}
-              {post.platform === 'twitter' && (() => {
+              {members.some((m) => m.platform === 'twitter') && (() => {
                 const len = composePostText('twitter', copy, post.hashtags).length
                 const raw = copy.length + (post.hashtags.length ? post.hashtags.slice(0, 2).join(' ').length + 2 : 0)
                 return (
                   <p className={`text-xs ${raw > TWEET_MAX ? 'text-red-300' : 'text-zinc-400'}`}>
-                    {raw}/{TWEET_MAX} caracteres{raw > TWEET_MAX ? ` — se recortará a ${len} al publicar` : ''}
+                    X: {raw}/{TWEET_MAX} caracteres{raw > TWEET_MAX ? ` — en X se recortará a ${len} (en las demás redes sale completo)` : ''}
                   </p>
                 )
               })()}
@@ -627,7 +677,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 </div>
               )}
               <div className="rounded-lg border border-dashed border-zinc-700 p-2.5 space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen · {IMAGE_SPECS[post.platform]?.width}×{IMAGE_SPECS[post.platform]?.height} ({IMAGE_SPECS[post.platform]?.ratio})</p>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen · {IMAGE_SPECS[specPlatform]?.width}×{IMAGE_SPECS[specPlatform]?.height} ({IMAGE_SPECS[specPlatform]?.ratio}){post.groupId ? ' · la misma imagen para todas las redes' : ''}</p>
                 {post.imageUrl ? (
                   <div className="flex items-start gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

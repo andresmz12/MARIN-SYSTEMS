@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
 import { recentFeedback, referenceLines } from '@/lib/auto-content'
+import { imagePlatformOf } from '@/lib/image-prompt'
 
 export const maxDuration = 60
 
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const generated = await generateMarketingContent({
       companyName: post.company.name,
-      platform: post.platform,
+      platform: imagePlatformOf(post),
       contentType: post.contentType,
       topic: guidance,
       tone: profile.tone,
@@ -47,19 +48,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
     })
 
+    const data = {
+      copy: generated.copy,
+      hashtags: generated.hashtags,
+      cta: generated.cta,
+      contentNotes: generated.contentNotes,
+      imagePrompt: generated.imagePrompt,
+      imageText: (generated.imageText ?? undefined) as never,
+      facts: generated.facts,
+      status: 'pending_review',
+      reviewNote: null,
+    }
+    if (post.groupId) {
+      await prisma.generatedPost.updateMany({
+        where: { groupId: post.groupId, userId: session.user.id, id: { not: post.id }, status: { notIn: ['published', 'publishing'] } },
+        data,
+      })
+    }
     const updated = await prisma.generatedPost.update({
       where: { id: post.id },
-      data: {
-        copy: generated.copy,
-        hashtags: generated.hashtags,
-        cta: generated.cta,
-        contentNotes: generated.contentNotes,
-        imagePrompt: generated.imagePrompt,
-        imageText: (generated.imageText ?? undefined) as never,
-        facts: generated.facts,
-        status: 'pending_review',
-        reviewNote: null,
-      },
+      data,
       include: { company: true },
     })
     return NextResponse.json(updated)

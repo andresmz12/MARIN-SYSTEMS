@@ -20,6 +20,7 @@ const JOB_LABELS: Record<string, string> = {
   'generate-recurring': 'Tareas recurrentes',
   'weekly-angles': 'Ángulos de contenido (lunes)',
   'auto-content': 'Contenido automático (domingo)',
+  'news-watch': 'Noticias automáticas (diario)',
   'publish-due': 'Publicación programada',
 }
 

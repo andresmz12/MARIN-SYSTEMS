@@ -135,3 +135,12 @@ export function planFit(platform: string, width: number, height: number): FitPla
   const loss = actual > target ? 1 - target / actual : 1 - actual / target
   return loss <= MAX_CROP_LOSS ? { action: 'crop', loss } : { action: 'mismatch', loss }
 }
+
+/**
+ * Un post que comparte contenido entre varias redes (groupId) usa UNA sola imagen 4:5:
+ * Instagram, Facebook, LinkedIn y X la aceptan sin recortes raros. Un post suelto usa el formato de su red.
+ */
+export const GROUP_IMAGE_PLATFORM = 'instagram'
+export function imagePlatformOf(post: { platform: string; groupId?: string | null }): string {
+  return post.groupId ? GROUP_IMAGE_PLATFORM : post.platform
+}

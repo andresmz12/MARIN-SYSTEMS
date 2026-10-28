@@ -415,6 +415,8 @@ model BrandProfile {
   forbiddenWords Json?
   // Piloto automático: un cron genera posts en 'pending_review' cada ~2 días.
   autoEnabled    Boolean         @default(false)
+  // Noticias oficiales (IRS u otras fuentes RSS) convertidas en borradores automáticamente.
+  newsEnabled    Boolean         @default(false)
   // Referencias de estilo: [{ type: 'link' | 'text', value, note? }]
   references     Json?
   // Estilo visual para los prompts de imagen: { palette: string[], style, handle, avoid }
@@ -454,6 +456,10 @@ model GeneratedPost {
   // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).
   source         String       @default("manual")
   reviewNote     String?
+  // Posts hermanos: el mismo contenido para varias redes comparten groupId y se revisan juntos.
+  groupId        String?
+  // Noticia de la que nace el post (para no repetirla y para citar la fuente).
+  sourceUrl      String?
   // Publicación automática: intentos, último error y enlace al post ya publicado.
   publishAttempts Int         @default(0)
   lastAttemptAt   DateTime?
@@ -474,6 +480,8 @@ model GeneratedPost {
 
   @@index([userId])
   @@index([companyId])
+  @@index([groupId])
+  @@index([companyId, sourceUrl])
   @@index([companyId, weekNumber])
 }
 

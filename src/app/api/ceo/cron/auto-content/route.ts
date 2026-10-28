@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { withCronLog } from '@/lib/cron-run'
-import { getISOWeek } from 'date-fns'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
-import { recentFeedback, referenceLines } from '@/lib/auto-content'
+import { buildGroupDrafts, recentFeedback, referenceLines } from '@/lib/auto-content'
+import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
-import { AUTO_PLATFORMS, fitCopy, fitsPlatform, isAutoPlatform } from '@/lib/platforms'
+import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
 
 export const maxDuration = 300
 
@@ -99,60 +99,37 @@ async function handler(req: Request) {
           const scheduledDate = slots[i]
           const angle = angles[i]
           const pillar = pillars.length > 0 ? pillars[(previousCycles + i) % pillars.length] : undefined
-          const dayTopics: string[] = []
-
-          for (const platform of platforms) {
-            const avoid = usedTopics.length ? ` NO repitas estos temas de otros días: ${usedTopics.join('; ')}.` : ''
-            const sameIdea = dayTopics.length
-              ? `Misma idea central que estos posts de hoy, adaptada al formato de ${platform}: ${dayTopics.join('; ')}.`
-              : ''
-            const generate = (extra = '') => generateMarketingContent({
-              companyName: name,
-              platform,
-              contentType: 'post',
-              topic: `${sameIdea}${avoid}${extra}`.trim(),
-              tone: profile.tone,
-              targetAudience: profile.targetAudience,
-              contentPillars: pillars,
-              pillar,
-              references: references.length > 0 ? references : undefined,
-              feedback: feedback.length > 0 ? feedback : undefined,
-              angles: angle ? [{ angle: angle.angle, hook: angle.hook }] : undefined,
-              voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
-              forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
-            })
-            let generated = await generate()
-            // X tiene límite duro: un reintento pidiendo más corto; si aun así no cabe, se recorta.
-            if (!fitsPlatform(platform, generated.copy, generated.hashtags) && !generated.copy.includes('[Contenido de ')) {
-              generated = await generate(' IMPORTANTE: el post anterior se pasó del límite; hazlo MÁS CORTO (máximo 220 caracteres en total).')
-            }
-            // Claude falló y ai.ts devolvió el texto de relleno: abortar esta marca.
-            if (generated.copy.includes('[Contenido de ')) {
-              throw new Error('La IA no devolvió contenido válido (se descarta toda la tanda)')
-            }
-            dayTopics.push(generated.topic)
-
-            drafts.push({
-                userId: profile.userId,
-                companyId: profile.companyId,
-                brandProfileId: profile.id,
-                platform,
-                contentType: 'post',
-                topic: generated.topic,
-                copy: fitCopy(platform, generated.copy, generated.hashtags),
-                hashtags: platform === 'twitter' ? generated.hashtags.slice(0, 2) : generated.hashtags,
-                cta: generated.cta,
-                contentNotes: generated.contentNotes,
-                imagePrompt: generated.imagePrompt,
-                imageText: (generated.imageText ?? undefined) as never,
-                facts: generated.facts,
-                status: 'pending_review',
-                source: 'auto',
-                scheduledDate,
-                weekNumber: getISOWeek(scheduledDate),
-                dayOfWeek: Math.min(5, Math.max(1, scheduledDate.getUTCDay())),
-            })
+          // Un solo contenido por día, compartido por todas las redes.
+          const avoid = usedTopics.length ? ` NO repitas estos temas de otros días: ${usedTopics.join('; ')}.` : ''
+          const generated = await generateMarketingContent({
+            companyName: name,
+            platform: GROUP_IMAGE_PLATFORM,
+            contentType: 'post',
+            topic: avoid.trim(),
+            tone: profile.tone,
+            targetAudience: profile.targetAudience,
+            contentPillars: pillars,
+            pillar,
+            references: references.length > 0 ? references : undefined,
+            feedback: feedback.length > 0 ? feedback : undefined,
+            angles: angle ? [{ angle: angle.angle, hook: angle.hook }] : undefined,
+            voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
+            forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
+          })
+          // Claude falló y ai.ts devolvió el texto de relleno: abortar esta marca.
+          if (generated.copy.includes('[Contenido de ')) {
+            throw new Error('La IA no devolvió contenido válido (se descarta toda la tanda)')
           }
+          drafts.push(...buildGroupDrafts({
+            userId: profile.userId,
+            companyId: profile.companyId,
+            brandProfileId: profile.id,
+            platforms,
+            generated,
+            scheduledDate,
+            source: 'auto',
+          }))
+          const dayTopics = [generated.topic]
           usedTopics.push(...dayTopics)
           if (angle) usedAngleIds.push(angle.id)
         }

@@ -310,16 +310,21 @@ export async function sendContentReadyEmail({
   companyName,
   count,
   pendingTotal,
+  newsTitle,
 }: {
   companyName: string
   count: number
   pendingTotal: number
+  /** Si el contenido nace de una noticia, su titular (cambia el asunto y el texto). */
+  newsTitle?: string
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const to = process.env.ALERT_EMAIL_TO ?? ''
   if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
-  const subject = `[Corporación Marin] ${count} post${count > 1 ? 's' : ''} de ${companyName} por aprobar`
+  const subject = newsTitle
+    ? `[Corporación Marin] 📰 Noticia nueva para ${companyName}: ${newsTitle.slice(0, 80)}`
+    : `[Corporación Marin] ${count} post${count > 1 ? 's' : ''} de ${companyName} por aprobar`
   const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
   <h2 style="margin:0 0 8px;">✅ Contenido listo para revisar</h2>
   <p style="margin:0 0 16px;color:#a1a1aa;">Se generaron ${count} post${count > 1 ? 's' : ''} nuevo${count > 1 ? 's' : ''} para <strong>${companyName}</strong>. Tienes ${pendingTotal} por aprobar en total.</p>
