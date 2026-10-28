@@ -22,6 +22,8 @@ interface Props {
   /** Hora del reloj (real o de la demostración), en minutos desde 00:00: manda sobre el día y la noche. */
   minutes: number
   ceo: CeoStats
+  /** Oficina clara (siempre de día) o noche cerrada con neón; la oscura sigue el reloj. */
+  bright?: boolean
   onSelect: (id: string, departmentId: string | null) => void
 }
 
@@ -130,18 +132,18 @@ function textSprite(text: string, color: string, size = 84) {
   s.scale.set(0.9, 0.9, 1)
   return s
 }
-function gridTexture(repX: number, repY: number) {
+function gridTexture(repX: number, repY: number, bright = false) {
   const c = document.createElement('canvas')
   c.width = 256
   c.height = 256
   const g = c.getContext('2d')
   if (g) {
-    g.fillStyle = '#0a1020'
+    g.fillStyle = bright ? '#e9eef4' : '#0a1020'
     g.fillRect(0, 0, 256, 256)
-    g.strokeStyle = 'rgba(90,215,255,0.28)'
+    g.strokeStyle = bright ? 'rgba(70,110,160,0.30)' : 'rgba(90,215,255,0.28)'
     g.lineWidth = 2
     g.strokeRect(1, 1, 254, 254)
-    g.strokeStyle = 'rgba(90,215,255,0.10)'
+    g.strokeStyle = bright ? 'rgba(70,110,160,0.12)' : 'rgba(90,215,255,0.10)'
     g.lineWidth = 1
     g.beginPath()
     g.moveTo(128, 0)
@@ -258,7 +260,7 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string): Actor 
 function seatRobot(o: Seatable, template: THREE.Group, gold = false) {
   // Los tipos de SkeletonUtils de esta versión no incluyen clone(), pero el módulo sí lo trae.
   const robot = (SkeletonUtils as unknown as { clone: (o: THREE.Object3D) => THREE.Object3D }).clone(template) as THREE.Group
-  const tint = gold ? 0xf2d27a : o.ghost ? 0x4a5370 : o.color
+  const tint = gold ? 0xd9a93a : o.ghost ? 0x4a5370 : o.color
   robot.traverse((n) => {
     const m = n as THREE.Mesh
     if (!m.isMesh) return
@@ -302,7 +304,7 @@ function playClip(o: Seatable, name: string, speed = 1) {
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, onSelect }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, bright = false, onSelect }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -311,7 +313,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   live.current = { statusOf, minutes, selectedId, focus, ceo }
 
   // La escena se reconstruye solo si cambia la estructura (zonas y agentes), no por el estado.
-  const structure = departments.map((d) => `${d.id}:${d.name}:${d.accent}:${d.agents.map((a) => `${a.id}${a.status === 'ghost' ? 'g' : ''}${a.color}`).join(',')}`).join('|')
+  const structure = departments.map((d) => `${d.id}:${d.name}:${d.accent}:${d.agents.map((a) => `${a.id}${a.status === 'ghost' ? 'g' : ''}${a.color}`).join(',')}`).join('|') + (bright ? '|bright' : '|dark')
 
   useEffect(() => {
     const host = hostRef.current
@@ -324,9 +326,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x070b16)
+    scene.background = new THREE.Color(bright ? 0xcfe3f5 : 0x070b16)
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 250)
-    const hemi = new THREE.HemisphereLight(0x9bb2ff, 0x10152a, 0.6)
+    const hemi = new THREE.HemisphereLight(bright ? 0xffffff : 0x9bb2ff, bright ? 0xb9c6d8 : 0x10152a, bright ? 0.72 : 0.6)
     scene.add(hemi)
     const sun = new THREE.DirectionalLight(0xfff1dc, 0.7)
     sun.position.set(14, 26, 16)
@@ -345,7 +347,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     scene.add(root)
 
     // Piso con cuadrícula, borde de luz y ciudad al fondo
-    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.3, fd), new THREE.MeshStandardMaterial({ map: gridTexture(fw / 2.1, fd / 2.1), roughness: 0.6, metalness: 0.2 }))
+    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.3, fd), new THREE.MeshStandardMaterial({ map: gridTexture(fw / 2.1, fd / 2.1, bright), color: bright ? 0xd9e0e9 : 0xffffff, roughness: 0.6, metalness: 0.2 }))
     floorMesh.receiveShadow = true
     put(floorMesh, fcx, -0.15, fcz, root)
     const edges: THREE.Mesh[] = []
@@ -363,7 +365,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       put(box(w, h, 1, 0x0d1328), x, h / 2, floor.minZ - 2.4 - (i % 3) * 0.8, root)
       for (let r = 0; r < Math.floor(h / 1.1); r++) {
         if (Math.sin(i * 12.9 + r * 4.1) > -0.2) {
-          const win = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.4), new THREE.MeshBasicMaterial({ color: 0xffd98a }))
+          const win = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.4), new THREE.MeshBasicMaterial({ color: bright ? 0x8fb4de : 0xffd98a }))
           win.position.set(x + (r % 2 ? 0.2 : -0.2), 0.8 + r * 1.05, floor.minZ - 1.9 - (i % 3) * 0.8)
           win.userData.id = i * 31 + r
           root.add(win)
@@ -376,7 +378,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const zoneLines: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>[] = []
     plan.zones.forEach((z) => {
       const c = hex(z.dept.accent)
-      const pad = new THREE.Mesh(new THREE.PlaneGeometry(z.w, z.d), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.07 }))
+      const pad = new THREE.Mesh(new THREE.PlaneGeometry(z.w, z.d), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: bright ? 0.16 : 0.07 }))
       pad.rotation.x = -Math.PI / 2
       put(pad, z.cx, 0.02, z.cz, root)
       const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map((s) => new THREE.Vector3(z.cx + (s[0] * z.w) / 2, 0.04, z.cz + (s[1] * z.d) / 2))
@@ -451,6 +453,21 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     put(box(0.4, 0.5, 0.4, 0x2a3558), -3.9, 0.75, 2.2, cg)
     root.add(cg)
     const ceoActor: Seatable = { seat: ceoSeat, fallback: ceoFallback, color: gold, ghost: false }
+
+    // Oficina clara: se repintan los muebles con una paleta de día (blanco, madera, gris azulado).
+    if (bright) {
+      const LIGHT: Record<number, number> = {
+        0x2a3558: 0xf2f4f8, 0x1c2440: 0xdde2ea, 0x151c34: 0x6f7a90, 0x0c1226: 0x7a8499,
+        0x1b2446: 0xc8a770, 0x141c38: 0xcfd6e2, 0x0d1328: 0xaec0d6, 0x232d4c: 0xdbe3ee, 0x4a3b2a: 0xc8a770,
+      }
+      scene.traverse((o) => {
+        const mt = (o as THREE.Mesh).material
+        if (mt instanceof THREE.MeshStandardMaterial) {
+          const to = LIGHT[mt.color.getHex()]
+          if (to !== undefined) mt.color.setHex(to)
+        }
+      })
+    }
 
     // Robots animados (cuando el modelo carga reemplazan a las figuras simples)
     loadRobot().then((tpl) => {
@@ -642,13 +659,15 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const { statusOf: st, minutes: m, selectedId: sel, focus: fcs, ceo: cs } = live.current
 
       // Día y noche según la hora del reloj
-      const day = Math.max(0, Math.sin((Math.PI * (m - 360)) / 720))
+      const day = bright ? 1 : Math.max(0, Math.sin((Math.PI * (m - 360)) / 720))
       const night = 1 - day
-      scene.background = (scene.background as THREE.Color).setRGB(0.027 + day * 0.07, 0.043 + day * 0.1, 0.086 + day * 0.2)
-      hemi.intensity = 0.38 + day * 0.5
-      sun.intensity = 0.22 + day * 0.75
+      if (!bright) {
+        scene.background = (scene.background as THREE.Color).setRGB(0.027 + day * 0.07, 0.043 + day * 0.1, 0.086 + day * 0.2)
+        hemi.intensity = 0.38 + day * 0.5
+        sun.intensity = 0.22 + day * 0.75
+      } else sun.intensity = 0.7
       zoneLines.forEach((l) => { l.material.opacity = 0.55 + night * 0.4 })
-      windows.forEach((w) => { w.visible = night > 0.25 ? Math.sin(w.userData.id * 9.7) > -0.3 + (1 - night) : Math.sin(w.userData.id * 3.3) > 0.85 })
+      windows.forEach((w) => { w.visible = bright ? true : night > 0.25 ? Math.sin(w.userData.id * 9.7) > -0.3 + (1 - night) : Math.sin(w.userData.id * 3.3) > 0.85 })
 
       const f = focusOf(fcs)
       cur.tx += (f.tx - cur.tx) * 0.1
@@ -758,7 +777,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             key={`zone-${d.id}`}
             ref={(el) => { zoneRefs.current[d.id] = el }}
             className="absolute hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.22em] md:flex"
-            style={{ color: d.accent, textShadow: `0 0 12px ${d.accent}` }}
+            style={bright ? { color: d.accent, filter: 'brightness(0.62)', textShadow: '0 0 6px #fff, 0 0 10px #fff' } : { color: d.accent, textShadow: `0 0 12px ${d.accent}` }}
           >
             {d.name}
           </div>

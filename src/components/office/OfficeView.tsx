@@ -48,6 +48,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [error, setError] = useState<string | null>(null)
   const [focus, setFocus] = useState<string>('all')
   const [selected, setSelected] = useState<string | null>(null)
+  const [bright, setBright] = useState(true)
   const [demo, setDemo] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [demoDay, setDemoDay] = useState(1)
@@ -67,6 +68,17 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
       setError('No se pudo cargar la oficina. Reintentando…')
     }
   }, [])
+
+  // La preferencia de claro/oscuro se recuerda en este navegador (si el almacenamiento no está disponible, se queda en claro).
+  useEffect(() => {
+    try { if (localStorage.getItem('office-bright') === '0') setBright(false) } catch { /* sin almacenamiento */ }
+  }, [])
+  const toggleBright = () => {
+    setBright((b) => {
+      try { localStorage.setItem('office-bright', b ? '0' : '1') } catch { /* sin almacenamiento */ }
+      return !b
+    })
+  }
 
   useEffect(() => {
     load()
@@ -168,6 +180,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             statusOf={statusOf}
             minutes={clockMin}
             ceo={ceoStats}
+            bright={bright}
             onSelect={(id, d) => {
               setSelected(id)
               if (id === 'ceo') setFocus('ceo')
@@ -258,6 +271,14 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${demo ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
         >
           {demo ? 'Salir de la demostración' : '▶ Ver un día en demostración'}
+        </button>
+        <button
+          onClick={toggleBright}
+          aria-pressed={bright}
+          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:border-zinc-500"
+          title={bright ? 'Cambiar a la oficina oscura, que sigue la hora del día' : 'Cambiar a la oficina clara'}
+        >
+          {bright ? '☀️ Oficina clara' : '🌙 Oficina oscura'}
         </button>
         {demo && (
           <>
