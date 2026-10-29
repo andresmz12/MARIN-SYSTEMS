@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import type { AgentStatus, OfficeAgent, OfficeDepartment } from '@/lib/office'
 import { animatePerson, buildPerson, specFor, type Person, type PersonPose } from './person'
+import { NavGrid, inRect, type Pt, type Rect } from './navigation'
 
 export interface CeoStats {
   pending: number
@@ -160,11 +161,26 @@ function plant(x: number, z: number, parent: THREE.Object3D, s = 1) {
 }
 
 // ───────────────────────── Escritorio con su persona ─────────────────────────
+/** Un viaje a pie: se levanta, camina, espera un rato, regresa y se sienta. */
+interface Move {
+  kind: 'coffee' | 'deliver' | 'help'
+  stage: 'stand' | 'out' | 'wait' | 'back' | 'sit'
+  path: Pt[]
+  i: number
+  t: number
+  wait: number
+  /** Hacia dónde mira al llegar (radianes, 0 = hacia +z). */
+  face: number
+}
+
 interface Actor {
   id: string
   deptId: string
   a: OfficeAgent
   wrap: THREE.Group
+  seat: THREE.Group
+  mv?: Move
+  heading: number
   person: Person
   screen: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
   zz: THREE.Sprite
@@ -206,7 +222,7 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
   const wrap = new THREE.Group()
   wrap.add(desk)
   wrap.position.set(x, 0, z)
-  return { id: a.id, deptId, a, wrap, person, screen, zz, ex, ghost }
+  return { id: a.id, deptId, a, wrap, seat, heading: Math.PI, person, screen, zz, ex, ghost }
 }
 
 // ───────────────────────── Componente ─────────────────────────
@@ -215,6 +231,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const popRef = useRef<HTMLDivElement>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
   const live = useRef({ statusOf, minutes, selectedId, focus, ceo })
   live.current = { statusOf, minutes, selectedId, focus, ceo }
 
@@ -395,6 +412,97 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     plant(-3.9, 2.0, cg, 0.9)
     root.add(cg)
 
+    // ── Zona de descanso: agua, café, impresora y pizarra con los horarios del equipo ──
+    const breakX0 = floor.minX + 3.2
+    const breakMaxX = plan.ceo.x - CEO_W / 2 - 1.8
+    const hasBreak = breakMaxX - breakX0 > 9
+    const propRects: Rect[] = []
+    let coffeePoint: Pt | null = null
+    if (hasBreak) {
+      const wz = floor.maxZ - 1.5
+      const cooler = new THREE.Group()
+      put(box(0.5, 0.9, 0.5, 0xf1f3f6), 0, 0.45, 0, cooler)
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.55, 14), new THREE.MeshStandardMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.75 })), 0, 1.18, 0, cooler)
+      put(box(0.16, 0.04, 0.12, 0x6fb4e8), 0, 0.7, 0.27, cooler)
+      put(cooler, breakX0, 0, wz, root)
+      propRects.push({ x0: breakX0 - 0.3, x1: breakX0 + 0.3, z0: wz - 0.3, z1: wz + 0.3 })
+
+      const cx2 = breakX0 + 2.8
+      const counter = new THREE.Group()
+      put(box(2.2, 0.95, 0.8, 0xcdac78), 0, 0.475, 0, counter)
+      put(box(2.3, 0.05, 0.9, 0xf3ead8), 0, 0.97, 0, counter)
+      put(box(0.55, 0.55, 0.42, 0x2a2e38), -0.55, 1.27, 0, counter)
+      put(box(0.5, 0.05, 0.4, 0xc23b3b), -0.55, 1.57, 0, counter)
+      ;[0.15, 0.4, 0.65].forEach((dx) => put(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.1, 10), mat(0xf6f6f6)), dx, 1.04, 0.1, counter))
+      put(counter, cx2, 0, wz, root)
+      propRects.push({ x0: cx2 - 1.15, x1: cx2 + 1.15, z0: wz - 0.45, z1: wz + 0.45 })
+      coffeePoint = { x: cx2, z: wz - 1.4 }
+
+      const px2 = breakX0 + 5.6
+      const printer = new THREE.Group()
+      put(box(1.0, 0.8, 0.7, 0xe9e4da), 0, 0.4, 0, printer)
+      put(box(0.8, 0.28, 0.5, 0xf4f4f6), 0, 0.94, 0, printer)
+      put(box(0.5, 0.02, 0.3, 0xffffff), 0, 1.1, 0.1, printer)
+      put(printer, px2, 0, wz, root)
+      propRects.push({ x0: px2 - 0.55, x1: px2 + 0.55, z0: wz - 0.4, z1: wz + 0.4 })
+
+      // Pizarra con ruedas: los horarios reales de los agentes
+      const bx0 = breakX0 + 8.4
+      const board = document.createElement('canvas')
+      board.width = 960
+      board.height = 560
+      const bg = board.getContext('2d')
+      if (bg) {
+        bg.fillStyle = '#ffffff'
+        bg.fillRect(0, 0, 960, 560)
+        bg.fillStyle = '#2f3b5c'
+        bg.font = '800 54px system-ui, sans-serif'
+        bg.fillText('Agenda del equipo', 40, 80)
+        bg.fillStyle = '#b8863b'
+        bg.fillRect(40, 100, 300, 8)
+        bg.font = '600 38px system-ui, sans-serif'
+        const rows: [string, string][] = [['7:00 AM', 'Temas del día'], ['10:00 AM', 'Noticias del IRS'], ['Dom 8:00', 'Métricas de la semana'], ['Dom 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación']]
+        rows.forEach(([a, b], i) => {
+          bg.fillStyle = '#3b6cff'
+          bg.fillText(a, 40, 190 + i * 72)
+          bg.fillStyle = '#2a2e38'
+          bg.fillText(b, 300, 190 + i * 72)
+        })
+      }
+      const wb = new THREE.Group()
+      put(box(3.4, 2.0, 0.08, 0xf2f2f2), 0, 1.7, 0, wb)
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.87), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(board) }))
+      face.rotation.y = Math.PI
+      put(face, 0, 1.7, -0.045, wb)
+      ;[-1.4, 1.4].forEach((dx) => put(box(0.08, 1.0, 0.08, 0x6b7280), dx, 0.5, 0, wb))
+      put(wb, bx0, 0, wz + 0.3, root)
+      propRects.push({ x0: bx0 - 1.8, x1: bx0 + 1.8, z0: wz, z1: wz + 0.6 })
+    }
+
+    // ── Rutas: los muebles son obstáculos y las personas los rodean ──
+    const obstacles: Rect[] = [...propRects]
+    plan.zones.forEach((z) => {
+      const backLen = z.w * 0.82
+      const wallZ = z.cz + z.d / 2 - 0.1
+      obstacles.push({ x0: z.cx - backLen / 2, x1: z.cx + backLen / 2, z0: wallZ - 0.08, z1: wallZ + 0.08 })
+      const sideLen = z.d * 0.62
+      const sideZ = z.cz + (z.d - sideLen) / 2 - 0.1
+      obstacles.push({ x0: z.cx + z.w / 2 - 0.18, x1: z.cx + z.w / 2 - 0.02, z0: sideZ - sideLen / 2, z1: sideZ + sideLen / 2 })
+      obstacles.push({ x0: z.cx + z.w / 2 - 1.0, x1: z.cx + z.w / 2 - 0.4, z0: z.cz + z.d / 2 - 1.0, z1: z.cz + z.d / 2 - 0.4 })
+      obstacles.push({ x0: z.cx - z.w / 2 + 0.4, x1: z.cx - z.w / 2 + 1.0, z0: z.cz + z.d / 2 - 1.0, z1: z.cz + z.d / 2 - 0.4 })
+    })
+    actors.forEach((o) => obstacles.push({ x0: o.wrap.position.x - 1.05, x1: o.wrap.position.x + 1.05, z0: o.wrap.position.z - 0.6, z1: o.wrap.position.z + 1.5 }))
+    obstacles.push(
+      { x0: plan.ceo.x - 2.1, x1: plan.ceo.x + 2.1, z0: plan.ceo.z - 0.5, z1: plan.ceo.z + 2.2 }, // escritorio y silla de Andrés
+      { x0: plan.ceo.x + 2.1, x1: plan.ceo.x + 3.9, z0: plan.ceo.z - 2.0, z1: plan.ceo.z - 1.2 }, // sofá
+      { x0: plan.ceo.x - CEO_W / 2, x1: plan.ceo.x + CEO_W / 2, z0: plan.ceo.z + CEO_D / 2 - 0.15, z1: plan.ceo.z + CEO_D / 2 + 0.15 }, // vidrio del fondo
+      { x0: plan.ceo.x + CEO_W / 2 - 0.15, x1: plan.ceo.x + CEO_W / 2 + 0.15, z0: plan.ceo.z - CEO_D / 2, z1: plan.ceo.z + CEO_D / 2 }, // vidrio lateral
+      { x0: floor.maxX - 1.6, x1: floor.maxX, z0: floor.maxZ - 1.6, z1: floor.maxZ },
+      { x0: floor.minX, x1: floor.minX + 1.6, z0: floor.maxZ - 1.6, z1: floor.maxZ },
+    )
+    const nav = new NavGrid({ x0: floor.minX + 0.5, x1: floor.maxX - 0.6, z0: floor.minZ + 0.4, z1: floor.maxZ - 0.6 }, 0.5, obstacles, 0.3)
+    const platformRect: Rect = { x0: plan.ceo.x - CEO_W / 2, x1: plan.ceo.x + CEO_W / 2, z0: plan.ceo.z - CEO_D / 2, z1: plan.ceo.z + CEO_D / 2 }
+
     // Pantalla: ANDRÉS MARÍN · CEO con los tres números
     let screenKey = ''
     const drawScreen = (c: CeoStats) => {
@@ -525,10 +633,132 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
 
     const poseOf = (s: AgentStatus): PersonPose => (s === 'work' ? 'type' : s === 'sleep' ? 'rest' : s === 'alert' ? 'help' : 'idle')
 
+    // ── Caminatas ──
+    const angDiff = (a: number, b: number) => {
+      let d = (b - a + Math.PI) % (Math.PI * 2)
+      if (d < 0) d += Math.PI * 2
+      return d - Math.PI
+    }
+    const seatPt = (o: Actor): Pt => ({ x: o.wrap.position.x, z: o.wrap.position.z + 0.95 })
+    const exitPt = (o: Actor): Pt => ({ x: o.wrap.position.x, z: o.wrap.position.z + 2.1 })
+    const ceoFront = (dx: number): Pt => ({ x: plan.ceo.x + dx, z: plan.ceo.z - 1.7 })
+    const startTrip = (o: Actor, kind: Move['kind'], dest: Pt, face: number, wait: number): boolean => {
+      if (o.mv || o.ghost) return false
+      if (actors.filter((a) => a.mv).length >= 2) return false // nunca más de dos a la vez
+      const path = nav.findPath(exitPt(o), dest)
+      if (!path) return false
+      o.mv = { kind, stage: 'stand', path, i: 0, t: 0, wait, face }
+      return true
+    }
+    const stepMove = (o: Actor, dt: number): { pose: PersonPose | null; speed: number } | null => {
+      const m = o.mv
+      if (!m) return null
+      const g = o.person.group
+      m.t += dt
+      if (m.stage === 'stand') {
+        if (m.t > 0.55) {
+          const sp = seatPt(o)
+          g.parent?.remove(g)
+          root.add(g)
+          g.position.set(sp.x, 0, sp.z)
+          g.rotation.y = Math.PI
+          o.heading = Math.PI
+          m.stage = 'out'
+          m.i = 0
+          m.t = 0
+        }
+        return { pose: 'stand', speed: 0 }
+      }
+      if (m.stage === 'out' || m.stage === 'back') {
+        const target = m.path[m.i]
+        const dx = target.x - g.position.x
+        const dz = target.z - g.position.z
+        const dist = Math.hypot(dx, dz)
+        const step = 2.0 * dt
+        if (dist > 0.02) o.heading += angDiff(o.heading, Math.atan2(dx, dz)) * Math.min(1, dt * 9)
+        if (dist <= step) {
+          g.position.x = target.x
+          g.position.z = target.z
+          m.i++
+          if (m.i >= m.path.length) { m.stage = m.stage === 'out' ? 'wait' : 'sit'; m.t = 0 }
+        } else {
+          g.position.x += (dx / dist) * step
+          g.position.z += (dz / dist) * step
+        }
+        const up = inRect({ x: g.position.x, z: g.position.z }, platformRect) ? PLATFORM_H : 0
+        g.position.y += (up - g.position.y) * Math.min(1, dt * 8)
+        g.rotation.y = o.heading
+        return { pose: m.stage === 'out' && m.kind === 'deliver' ? 'deliver' : 'walk', speed: 1 }
+      }
+      if (m.stage === 'wait') {
+        o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
+        g.rotation.y = o.heading
+        if (m.t > m.wait) {
+          const cur = { x: g.position.x, z: g.position.z }
+          const home = nav.findPath(cur, exitPt(o)) ?? [cur, exitPt(o)]
+          m.path = [...home, seatPt(o)]
+          m.i = 1
+          m.stage = 'back'
+          m.t = 0
+        }
+        return { pose: m.kind === 'coffee' ? 'coffee' : m.kind === 'help' ? 'wave' : 'stand', speed: 0 }
+      }
+      // sit: se acomoda en la silla mirando al monitor; las piernas se doblan solas
+      o.heading += angDiff(o.heading, Math.PI) * Math.min(1, dt * 8)
+      g.rotation.y = o.heading
+      g.position.y += (0 - g.position.y) * Math.min(1, dt * 8)
+      if (m.t > 0.6) {
+        g.parent?.remove(g)
+        o.seat.add(g)
+        g.position.set(0, 0, 0)
+        g.rotation.y = 0
+        o.mv = undefined
+        return null
+      }
+      return { pose: null, speed: 0 }
+    }
+
+    // ── Burbujas con lo que va pasando ──
+    const bubbles: { el: HTMLDivElement; key: string; until: number }[] = []
+    const bubble = (key: string, text: string, color: string, now: number) => {
+      const layer = bubbleRef.current
+      if (!layer || bubbles.length >= 3) return
+      const el = document.createElement('div')
+      el.textContent = text
+      el.style.cssText = `position:absolute;transform:translate(-50%,-100%);background:#fff;border:1px solid #e5e7eb;border-left:3px solid ${color};border-radius:10px;padding:2px 8px;font:700 10px system-ui,sans-serif;color:#27304a;box-shadow:0 2px 8px rgba(0,0,0,.18);white-space:nowrap;display:none;`
+      layer.appendChild(el)
+      bubbles.push({ el, key, until: now + 4.5 })
+    }
+    const prev = new Map<string, AgentStatus>()
+    let prevPending: number | null = null
+    let nextCoffee = 0
+    const shortText = (t: string, n = 38) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
+    const onChange = (o: Actor, before: AgentStatus, now: AgentStatus, time: number) => {
+      if (o.ghost) return
+      if (now === 'alert') {
+        bubble(o.id, '¡Algo falló!', '#e5484d', time)
+        startTrip(o, 'help', ceoFront(-1.4 + (o.id.length % 3) * 1.4), 0, 4)
+      } else if (before === 'work' && now !== 'work') {
+        bubble(o.id, 'Listo ✓', '#2f9e63', time)
+        const next = o.id.endsWith('-research') ? 'writer' : o.id.endsWith('-writer') ? 'checker' : null
+        if (next) {
+          const tgt = actors.find((a) => a.deptId === o.deptId && a.id.endsWith(`-${next}`))
+          if (tgt) startTrip(o, 'deliver', exitPt(tgt), Math.PI, 1.8)
+        } else if (o.id.endsWith('-checker') || o.id.endsWith('-analyst')) {
+          startTrip(o, 'deliver', ceoFront(o.id.endsWith('-analyst') ? 1.4 : -1.0), 0, 2)
+        }
+      } else if (now === 'work') {
+        bubble(o.id, shortText(o.a.doing || 'Trabajando…'), '#3b6cff', time)
+      }
+    }
+    let last = performance.now()
+
     let raf = 0
     const frame = (t: number) => {
       raf = requestAnimationFrame(frame)
       const time = t / 1000
+      const dt = Math.min(0.1, Math.max(0.001, (t - last) / 1000))
+      last = t
       const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
 
       const f = focusOf(fcs)
@@ -547,25 +777,42 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
 
       actors.forEach((o) => {
         const s = st(o.id)
-        animatePerson(o.person, poseOf(s), time)
+        const before = prev.get(o.id)
+        if (before !== undefined && before !== s) onChange(o, before, s, time)
+        prev.set(o.id, s)
+        const trip = stepMove(o, dt)
+        animatePerson(o.person, trip?.pose ?? poseOf(s), time, dt, trip?.speed ?? 0)
         // La pantalla se enciende cuando trabaja y parpadea en rojo si algo falla.
         const em = o.screen.material
         if (s === 'work') { em.emissive.setHex(0x7ab8ff); em.emissiveIntensity = 0.75 + Math.sin(time * 7) * 0.1 }
         else if (s === 'alert') { em.emissive.setHex(0xff5b5b); em.emissiveIntensity = Math.sin(time * 6) > 0 ? 0.8 : 0.15 }
         else { em.emissive.setHex(0x000000); em.emissiveIntensity = 1 }
-        o.zz.visible = s === 'sleep'
+        const away = !!o.mv && o.mv.stage !== 'stand'
+        o.zz.visible = s === 'sleep' && !o.mv
         o.zz.position.y = 1.95 + Math.sin(time * 2) * 0.06
-        o.ex.visible = s === 'alert'
+        o.ex.visible = s === 'alert' && !o.mv
         o.ex.position.y = 2.15 + Math.abs(Math.sin(time * 6)) * 0.1
         const el = labelRefs.current[o.id]
         if (el) {
-          pushLabel(el, o.wrap.position.x, 2.2, o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
+          const here = away && o.mv?.stage !== 'sit' ? o.person.group.position : null
+          pushLabel(el, here ? here.x : o.wrap.position.x, 2.3 + (here ? here.y : 0), here ? here.z : o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
           el.dataset.status = s
           el.dataset.sel = sel === o.id ? '1' : '0'
           el.style.opacity = fcs === 'all' || fcs === o.deptId ? '' : '0.4'
         }
       })
-      animatePerson(ceoPerson, cs.problems > 0 ? 'type' : 'type', time + 4)
+      animatePerson(ceoPerson, 'type', time + 4, dt)
+      if (prevPending !== null && cs.pending > prevPending) bubble('ceo', `Tienes ${cs.pending} por aprobar`, '#d6a23b', time)
+      prevPending = cs.pending
+      // Café de vez en cuando: nunca más de dos personas caminando a la vez
+      if (coffeePoint) {
+        if (nextCoffee === 0) nextCoffee = time + 12 + Math.random() * 18
+        if (time > nextCoffee) {
+          nextCoffee = time + 40 + Math.random() * 50
+          const pool = actors.filter((a) => !a.ghost && !a.mv && st(a.id) !== 'alert')
+          if (pool.length) startTrip(pool[Math.floor(Math.random() * pool.length)], 'coffee', coffeePoint, 0, 4.5)
+        }
+      }
       const ceoEl = labelRefs.current.ceo
       if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
       flushLabels()
@@ -585,12 +832,23 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           pop.style.visibility = 'visible'
         } else pop.style.visibility = 'hidden'
       }
+      for (let b = bubbles.length - 1; b >= 0; b--) {
+        const bb = bubbles[b]
+        const lab = labelRefs.current[bb.key]
+        if (time > bb.until || !lab) { bb.el.remove(); bubbles.splice(b, 1); continue }
+        if (lab.style.display === 'none') { bb.el.style.display = 'none'; continue }
+        bb.el.style.display = 'block'
+        bb.el.style.left = lab.style.left
+        bb.el.style.top = `${parseFloat(lab.style.top || '0') - lab.offsetHeight - 3}px`
+        bb.el.style.opacity = String(Math.min(1, (bb.until - time) / 0.6))
+      }
       drawScreen(cs)
 
       const selActor = actors.find((a) => a.id === sel)
       if (selActor) {
         selRing.visible = true
-        selRing.position.set(selActor.wrap.position.x, 0.06, selActor.wrap.position.z + 0.95)
+        const gp = selActor.mv && selActor.mv.stage !== 'sit' && selActor.mv.stage !== 'stand' ? selActor.person.group.position : null
+        selRing.position.set(gp ? gp.x : selActor.wrap.position.x, 0.06 + (gp ? gp.y : 0), gp ? gp.z : selActor.wrap.position.z + 0.95)
         selRing.scale.setScalar(1 + Math.sin(time * 3) * 0.05)
       } else if (sel === 'ceo') {
         selRing.visible = true
@@ -655,6 +913,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#dfe9f2]">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Oficina con las áreas de cada departamento y la oficina de Andrés Marín" />
       <div className="pointer-events-none absolute inset-0">
+        <div ref={bubbleRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
         {departments.flatMap((d) => d.agents.map((a) => (
           <button
             key={a.id}
