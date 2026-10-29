@@ -212,7 +212,6 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const zoneRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const live = useRef({ statusOf, minutes, selectedId, focus, ceo })
   live.current = { statusOf, minutes, selectedId, focus, ceo }
 
@@ -311,8 +310,31 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       put(rug, z.cx, 0.015, z.cz, root)
       // Mampara trasera y lateral: dividen sin encerrar
       const backLen = z.w * 0.82
-      put(new THREE.Mesh(new THREE.BoxGeometry(backLen, 1.1, 0.05), partition), z.cx, 0.62, z.cz + z.d / 2 - 0.1, root)
-      put(box(backLen, 0.06, 0.09, 0xc9a77a), z.cx, 1.18, z.cz + z.d / 2 - 0.1, root)
+      const wallZ = z.cz + z.d / 2 - 0.1
+      const WALL = 1.9
+      put(new THREE.Mesh(new THREE.BoxGeometry(backLen, WALL, 0.07), new THREE.MeshStandardMaterial({ color: 0xf6f8fa, transparent: true, opacity: 0.8, roughness: 0.4 })), z.cx, WALL / 2, wallZ, root)
+      put(box(backLen, 0.07, 0.11, 0xc9a77a), z.cx, WALL + 0.03, wallZ, root)
+      // Nombre del área, escrito en la pared
+      const cvz = document.createElement('canvas')
+      cvz.width = 1200
+      cvz.height = 240
+      const gz = cvz.getContext('2d')
+      if (gz) {
+        const label = z.dept.name.toUpperCase()
+        let size = 110
+        gz.font = `800 ${size}px system-ui, -apple-system, sans-serif`
+        while (gz.measureText(label).width > 1120 && size > 40) { size -= 6; gz.font = `800 ${size}px system-ui, -apple-system, sans-serif` }
+        gz.textBaseline = 'middle'
+        gz.textAlign = 'center'
+        gz.fillStyle = `#${deep(c, 0.62).toString(16).padStart(6, '0')}`
+        gz.fillText(label, 600, 112)
+        gz.fillStyle = `#${deep(c, 0.9).toString(16).padStart(6, '0')}`
+        gz.fillRect(420, 190, 360, 10)
+      }
+      const nameW = backLen * 0.86
+      const nameBoard = new THREE.Mesh(new THREE.PlaneGeometry(nameW, nameW / 5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvz), transparent: true }))
+      nameBoard.rotation.y = Math.PI
+      put(nameBoard, z.cx, WALL * 0.52, wallZ - 0.045, root)
       const sideLen = z.d * 0.62
       put(new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.1, sideLen), partition), z.cx + z.w / 2 - 0.1, 0.62, z.cz + (z.d - sideLen) / 2 - 0.1, root)
       put(box(0.09, 0.06, sideLen, 0xc9a77a), z.cx + z.w / 2 - 0.1, 1.18, z.cz + (z.d - sideLen) / 2 - 0.1, root)
@@ -416,7 +438,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (k === 'ceo') return { tx: plan.ceo.x, tz: plan.ceo.z - 0.5, span: 20 }
       const z = plan.zones.find((q) => q.dept.id === k)
       if (z) return { tx: z.cx, tz: z.cz, span: Math.max(z.w, z.d) * 1.35 + 8 }
-      return { tx: fcx, tz: fcz, span: Math.max(fw, fd) + Math.min(fw, fd) * 0.5 }
+      return { tx: fcx, tz: fcz, span: (Math.max(fw, fd) + Math.min(fw, fd) * 0.5) * 0.98 }
     }
     let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que las personas dan la cara
     let pitch = 0.6
@@ -543,15 +565,6 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       animatePerson(ceoPerson, cs.problems > 0 ? 'type' : 'type', time + 4)
       const ceoEl = labelRefs.current.ceo
       if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
-      plan.zones.forEach((z) => {
-        const el = zoneRefs.current[z.dept.id]
-        if (!el) return
-        const p = project(z.cx - z.w / 2 + 2.2, 0.1, z.cz - z.d / 2 + 0.2)
-        el.style.left = `${p.x}px`
-        el.style.top = `${p.y}px`
-        el.style.display = p.back ? 'none' : 'flex'
-        el.style.opacity = fcs === 'all' || fcs === z.dept.id ? '1' : '0.4'
-      })
       flushLabels()
       drawScreen(cs)
 
@@ -594,16 +607,6 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#dfe9f2]">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Oficina con las áreas de cada departamento y la oficina de Andrés Marín" />
       <div className="pointer-events-none absolute inset-0">
-        {departments.map((d) => (
-          <div
-            key={`zone-${d.id}`}
-            ref={(el) => { zoneRefs.current[d.id] = el }}
-            className="absolute hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-white/70 px-1.5 py-px text-[8px] font-extrabold uppercase tracking-[0.14em] md:flex"
-            style={{ color: d.accent, filter: 'brightness(0.62)' }}
-          >
-            {d.name}
-          </div>
-        ))}
         {departments.flatMap((d) => d.agents.map((a) => (
           <button
             key={a.id}
