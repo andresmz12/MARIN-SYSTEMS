@@ -4,6 +4,7 @@ import sharp from 'sharp'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { IMAGE_SPECS, imagePlatformOf, planFit } from '@/lib/image-prompt'
+import { fitToSpec, type FitMode } from '@/lib/image-fit'
 
 export const maxDuration = 60
 
@@ -41,16 +42,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const specPlatform = imagePlatformOf(post)
     const plan = planFit(specPlatform, from.width, from.height)
     const spec = IMAGE_SPECS[specPlatform]
-    let pipeline = sharp(base.data)
+    const mode: FitMode = form.get('mode') === 'crop' ? 'crop' : 'complete'
+    let jpeg: Buffer
+    let info: { width: number; height: number }
+    let action: string = plan.action
     if (plan.action === 'crop' && spec) {
-      pipeline = pipeline.resize({ width: spec.width, height: spec.height, fit: 'cover', position: 'centre' })
+      const fitted = await fitToSpec(base.data, spec, plan.loss, mode)
+      jpeg = fitted.data
+      info = { width: spec.width, height: spec.height }
+      action = fitted.action
     } else {
-      pipeline = pipeline.resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+      const out = await sharp(base.data)
+        .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 90 })
+        .toBuffer({ resolveWithObject: true })
+      jpeg = out.data
+      info = { width: out.info.width, height: out.info.height }
     }
-    const { data: jpeg, info } = await pipeline
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 90 })
-      .toBuffer({ resolveWithObject: true })
 
     // La misma imagen para todas las redes del grupo (cada post guarda su copia y su enlace público).
     const targets = post.groupId
@@ -77,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     return NextResponse.json({
       ...updated,
-      fit: { platform: specPlatform, action: plan.action, from, to: { width: info.width, height: info.height }, target: spec ? `${spec.width}x${spec.height} (${spec.ratio})` : null },
+      fit: { platform: specPlatform, action, from, to: { width: info.width, height: info.height }, target: spec ? `${spec.width}x${spec.height} (${spec.ratio})` : null },
     })
   } catch (err) {
     console.error(err)

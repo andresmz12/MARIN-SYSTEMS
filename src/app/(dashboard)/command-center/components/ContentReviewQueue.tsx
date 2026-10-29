@@ -44,6 +44,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [refInput, setRefInput] = useState('')
   const [refNote, setRefNote] = useState('')
   const [imgText, setImgText] = useState<Record<string, ImageText>>({})
+  const [cropMode, setCropMode] = useState(false)
   const [slideDraft, setSlideDraft] = useState<Record<string, Slide[]>>({})
   const [vs, setVs] = useState({ style: '', handle: '', avoid: '', palette: [] as string[] })
   const [vsColor, setVsColor] = useState('#22d3ee')
@@ -267,6 +268,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     try {
       const form = new FormData()
       form.append('file', file)
+      form.append('mode', cropMode ? 'crop' : 'complete')
       const res = await fetch(`/api/ceo/content/${id}/image`, { method: 'POST', body: form })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string }
@@ -274,7 +276,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       }
       const d = await res.json().catch(() => null) as { fit?: { platform?: string; action: string; from: { width: number; height: number }; to: { width: number; height: number }; target: string | null } } | null
       const fit = d?.fit
-      if (fit?.action === 'crop') {
+      if (fit?.action === 'complete') showToast('Imagen completa: no se cortó nada. Los lados se rellenaron con la misma imagen difuminada.', 'success')
+      else if (fit?.action === 'crop') {
         // Cuánto se recortó por lado: así se sabe si el logo o el texto pudieron quedar pegados al borde.
         const tall = fit.from.height / fit.from.width > fit.to.height / fit.to.width
         const pct = Math.round((tall ? (1 - (fit.from.width * fit.to.height) / fit.to.width / fit.from.height) : (1 - (fit.from.height * fit.to.width) / fit.to.height / fit.from.width)) * 50)
@@ -975,6 +978,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                       >
                         Copiar prompt
                       </button>
+                      <label className="flex items-center gap-1 text-[11px] text-zinc-400" title="Por defecto la imagen entra completa y los lados se rellenan con ella difuminada, sin cortar el logo ni el texto">
+                        <input type="checkbox" checked={cropMode} onChange={(e) => setCropMode(e.target.checked)} /> recortar en vez de completar
+                      </label>
                       <label className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 cursor-pointer">
                         {busy ? 'Subiendo…' : 'Subir imagen'}
                         <input

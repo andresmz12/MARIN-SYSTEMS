@@ -26,7 +26,7 @@ El sistema no genera imágenes: arma el **prompt completo** y tú lo pegas en Ch
    Puedes editarlo en la tarjeta; el prompt se actualiza solo (`Ver el prompt completo`).
 3. **Copiar todos los prompts** → pega **cada bloque como un mensaje nuevo** en ChatGPT → descarga
    cada imagen → **Subir imagen** en su tarjeta.
-4. ChatGPT entrega 1:1, 2:3 o 3:2. El prompt pide el formato más cercano con el texto en una zona
+4. **Por defecto la imagen entra COMPLETA:** si la proporción no coincide, no se corta nada; se coloca entera y los lados (o arriba y abajo) se rellenan con la misma imagen difuminada (casilla "recortar en vez de completar" para recortar). ChatGPT entrega 1:1, 2:3 o 3:2. El prompt pide el formato más cercano con el texto en una zona
    segura, y al subir el sistema **recorta al centro** al tamaño exacto de la red (Instagram
    1080×1350, Facebook 1080×1080, LinkedIn 1200×628, X 1600×900, TikTok 1080×1920) y lo pasa a JPEG.
    Si la orientación es la contraria (recortaría más del 30 %), no la toca y te avisa.
