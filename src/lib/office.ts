@@ -106,7 +106,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
   })
   departments.push({
     id: 'monitoring',
-    name: 'Monitoreo',
+    name: 'Monitoreo Apps',
     kind: 'monitoring',
     accent: '#4fd18b',
     agents: monitoring,
