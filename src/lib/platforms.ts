@@ -44,6 +44,14 @@ export function composePostText(platform: string, copy: string, hashtags: string
   return tags ? `${body}\n\n${tags}` : body
 }
 
+/**
+ * LinkedIn usa un "little text format": los caracteres | { } @ [ ] ( ) < > # * _ ~ \ son reservados y, sin escapar,
+ * el post se corta ahí o falla. Este texto los escapa con "\" (los # quedan como texto, sin enlace de hashtag).
+ */
+export function escapeLinkedInText(text: string): string {
+  return text.replace(/[\\|{}@\[\]()<>#*_~]/g, '\\$&')
+}
+
 /** ¿El copy generado ya cabe en la red sin recortar? (solo X tiene límite estricto) */
 export function fitsPlatform(platform: string, copy: string, hashtags: string[]): boolean {
   return fitCopy(platform, copy, hashtags) === copy

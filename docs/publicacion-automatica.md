@@ -119,3 +119,4 @@ En Make:
 - **Instagram:** módulo *Create a carousel post*, con las URLs de `imageUrls` (un filtro `isCarousel = true` antes de la rama normal).
 - **Facebook:** subir cada foto sin publicar (`published=false`) y crear un solo post con `attached_media`; o usar la portada si prefieres un solo post con imagen.
 - **LinkedIn y X:** siguen usando `imageUrl` (la portada).
+- **LinkedIn (módulo Create a User Image Post):** en *Content* mapea **`linkedinText`**, no `text`: es el mismo texto con los caracteres reservados de LinkedIn escapados (paréntesis, #, @, etc.); sin eso el post se corta en el primer paréntesis. Conexión: *LinkedIn (OpenID Connect)* iniciando sesión con el perfil que publicará.

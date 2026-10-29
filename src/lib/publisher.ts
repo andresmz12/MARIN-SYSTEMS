@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { composePostText, publishablePlatforms } from '@/lib/platforms'
+import { composePostText, escapeLinkedInText, publishablePlatforms } from '@/lib/platforms'
 
 export const MAX_PUBLISH_ATTEMPTS = 3
 /** Espera mínima entre intentos de un mismo post. */
@@ -71,6 +71,8 @@ export async function publishPost(postId: string, opts: { userId?: string } = {}
         platform: post.platform,
         // Texto ya listo para publicar (X: recortado a 280). `copy`/`hashtags`/`cta` por si el escenario los arma distinto.
         text: composePostText(post.platform, post.copy, post.hashtags),
+        // Para el módulo de LinkedIn de Make (formato de texto reservado): el mismo texto con los caracteres especiales escapados.
+        linkedinText: escapeLinkedInText(composePostText(post.platform, post.copy, post.hashtags)),
         copy: post.copy,
         hashtags: post.hashtags,
         cta: post.cta,
