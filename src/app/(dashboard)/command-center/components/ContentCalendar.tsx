@@ -74,6 +74,14 @@ export function ContentCalendar({ companies }: { companies: CEOCompany[] }) {
   const visible = (d: string) => (days[d] ?? []).filter((i) => showRejected || i.status !== 'rejected')
   const all = Object.values(days).flat().filter((i) => showRejected || i.status !== 'rejected')
   const count = (s: string[]) => all.filter((i) => s.includes(i.status)).length
+  async function remove(it: CalItem) {
+    const was = it.status === 'published' ? '\n\nSi ya estaba publicado en una red, tendrás que borrarlo allá a mano.' : ''
+    if (!window.confirm(`¿Eliminar "${it.topic}" en todas las redes?${was}`)) return
+    const res = await fetch(`/api/ceo/content/${it.id}?group=1`, { method: 'DELETE' })
+    if (res.ok) await load()
+    else setError('No se pudo eliminar el post')
+  }
+
   const sel = visible(selected).sort((a, b) => a.time.localeCompare(b.time))
 
   return (
@@ -153,6 +161,7 @@ export function ContentCalendar({ companies }: { companies: CEOCompany[] }) {
                         ? <a key={p.platform} href={p.url} target="_blank" rel="noreferrer" className={`${cls} underline`}>{label} ↗</a>
                         : <span key={p.platform} className={cls}>{label}</span>
                     })}
+                    <button onClick={() => remove(it)} className="rounded-full border border-red-500/30 px-2 py-0.5 text-[11px] text-red-300/80 hover:text-red-200">🗑️ Eliminar</button>
                     {it.sourceUrl && <a href={it.sourceUrl} target="_blank" rel="noreferrer" className="rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 underline">Fuente ↗</a>}
                   </div>
                 </li>

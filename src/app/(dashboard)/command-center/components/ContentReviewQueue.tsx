@@ -347,6 +347,14 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     await load()
   }
 
+  async function deletePost(post: GeneratedPost) {
+    const was = post.status === 'published' ? '\n\nSi ya estaba publicado en una red, tendrás que borrarlo allá a mano: aquí solo se elimina de la app y del calendario.' : ''
+    if (!window.confirm(`¿Eliminar "${post.topic}" en todas las redes?${was}`)) return
+    const res = await fetch(`/api/ceo/content/${post.id}?group=1`, { method: 'DELETE' })
+    if (res.ok) { showToast('Post eliminado', 'success'); await load() }
+    else showToast('No se pudo eliminar el post', 'error')
+  }
+
   async function removeImage(id: string) {
     const res = await fetch(`/api/ceo/content/${id}/image`, { method: 'DELETE' })
     if (res.ok) await load()
@@ -1199,6 +1207,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 />
                 <span className={`text-xs ${post.imageUrl ? 'text-emerald-300' : 'text-amber-300'}`}>{post.imageUrl ? '🖼️' : 'sin imagen'}</span>
                 {post.status === 'publishing' && <span className="text-xs text-indigo-300">Publicando…</span>}
+                {post.status !== 'publishing' && (
+                  <button onClick={() => deletePost(post)} className="text-xs text-red-300/80 hover:text-red-200" title="Eliminar este post">🗑️</button>
+                )}
                 {post.publishError && post.status === 'approved' && (
                   <span className="text-xs text-amber-300" title={post.publishError}>reintento {post.publishAttempts}/3</span>
                 )}
@@ -1282,6 +1293,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 {post.externalUrl && (
                   <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
                 )}
+                <button onClick={() => deletePost(post)} className="text-red-300/80 hover:text-red-200" title="Eliminar este post">🗑️ Eliminar</button>
               </div>
               <MetricsForm key={`${post.id}-${post.metric?.source ?? ''}`} post={post} onSaved={load} />
             </div>

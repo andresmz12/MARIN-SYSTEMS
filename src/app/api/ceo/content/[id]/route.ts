@@ -86,10 +86,16 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    await prisma.generatedPost.deleteMany({
-      where: { id: params.id, userId: session.user.id },
+    // ?group=1 borra el contenido en todas las redes del grupo (lo normal desde la pantalla).
+    const wholeGroup = new URL(req.url).searchParams.get('group') === '1'
+    const post = await prisma.generatedPost.findFirst({ where: { id: params.id, userId: session.user.id }, select: { id: true, groupId: true } })
+    if (!post) return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 })
+    const result = await prisma.generatedPost.deleteMany({
+      where: wholeGroup && post.groupId
+        ? { groupId: post.groupId, userId: session.user.id }
+        : { id: post.id, userId: session.user.id },
     })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, deleted: result.count })
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Error al eliminar el contenido' }, { status: 500 })
