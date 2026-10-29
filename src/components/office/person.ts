@@ -48,6 +48,8 @@ export interface Person {
 const SKINS = [0xf6d3b3, 0xf1c9a5, 0xe8b990, 0xe0ac86, 0xd09a74]
 const HAIRS = [0x4a3424, 0x5c4129, 0x6b4a2b, 0x9a6a3a, 0x7a5535, 0xb08a4f]
 const PANTS = [0x2b3144, 0x3a3f52, 0x232733, 0x4a4036]
+// Trajes de los agentes: tonos sobrios (carbón, grafito, gris, café oscuro). El azul marino con corbata dorada es solo del CEO.
+const JACKETS = [0x2f3441, 0x3b3f4a, 0x44474f, 0x262a33, 0x4a4540, 0x34393f]
 const SIT_Y = 0.6
 const STAND_Y = 1.0
 
@@ -61,12 +63,15 @@ function hashOf(id: string): number {
 export function specFor(id: string, shirt: number, ghost: boolean): PersonSpec {
   const h = hashOf(id)
   const styles: PersonSpec['hairStyle'][] = ['short', 'long', 'bun', 'cap']
+  // Todos los agentes van de traje: saco sobrio, camisa blanca y corbata del color de su rol (así se distingue quién es quién).
+  const jacket = ghost ? 0x9aa1ad : JACKETS[(h >> 14) % JACKETS.length]
   return {
     skin: SKINS[h % SKINS.length],
     hair: HAIRS[(h >> 3) % HAIRS.length],
     hairStyle: styles[(h >> 6) % styles.length],
     shirt,
-    pants: PANTS[(h >> 9) % PANTS.length],
+    suit: { jacket, tie: shirt },
+    pants: new THREE.Color(jacket).multiplyScalar(0.9).getHex(),
     scale: 0.96 + ((h >> 12) % 9) / 100,
     ghost,
   }
@@ -126,6 +131,14 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   if (suit) {
     torso.add(at(part(bx(0.12, 0.38, 0.01), 0xf4f4f6), 0, 0.3, 0.128))
     torso.add(at(part(bx(0.05, 0.3, 0.012), suit.tie), 0, 0.27, 0.135))
+    // Solapas del saco y un pañuelo en el bolsillo
+    const lapel = new THREE.Color(suit.jacket).multiplyScalar(0.8).getHex()
+    ;([1, -1] as const).forEach((sd) => {
+      const l = at(part(bx(0.07, 0.3, 0.012), lapel), sd * 0.1, 0.33, 0.131)
+      l.rotation.z = sd * -0.28
+      torso.add(l)
+    })
+    torso.add(at(part(bx(0.06, 0.04, 0.012), 0xf4f4f6), -0.13, 0.4, 0.132))
   }
   torso.add(at(part(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 10), spec.skin), 0, 0.56, 0))
 
