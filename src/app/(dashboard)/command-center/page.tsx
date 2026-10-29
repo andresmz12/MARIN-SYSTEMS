@@ -6,9 +6,11 @@ import type { CEOCompany } from './types'
 import { CompanyManager } from './components/CompanyManager'
 import { ContentReviewQueue } from './components/ContentReviewQueue'
 import { KnowledgeLibrary } from './components/KnowledgeLibrary'
+import { ContentCalendar } from './components/ContentCalendar'
 
 const MANAGE = '__manage__'
 const LIBRARY = '__library__'
+const CALENDAR = '__calendar__'
 
 export default function CommandCenterPage() {
   const { showToast } = useToast()
@@ -29,8 +31,9 @@ export default function CommandCenterPage() {
   useEffect(() => { loadCompanies() }, [loadCompanies])
 
   const active = companies.filter((c) => c.isActive)
-  const current = tab === MANAGE || tab === LIBRARY ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
+  const current = tab === MANAGE || tab === LIBRARY || tab === CALENDAR ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
   const showLibrary = tab === LIBRARY
+  const showCalendar = tab === CALENDAR
   const showManage = tab === MANAGE || (!loading && active.length === 0)
 
   if (loading) {
@@ -46,7 +49,7 @@ export default function CommandCenterPage() {
 
       <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3">
         {active.map((c) => {
-          const on = !showManage && !showLibrary && current?.id === c.id
+          const on = !showManage && !showLibrary && !showCalendar && current?.id === c.id
           return (
             <button
               key={c.id}
@@ -59,6 +62,14 @@ export default function CommandCenterPage() {
             </button>
           )
         })}
+        <button
+          onClick={() => setTab(CALENDAR)}
+          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            showCalendar ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          📅 Calendario
+        </button>
         <button
           onClick={() => setTab(LIBRARY)}
           className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
@@ -77,7 +88,9 @@ export default function CommandCenterPage() {
         </button>
       </div>
 
-      {showLibrary ? (
+      {showCalendar && active.length > 0 ? (
+        <ContentCalendar companies={active} />
+      ) : showLibrary ? (
         <KnowledgeLibrary companies={active} />
       ) : showManage ? (
         <CompanyManager companies={companies} onChanged={loadCompanies} />

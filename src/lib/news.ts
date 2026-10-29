@@ -155,18 +155,19 @@ export function checkArticleHtml(html: string, item: { title: string; publishedA
   const heading = stripHtml(clean.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '')
   const text = Array.from(clean.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)).map((p) => stripHtml(p[1])).filter((p) => p.length > 60).join(' ').slice(0, 4000)
   const wanted = words(item.title)
-  const have = new Set(words(heading))
+  const have = new Set([...words(heading), ...words(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '')])
   const overlap = wanted.length ? wanted.filter((w) => have.has(w)).length / wanted.length : 0
   if (overlap < 0.6) return { ok: false, reason: `la página no corresponde a la noticia ("${heading.slice(0, 80)}")`, text, date: null }
   if (text.length < 300) return { ok: false, reason: 'la página casi no tiene texto', text, date: null }
   const releaseId = clean.match(/\bIR-\d{4}-\d{1,4}\b/)?.[0]
   const pageDates = datesIn(clean.replace(/<[^>]*>/g, ' ')).map((d) => d.date)
   const DAY = 24 * 60 * 60 * 1000
-  const date = item.publishedAt
-    ? pageDates.find((d) => Math.abs(d.getTime() - item.publishedAt!.getTime()) <= 2 * DAY) ?? null
-    : null
-  if (!date) return { ok: false, reason: 'la fecha de la página no coincide con la del listado', text, date: null, releaseId }
-  return { ok: true, text, date, releaseId }
+  if (!item.publishedAt) return { ok: false, reason: 'la noticia no trae fecha', text, date: null, releaseId }
+  const match = pageDates.find((d) => Math.abs(d.getTime() - item.publishedAt!.getTime()) <= 2 * DAY)
+  // Si la página muestra fechas y NINGUNA coincide con la del listado, algo no cuadra. Si no muestra ninguna,
+  // vale la fecha que publica la fuente.
+  if (!match && pageDates.length > 0) return { ok: false, reason: 'la fecha de la página no coincide con la del listado', text, date: null, releaseId }
+  return { ok: true, text, date: match ?? item.publishedAt, releaseId }
 }
 
 /** Descarga el enlace y lo verifica (ver checkArticleHtml). */

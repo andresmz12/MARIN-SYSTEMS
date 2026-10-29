@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
 import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
 import { knowledgeFor } from '@/lib/knowledge'
+import { avoidList, isRepeat, topicHistory } from '@/lib/topic-memory'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
@@ -95,7 +96,8 @@ async function handler(req: Request) {
           where: { companyId: profile.companyId, source: 'auto', platform: platforms[0] },
         })
 
-        const usedTopics: string[] = []
+        // Memoria de temas: nada que ya se publicó, propuso o rechazó (hasta un año atrás) vuelve a salir.
+        const history = await topicHistory(profile.companyId)
         const drafts: Prisma.GeneratedPostCreateManyInput[] = []
         const usedAngleIds: string[] = []
 
@@ -105,14 +107,14 @@ async function handler(req: Request) {
           const angle = angles[i]
           const pillar = pillars.length > 0 ? pillars[(previousCycles + i) % pillars.length] : undefined
           // Un solo contenido por día, compartido por todas las redes.
-          const avoid = usedTopics.length ? ` NO repitas estos temas de otros días: ${usedTopics.join('; ')}.` : ''
-          const generated = await generateMarketingContent({
+          const knowledge = await knowledgeFor(profile.userId, profile.companyId, `${pillar ?? ''} ${angle?.angle ?? ''} ${angle?.hook ?? ''}`)
+          const make = (extra = '') => generateMarketingContent({
             companyName: name,
             platform: GROUP_IMAGE_PLATFORM,
             contentType: 'post',
-            topic: avoid.trim(),
+            topic: `${history.topics.length ? `NO repitas ni parafrasees estos temas que ya publicamos o propusimos: ${avoidList(history.topics)}.` : ''}${extra}`.trim(),
             research: true,
-            knowledge: await knowledgeFor(profile.userId, profile.companyId, `${pillar ?? ''} ${angle?.angle ?? ''} ${angle?.hook ?? ''}`),
+            knowledge,
             tone: profile.tone,
             targetAudience: profile.targetAudience,
             contentPillars: pillars,
@@ -123,6 +125,16 @@ async function handler(req: Request) {
             voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
             forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
           })
+          let generated = await make()
+          let dup = generated.copy.includes('[Contenido de ') ? null : isRepeat(generated.topic, history.topics)
+          if (dup) {
+            generated = await make(` Tu propuesta anterior ("${generated.topic}") se parece a "${dup}", que ya publicamos. Elige un tema DIFERENTE.`)
+            dup = generated.copy.includes('[Contenido de ') ? null : isRepeat(generated.topic, history.topics)
+          }
+          if (dup) {
+            console.warn(`[cron/auto-content] ${name}: "${generated.topic}" repite "${dup}", se omite ese día`)
+            continue
+          }
           // Claude falló y ai.ts devolvió el texto de relleno: abortar esta marca.
           if (generated.copy.includes('[Contenido de ')) {
             throw new Error('La IA no devolvió contenido válido (se descarta toda la tanda)')
@@ -136,8 +148,7 @@ async function handler(req: Request) {
             scheduledDate,
             source: 'auto',
           }))
-          const dayTopics = [generated.topic]
-          usedTopics.push(...dayTopics)
+          history.topics.unshift(generated.topic)
           if (angle) usedAngleIds.push(angle.id)
         }
 

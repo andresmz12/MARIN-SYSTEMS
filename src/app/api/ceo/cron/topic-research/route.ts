@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { backgroundCron } from '@/lib/cron-run'
 import { prisma } from '@/lib/prisma'
+import { isRepeat, topicHistory } from '@/lib/topic-memory'
 import { researchTopics } from '@/lib/agents-ai'
 import { latestInsights } from '@/lib/auto-content'
 
@@ -43,12 +44,13 @@ async function handler(req: Request) {
           companyName: name,
           targetAudience: profile.targetAudience,
           contentPillars: Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : [],
-          recentTopics: known.slice(0, 25),
+          recentTopics: (await topicHistory(profile.companyId, { openIdeas: true })).topics.slice(0, 80),
           insightsHint: await latestInsights(profile.companyId),
           today: new Date().toISOString().slice(0, 10),
         })
         const seen = new Set(known.map((k) => k.toLowerCase().trim()))
-        const fresh = topics.filter((t) => !seen.has(t.angle.toLowerCase().trim()))
+        const past = (await topicHistory(profile.companyId, { openIdeas: true })).topics
+        const fresh = topics.filter((t) => !seen.has(t.angle.toLowerCase().trim()) && !isRepeat(t.angle, past))
         for (const t of fresh) {
           await prisma.contentAngle.create({
             data: { companyId: profile.companyId, angle: t.angle, hook: t.hook, sourceCompetitor: t.source ?? null },

@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
 import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
 import { knowledgeFor } from '@/lib/knowledge'
+import { vetNews } from '@/lib/agents-ai'
+import { avoidList, isRepeat, topicHistory } from '@/lib/topic-memory'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { fetchFeed, newsFeedUrls, verifyArticle, type NewsItem } from '@/lib/news'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
@@ -94,16 +96,28 @@ async function handler(req: Request) {
         const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
         const references = referenceLines(profile.references)
         const feedback = [...(await recentFeedback(profile.companyId)), ...(await latestInsights(profile.companyId))]
+        const history = await topicHistory(profile.companyId)
         let created = 0
         let made = 0
         const rejected: string[] = []
 
         for (const item of todo) {
           if (made >= MAX_PER_RUN) break
+          // Memoria: la misma noticia (enlace) o el mismo tema con otras palabras no se repite.
+          const dup = history.urls.has(item.link) ? 'ese enlace' : isRepeat(item.title, history.topics)
+          if (dup) {
+            rejected.push(`"${item.title.slice(0, 60)}": ya usamos ese tema (${dup === 'ese enlace' ? dup : `"${dup.slice(0, 50)}"`})`)
+            continue
+          }
           // Antes de escribir: el enlace abre, es ESA noticia y su fecha coincide. Si no, se descarta.
           const check = await verifyArticle(item)
           if (!check.ok) {
             rejected.push(`"${item.title.slice(0, 60)}": ${check.reason}`)
+            continue
+          }
+          const vet = await vetNews({ companyName: name, targetAudience: profile.targetAudience, title: item.title, date: check.date!.toISOString().slice(0, 10), text: check.text, pastTopics: history.topics })
+          if (vet && !vet.accept) {
+            rejected.push(`"${item.title.slice(0, 60)}": el revisor la descartó (${vet.reason})`)
             continue
           }
           made++
@@ -118,6 +132,7 @@ async function handler(req: Request) {
               `NOTICIA OFICIAL para explicar a nuestra audiencia: "${item.title}", publicada el ${published}.`,
               item.summary ? `Resumen de la fuente: ${item.summary}` : '',
               `Fuente: ${item.link}.`,
+              history.topics.length ? `Temas que YA publicamos (no repetir ni parafrasear): ${avoidList(history.topics)}.` : '',
               'Usa los datos de este texto y completa los detalles con la fuente oficial (irs.gov): quién califica, montos, fechas y un ejemplo con números. No inventes nada: si un dato importante no aparece en una fuente oficial, no lo afirmes. Pon en "facts" cada dato concreto (montos, fechas, formularios) con su fuente, para que el dueño lo verifique.',
             ].filter(Boolean).join(' '),
             research: true,
@@ -132,6 +147,8 @@ async function handler(req: Request) {
           })
           if (generated.copy.includes('[Contenido de ')) throw new Error('La IA no devolvió contenido válido')
           generated.facts = [sourceLine, ...generated.facts].slice(0, 7)
+          history.topics.unshift(generated.topic)
+          history.urls.add(item.link)
 
           const drafts = buildGroupDrafts({
               userId: profile.userId,

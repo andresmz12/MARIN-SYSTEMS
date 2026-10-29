@@ -990,7 +990,10 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
               <div className="flex flex-wrap gap-2">
                 <button
                   disabled={busy}
-                  onClick={() => patch(post.id, { status: 'approved', ...(edits[post.id] !== undefined ? { copy: edits[post.id] } : {}) }, 'Post aprobado')}
+                  onClick={() => {
+                    if (post.factCheck?.verdict === 'error' && !window.confirm('El verificador encontró un dato INCORRECTO en este post. Revisa el recuadro de verificación. ¿Aprobarlo de todos modos?')) return
+                    patch(post.id, { status: 'approved', ...(edits[post.id] !== undefined ? { copy: edits[post.id] } : {}) }, 'Post aprobado')
+                  }}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 disabled:opacity-40"
                 >
                   Aprobar

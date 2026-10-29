@@ -152,3 +152,41 @@ Responde ÚNICAMENTE con este JSON array:
     return []
   }
 }
+
+// ───────────────────────── Revisor de noticias ─────────────────────────
+
+export interface NewsVet { accept: boolean; reason: string }
+
+/**
+ * Antes de escribir sobre una noticia: ¿vale la pena para esta audiencia y no repite algo ya publicado?
+ * Es un filtro barato (sin búsqueda web): la veracidad ya se comprobó abriendo la fuente.
+ */
+export async function vetNews(input: {
+  companyName: string
+  targetAudience: string
+  title: string
+  date: string
+  text: string
+  pastTopics: string[]
+}): Promise<NewsVet | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  const prompt = `Eres el revisor de noticias de "${input.companyName}" (contabilidad, impuestos y negocios). Público: ${input.targetAudience}.
+Decide si esta noticia merece un post. Hoy es ${new Date().toISOString().slice(0, 10)}.
+
+NOTICIA (${input.date}): ${input.title}
+Texto de la fuente: ${input.text.slice(0, 1800)}
+
+Temas que YA publicamos o propusimos: ${input.pastTopics.slice(0, 40).join('; ') || 'ninguno'}
+
+Recházala si: es un recordatorio genérico sin dato nuevo, no afecta de forma concreta a dueños de negocio, trabajadores independientes o contribuyentes latinos, es sobre algo muy específico que casi nadie usa, o repite un tema que ya publicamos (aunque sea otra noticia). Acéptala solo si aporta un dato concreto y útil.
+Responde ÚNICAMENTE con este JSON: {"accept":true|false,"reason":"una frase"}`
+  try {
+    const text = await callClaude({ model: AI_MODEL, messages: [{ role: 'user', content: prompt }], maxTokens: 200 })
+    const o = extractJson(text) as { accept?: unknown; reason?: unknown } | null
+    if (!o || typeof o.accept !== 'boolean') return null
+    return { accept: o.accept, reason: asStr(o.reason, 200) }
+  } catch (err) {
+    console.error('[vet-news]', err)
+    return null
+  }
+}
