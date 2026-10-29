@@ -57,12 +57,14 @@ async function handler(req: Request) {
       .filter((i): i is NewsItem & { publishedAt: Date } => !!i.publishedAt && i.publishedAt.getTime() >= cutoff && i.publishedAt.getTime() <= now + 24 * 60 * 60 * 1000)
       .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
 
+    // Desde la pantalla se puede pedir una sola empresa.
+    const only = ((await req.clone().json().catch(() => ({}))) as { companyId?: string }).companyId
     const profiles = await prisma.brandProfile.findMany({
-      where: { newsEnabled: true },
+      where: { newsEnabled: true, ...(only ? { companyId: only } : {}) },
       include: { company: { select: { id: true, name: true } } },
     })
 
-    const summary: { company: string; created: number; skipped?: string; error?: string; rejected?: string[] }[] = []
+    const summary: { company: string; created: number; skipped?: string; error?: string; rejected?: string[]; news?: number }[] = []
 
     for (const profile of profiles) {
       const name = profile.company.name
@@ -146,6 +148,12 @@ async function handler(req: Request) {
             forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
           })
           if (generated.copy.includes('[Contenido de ')) throw new Error('La IA no devolvió contenido válido')
+          const again = isRepeat(generated.topic, history.topics)
+          if (again) {
+            made--
+            rejected.push(`"${item.title.slice(0, 60)}": el post salió igual a uno anterior ("${again.slice(0, 50)}")`)
+            continue
+          }
           generated.facts = [sourceLine, ...generated.facts].slice(0, 7)
           history.topics.unshift(generated.topic)
           history.urls.add(item.link)
@@ -168,7 +176,7 @@ async function handler(req: Request) {
           const notify = await sendContentReadyEmail({ companyName: name, count: 1, pendingTotal: pending, newsTitle: item.title })
           if (!notify.success) console.error('[cron/news-watch] aviso por correo falló:', notify.error)
         }
-        summary.push({ company: name, created, ...(rejected.length ? { rejected } : {}) })
+        summary.push({ company: name, created, news: made, ...(rejected.length ? { rejected } : {}) })
       } catch (err) {
         console.error(`[cron/news-watch] ${name}`, err)
         summary.push({ company: name, created: 0, error: String(err) })
@@ -176,7 +184,15 @@ async function handler(req: Request) {
     }
 
     console.log('[cron/news-watch]', JSON.stringify({ summary, feedErrors }))
-    return NextResponse.json({ processed: profiles.length, fresh: fresh.length, feedErrors, summary })
+    return NextResponse.json({
+      processed: profiles.length,
+      found: items.length,
+      fresh: fresh.length,
+      feedErrors,
+      // Lo que vio la lectura (para entender por qué hay o no noticias): título y fecha detectada.
+      sample: items.slice(0, 8).map((i) => ({ title: i.title.slice(0, 90), date: i.publishedAt ? i.publishedAt.toISOString().slice(0, 10) : null })),
+      summary,
+    })
   } catch (err) {
     console.error('[cron/news-watch]', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error leyendo noticias' }, { status: 500 })

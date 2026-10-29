@@ -90,6 +90,33 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   }, [companyId])
 
   const [generating, setGenerating] = useState(false)
+  const [newsBusy, setNewsBusy] = useState(false)
+  const [newsResult, setNewsResult] = useState<{
+    found?: number; fresh?: number; skipped?: string; feedErrors?: string[]; sample?: { title: string; date: string | null }[]
+    summary?: { company: string; created: number; news?: number; skipped?: string; error?: string; rejected?: string[] }[]
+  } | null>(null)
+
+  async function checkNews() {
+    setNewsBusy(true)
+    setNewsResult(null)
+    try {
+      const res = await fetch('/api/ceo/news/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId }),
+      })
+      const d = await res.json().catch(() => ({})) as NonNullable<typeof newsResult> & { error?: string }
+      if (!res.ok) throw new Error(d.error ?? 'No se pudo buscar noticias')
+      setNewsResult(d)
+      const created = d.summary?.reduce((n, r) => n + r.created, 0) ?? 0
+      showToast(created > 0 ? `${created > 1 ? 'Hay noticias nuevas' : 'Hay una noticia nueva'}: revísala abajo` : 'No hay noticias nuevas que sirvan por ahora', created > 0 ? 'success' : 'info')
+      await load()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo buscar noticias', 'error')
+    } finally {
+      setNewsBusy(false)
+    }
+  }
 
   async function generateWeek() {
     setGenerating(true)
@@ -546,6 +573,40 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         >
           {auto?.newsEnabled ? 'Activadas ✓' : 'Activar'}
         </button>
+        <button
+          onClick={checkNews}
+          disabled={!auto?.newsEnabled || newsBusy}
+          title={auto?.newsEnabled ? undefined : 'Activa primero las noticias automáticas'}
+          className="px-3.5 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-40"
+        >
+          {newsBusy ? 'Buscando… (1-2 min)' : '🔎 Buscar noticias ahora'}
+        </button>
+        {newsResult && (
+          <div className="basis-full rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-xs text-zinc-300 space-y-1.5">
+            {newsResult.skipped ? (
+              <p>{newsResult.skipped}</p>
+            ) : (
+              <>
+                <p>Vi <b>{newsResult.found ?? 0}</b> noticias en la fuente; <b>{newsResult.fresh ?? 0}</b> son recientes (últimos 4 días) y traen su fecha.</p>
+                {newsResult.summary?.map((r) => (
+                  <div key={r.company}>
+                    <p>{r.error ? `⚠️ ${r.error}` : r.created > 0 ? `✅ Creé ${r.news ?? 1} ${(r.news ?? 1) === 1 ? 'noticia nueva' : 'noticias nuevas'}. Revísa${(r.news ?? 1) === 1 ? 'la' : 'las'} abajo.` : `Sin posts nuevos${r.skipped ? `: ${r.skipped}` : '.'}`}</p>
+                    {r.rejected?.map((x) => <p key={x} className="pl-3 text-zinc-500">✕ {x}</p>)}
+                  </div>
+                ))}
+                {(newsResult.feedErrors?.length ?? 0) > 0 && newsResult.feedErrors!.map((e) => <p key={e} className="text-red-300">⚠️ {e}</p>)}
+                {(newsResult.sample?.length ?? 0) > 0 && (
+                  <details>
+                    <summary className="cursor-pointer text-zinc-400">Lo que leí de la fuente</summary>
+                    <ul className="mt-1 space-y-0.5 pl-3 text-zinc-500">
+                      {newsResult.sample!.map((x) => <li key={x.title}>{x.date ?? 'sin fecha'} · {x.title}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <AgentReportsPanel companyId={companyId} />
