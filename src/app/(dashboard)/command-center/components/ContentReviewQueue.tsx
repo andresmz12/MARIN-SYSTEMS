@@ -486,7 +486,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       key: 'auto',
       done: !!auto?.autoEnabled,
       title: 'Activa el piloto automático',
-      help: 'Cada domingo genera los posts de la semana. Nada se publica sin que lo apruebes.',
+      help: 'Cada sábado genera los posts de la semana. Nada se publica sin que lo apruebes.',
       action: auto && !auto.autoEnabled ? { label: 'Activar', run: toggleAuto } : undefined,
     },
     {
@@ -542,7 +542,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold text-zinc-100">🤖 Piloto automático</p>
           <p className="text-xs text-zinc-400">
-            Cada domingo genera los posts de lunes, miércoles y viernes (solo imágenes). Los videos los subes tú. Nada se publica sin tu aprobación.
+            Cada sábado genera los posts de lunes, miércoles y viernes (solo imágenes). Los videos los subes tú. Nada se publica sin tu aprobación.
           </p>
         </div>
         <button
@@ -561,7 +561,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           <button
             onClick={() => generateWeek()}
             disabled={generating}
-            title="Crea ahora la tanda de la semana, sin esperar al domingo"
+            title="Crea ahora la tanda de la semana, sin esperar al sábado"
             className="px-3.5 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-50"
           >
             {generating ? 'Generando… (2-3 min)' : '✨ Generar tanda ahora'}

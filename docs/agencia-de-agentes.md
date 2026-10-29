@@ -6,9 +6,9 @@ Cada agente corre en un **horario fijo** (GitHub Actions → endpoint con `CRON_
 |---|---|---|---|
 | Investigador de temas (`topic-research`) | diario 7:00 AM COL | Busca en la web temas oportunos (noticias, fechas límite) y los deja como ideas (ángulos) | Haiku + búsqueda web |
 | Noticias (`news-watch`) | diario 10:00 AM COL | Lee `NEWS_FEED_URLS` y convierte noticias nuevas en borradores | Sonnet |
-| Contenido (`auto-content`) | domingo 9:00 AM COL | Genera los posts de L/X/V (uno por tema, para todas las redes) | Sonnet |
+| Contenido (`auto-content`) | sábado 9:00 AM COL | Genera los posts de L/X/V (uno por tema, para todas las redes) | Sonnet |
 | Verificador de datos | tras generar cada post, o botón "Verificar datos" | Contrasta montos/fechas/formularios con la biblioteca, la fuente y IRS.gov | Sonnet + búsqueda web |
-| Analista de métricas (`metrics-report`) | domingo 8:00 AM COL | Analiza los números de los posts publicados; el informe se usa al generar la semana | Haiku |
+| Analista de métricas (`metrics-report`) | sábado 8:00 AM COL | Analiza los números de los posts publicados; el informe se usa al generar la semana | Haiku |
 
 ## Biblioteca de impuestos
 Pestaña **📚 Biblioteca**: textos que la IA puede citar para datos concretos. Se eligen los fragmentos más parecidos al tema (por palabras) y se pasan al generador y al verificador.

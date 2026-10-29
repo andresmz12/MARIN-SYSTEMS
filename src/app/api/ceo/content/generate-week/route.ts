@@ -7,7 +7,7 @@ import { POST as runAutoContent } from '@/app/api/ceo/cron/auto-content/route'
 export const maxDuration = 300
 
 // Genera la tanda de la semana de UNA empresa desde la pantalla, sin pasar por GitHub.
-// Usa el mismo proceso del domingo (mismas reglas, verificación y aviso por correo).
+// Usa el mismo proceso del sábado (mismas reglas, verificación y aviso por correo).
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

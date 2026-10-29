@@ -7,9 +7,9 @@ on:
     - cron: "0 23 * * *"    # evening  — 6:00 PM Colombia
     - cron: "0 */6 * * *"   # generate — cada 6 horas
     - cron: "0 13 * * 1"   # weekly-angles — lunes 8:00 AM Colombia (UTC-5)
-    - cron: "0 14 * * 0"   # auto-content — domingos 9:00 AM COL; genera los posts de L/X/V
+    - cron: "0 14 * * 6"   # auto-content — sábados 9:00 AM COL; genera los posts de L/X/V para subirlos el fin de semana
     - cron: "0 12 * * *"   # topic-research — todos los días 7:00 AM COL; el investigador deja ideas del día
-    - cron: "0 13 * * 0"   # metrics-report — domingos 8:00 AM COL, antes de generar la semana
+    - cron: "0 13 * * 6"   # metrics-report — sábados 8:00 AM COL, antes de generar la semana
     - cron: "0 15 * * *"   # news-watch — todos los días 10:00 AM COL; convierte noticias nuevas en borradores
     - cron: "10 18-23 * * 1-5"   # publish-due — L-V 1:10-6:10 PM COL, cada hora; publica lo aprobado cuya hora ya llegó
   workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
@@ -103,9 +103,9 @@ jobs:
             https://marin-systems-production.up.railway.app/api/ceo/cron/weekly-angles
 
   auto-content:
-    name: Auto Content (Sun 9:00 AM COL, posts for Mon/Wed/Fri)
+    name: Auto Content (Sat 9:00 AM COL, posts for Mon/Wed/Fri)
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'auto-content')) || github.event.schedule == '0 14 * * 0'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'auto-content')) || github.event.schedule == '0 14 * * 6'
     steps:
       - name: POST /ceo/cron/auto-content
         run: |
@@ -159,9 +159,9 @@ jobs:
             https://marin-systems-production.up.railway.app/api/ceo/cron/topic-research
 
   metrics-report:
-    name: Metrics Report (Sun 8:00 AM COL)
+    name: Metrics Report (Sat 8:00 AM COL)
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'metrics-report')) || github.event.schedule == '0 13 * * 0'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'metrics-report')) || github.event.schedule == '0 13 * * 6'
     steps:
       - name: POST /ceo/cron/metrics-report
         run: |

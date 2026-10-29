@@ -43,7 +43,7 @@ export function AgentReportsPanel({ companyId }: { companyId: string }) {
               {list(metrics.content.change).map((w, i) => <p key={`c${i}`} className="text-xs text-amber-300">🔧 {w}</p>)}
             </>
           ) : (
-            <p className="text-xs text-zinc-500">Aún no hay informe. Cada domingo se genera uno cuando hay al menos 3 posts publicados con números (agrégalos con "📊 Agregar números" en los publicados).</p>
+            <p className="text-xs text-zinc-500">Aún no hay informe. Cada sábado se genera uno cuando hay al menos 3 posts publicados con números (agrégalos con "📊 Agregar números" en los publicados).</p>
           )}
         </div>
         <div className="space-y-1.5">

@@ -8,7 +8,7 @@ Solo se publican **imágenes** en Instagram, Facebook, LinkedIn y X. Los videos 
 
 ## Flujo
 
-1. Domingo: el sistema genera los posts de lunes, miércoles y viernes (1:00 PM Colombia).
+1. Sábado: el sistema genera los posts de lunes, miércoles y viernes (1:00 PM Colombia).
 2. Tú generas las imágenes, las subes, revisas y **apruebas** cada post (`Command Center → Por aprobar`).
 3. A su hora, un job (L–V, 1:10–6:10 PM, cada hora) envía cada post aprobado **con imagen** al webhook.
 4. Si el webhook falla, reintenta hasta 3 veces (mínimo 30 min entre intentos). Al tercer fallo el post

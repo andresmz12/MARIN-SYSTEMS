@@ -52,7 +52,7 @@ const hhmm = (m: number) => {
 }
 const DAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
-/** Próxima vez que cae en alguno de los horarios, en texto ("hoy 7:00 AM", "mañana 7:00 AM", "domingo 8:00 AM"). */
+/** Próxima vez que cae en alguno de los horarios, en texto ("hoy 7:00 AM", "mañana 7:00 AM", "sábado 8:00 AM"). */
 export function nextRunText(slots: ScheduleSlot[], now: Date): string | null {
   if (slots.length === 0) return null
   const { day, minutes } = colombiaMinutes(now)
@@ -154,18 +154,18 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     const topicList = (topics?.content as { topics?: { angle: string }[] } | null)?.topics?.map((t) => t.angle).join(' · ')
 
     const slotsResearch: ScheduleSlot[] = [{ day: null, from: 7 * 60, to: 8 * 60 }]
-    const slotsWriter: ScheduleSlot[] = [{ day: 0, from: 9 * 60, to: 10 * 60 }, { day: null, from: 10 * 60, to: 11 * 60 }]
-    const slotsChecker: ScheduleSlot[] = [{ day: 0, from: 10 * 60, to: 11 * 60 }, { day: null, from: 11 * 60, to: 12 * 60 }]
-    const slotsAnalyst: ScheduleSlot[] = [{ day: 0, from: 8 * 60, to: 9 * 60 }]
+    const slotsWriter: ScheduleSlot[] = [{ day: 6, from: 9 * 60, to: 10 * 60 }, { day: null, from: 10 * 60, to: 11 * 60 }]
+    const slotsChecker: ScheduleSlot[] = [{ day: 6, from: 10 * 60, to: 11 * 60 }, { day: null, from: 11 * 60, to: 12 * 60 }]
+    const slotsAnalyst: ScheduleSlot[] = [{ day: 6, from: 8 * 60, to: 9 * 60 }]
 
     const agents: OfficeAgent[] = [
       { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Todos los días · 7:00 AM', model: 'Haiku + búsqueda web',
         lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando fechas límite y noticias del día…' },
-      { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Domingo 9:00 AM (semana) · diario 10:00 AM (noticias)', model: 'Sonnet',
+      { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · diario 10:00 AM (noticias)', model: 'Sonnet',
         lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
       { id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
         lastReport: fc?.summary ? short(fc.summary) : 'Todavía no ha verificado posts.', lastAt: lastChecked?.factCheckedAt?.toISOString() ?? null, nextRun: nextRunText(slotsChecker, now), slots: slotsChecker, href: '/command-center', doing: 'Comparando montos y fechas con IRS.gov…' },
-      { id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Domingos · 8:00 AM', model: 'Haiku',
+      { id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
         lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
       ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
       ghost(`${c.id}-community`, personName(ci, 5), 'Comunidad: responde comentarios (próximamente)', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
