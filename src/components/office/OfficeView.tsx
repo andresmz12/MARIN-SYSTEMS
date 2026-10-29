@@ -164,7 +164,8 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           <OfficeScene
             departments={departments}
             focus={focus}
-            selectedId={ceoSelected ? 'ceo' : agent.id}
+            selectedId={selected}
+            onClose={() => setSelected(null)}
             statusOf={statusOf}
             minutes={clockMin}
             ceo={ceoStats}

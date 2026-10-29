@@ -22,6 +22,8 @@ interface Props {
   minutes: number
   ceo: CeoStats
   onSelect: (id: string, departmentId: string | null) => void
+  /** Cierra la tarjeta del agente elegido. */
+  onClose: () => void
 }
 
 // ───────────────────────── Distribución ─────────────────────────
@@ -208,10 +210,11 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, onSelect }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, onSelect, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const popRef = useRef<HTMLDivElement>(null)
   const live = useRef({ statusOf, minutes, selectedId, focus, ceo })
   live.current = { statusOf, minutes, selectedId, focus, ceo }
 
@@ -566,6 +569,22 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const ceoEl = labelRefs.current.ceo
       if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
       flushLabels()
+      // Tarjeta del agente elegido: flota encima de su etiqueta, sin salirse del cuadro.
+      const pop = popRef.current
+      if (pop) {
+        const selLabel = sel ? labelRefs.current[sel] : null
+        if (selLabel && selLabel.style.display !== 'none') {
+          const pw = pop.offsetWidth || 260
+          const ph = pop.offsetHeight || 140
+          const lx = parseFloat(selLabel.style.left || '0')
+          const ly = parseFloat(selLabel.style.top || '0') - selLabel.offsetHeight - 8
+          const x = Math.max(8 + pw / 2, Math.min(host.clientWidth - 8 - pw / 2, lx))
+          const y = Math.max(8 + ph, Math.min(host.clientHeight - 8, ly))
+          pop.style.left = `${x}px`
+          pop.style.top = `${y}px`
+          pop.style.visibility = 'visible'
+        } else pop.style.visibility = 'hidden'
+      }
       drawScreen(cs)
 
       const selActor = actors.find((a) => a.id === sel)
@@ -603,6 +622,35 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structure])
 
+  // Contenido de la tarjeta flotante del agente (o de Andrés) elegido.
+  const short = (t: string, n = 150) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
+  let popContent: { title: string; subtitle: string; status: string; pill: string; text: string; href?: string; cta: string } | null = null
+  if (selectedId === 'ceo') {
+    popContent = {
+      title: 'Andrés Marín',
+      subtitle: 'CEO · oficina de cristal',
+      status: 'En su puesto',
+      pill: 'bg-emerald-100 text-emerald-700',
+      text: `${ceo.pending} por aprobar · ${ceo.problems} con problemas · ${ceo.working} trabajando`,
+      href: '/dashboard',
+      cta: 'Abrir el Dashboard',
+    }
+  } else if (selectedId) {
+    const found = departments.flatMap((d) => d.agents.map((a) => ({ a, d }))).find((x) => x.a.id === selectedId)
+    if (found) {
+      const stt = statusOf(found.a.id)
+      popContent = {
+        title: found.a.name,
+        subtitle: `${found.a.role} · ${found.d.name}`,
+        status: stt === 'work' ? 'Trabajando' : stt === 'alert' ? 'Necesita atención' : stt === 'ghost' ? 'Puesto libre' : 'Fuera de horario',
+        pill: stt === 'work' ? 'bg-emerald-100 text-emerald-700' : stt === 'alert' ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-600',
+        text: short(stt === 'work' && found.a.doing ? found.a.doing : found.a.lastReport),
+        href: stt === 'ghost' ? undefined : found.a.href,
+        cta: 'Abrir su trabajo',
+      }
+    }
+  }
+
   return (
     <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#dfe9f2]">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Oficina con las áreas de cada departamento y la oficina de Andrés Marín" />
@@ -619,6 +667,29 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             {a.name}{a.status === 'ghost' ? ' · pronto' : ''}
           </button>
         )))}
+        {popContent && (
+          <div
+            ref={popRef}
+            className="pointer-events-auto absolute w-[260px] -translate-x-1/2 -translate-y-full rounded-xl border border-zinc-200 bg-white p-3 text-zinc-800 shadow-xl"
+            style={{ visibility: 'hidden' }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar"
+              className="absolute right-2 top-1.5 rounded p-0.5 text-sm leading-none text-zinc-400 hover:text-zinc-700"
+            >
+              ✕
+            </button>
+            <p className="pr-5 text-[13px] font-extrabold leading-tight">{popContent.title}</p>
+            <p className="text-[11px] text-zinc-500">{popContent.subtitle}</p>
+            <span className={`mt-1.5 inline-block rounded-full px-2 py-px text-[10px] font-bold ${popContent.pill}`}>{popContent.status}</span>
+            <p className="mt-1.5 text-[11px] leading-snug text-zinc-700">{popContent.text}</p>
+            {popContent.href && (
+              <a href={popContent.href} className="mt-2 inline-block text-[11px] font-bold text-indigo-600 hover:underline">{popContent.cta} →</a>
+            )}
+          </div>
+        )}
         <button
           ref={(el) => { labelRefs.current.ceo = el }}
           type="button"
