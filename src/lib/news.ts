@@ -149,7 +149,7 @@ export interface ArticleCheck {
  * Verifica una noticia ANTES de escribir sobre ella: que el enlace abra de verdad, que la página sea ESA noticia
  * (el título coincide) y que su fecha sea la que dice el listado. Pura: recibe el HTML ya descargado.
  */
-export function checkArticleHtml(html: string, item: { title: string; publishedAt: Date | null }): ArticleCheck {
+export function checkArticleHtml(html: string, item: { title: string; publishedAt: Date | null }, opts: { requirePageDate?: boolean } = {}): ArticleCheck {
   const main = html.match(/<main[\s\S]*?<\/main>/i)?.[0] ?? html
   const clean = main.replace(/<(script|style|nav|footer|header)[\s\S]*?<\/\1>/gi, ' ')
   const heading = stripHtml(clean.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '')
@@ -166,16 +166,16 @@ export function checkArticleHtml(html: string, item: { title: string; publishedA
   const match = pageDates.find((d) => Math.abs(d.getTime() - item.publishedAt!.getTime()) <= 2 * DAY)
   // Si la página muestra fechas y NINGUNA coincide con la del listado, algo no cuadra. Si no muestra ninguna,
   // vale la fecha que publica la fuente.
-  if (!match && pageDates.length > 0) return { ok: false, reason: 'la fecha de la página no coincide con la del listado', text, date: null, releaseId }
+  if (!match && (pageDates.length > 0 || opts.requirePageDate)) return { ok: false, reason: 'la fecha de la página no coincide con la del listado', text, date: null, releaseId }
   return { ok: true, text, date: match ?? item.publishedAt, releaseId }
 }
 
 /** Descarga el enlace y lo verifica (ver checkArticleHtml). */
-export async function verifyArticle(item: { title: string; link: string; publishedAt: Date | null }): Promise<ArticleCheck> {
+export async function verifyArticle(item: { title: string; link: string; publishedAt: Date | null }, opts: { requirePageDate?: boolean } = {}): Promise<ArticleCheck> {
   try {
     const res = await fetch(item.link, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { 'User-Agent': 'CorporacionMarin/1.0 (+news-watch)' } })
     if (!res.ok) return { ok: false, reason: `el enlace respondió HTTP ${res.status}`, text: '', date: null }
-    return checkArticleHtml((await res.text()).slice(0, MAX_FEED_BYTES), item)
+    return checkArticleHtml((await res.text()).slice(0, MAX_FEED_BYTES), item, opts)
   } catch (e) {
     return { ok: false, reason: `no se pudo abrir el enlace (${e instanceof Error ? e.message : 'error'})`, text: '', date: null }
   }

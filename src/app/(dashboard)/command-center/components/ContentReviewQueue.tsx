@@ -93,7 +93,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [newsBusy, setNewsBusy] = useState(false)
   const [newsResult, setNewsResult] = useState<{
     found?: number; fresh?: number; latest?: string | null; undated?: number; skipped?: string; feedErrors?: string[]; sample?: { title: string; date: string | null }[]
-    summary?: { company: string; created: number; news?: number; skipped?: string; error?: string; rejected?: string[] }[]
+    summary?: { company: string; created: number; news?: number; web?: number; skipped?: string; error?: string; rejected?: string[] }[]
   } | null>(null)
 
   async function checkNews() {
@@ -595,6 +595,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 {newsResult.summary?.map((r) => (
                   <div key={r.company}>
                     <p>{r.error ? `⚠️ ${r.error}` : r.created > 0 ? `✅ Creé ${r.news ?? 1} ${(r.news ?? 1) === 1 ? 'noticia nueva' : 'noticias nuevas'}. Revísa${(r.news ?? 1) === 1 ? 'la' : 'las'} abajo.` : `Sin posts nuevos${r.skipped ? `: ${r.skipped}` : '.'}`}</p>
+                    {typeof r.web === 'number' && <p className="pl-3 text-zinc-500">🌐 La búsqueda en la web propuso {r.web} {r.web === 1 ? 'noticia' : 'noticias'}.</p>}
                     {r.rejected?.map((x) => <p key={x} className="pl-3 text-zinc-500">✕ {x}</p>)}
                   </div>
                 ))}

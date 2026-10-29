@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { generateMarketingContent } from '@/lib/ai'
 import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
 import { knowledgeFor } from '@/lib/knowledge'
-import { vetNews } from '@/lib/agents-ai'
+import { discoverNews, vetNews } from '@/lib/agents-ai'
 import { avoidList, isRepeat, topicHistory } from '@/lib/topic-memory'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { fetchFeed, newsFeedUrls, verifyArticle, type NewsItem } from '@/lib/news'
@@ -36,9 +36,6 @@ async function handler(req: Request) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
   }
   const feeds = newsFeedUrls()
-  if (feeds.length === 0) {
-    return NextResponse.json({ processed: 0, skipped: 'NEWS_FEED_URLS no configurado' })
-  }
 
   try {
     // Un feed caído no debe frenar a los demás, pero si TODOS fallan sí es un error que debe verse.
@@ -47,7 +44,7 @@ async function handler(req: Request) {
     for (const url of feeds) {
       try { items.push(...(await fetchFeed(url))) } catch (e) { feedErrors.push(e instanceof Error ? e.message : String(e)) }
     }
-    if (feedErrors.length === feeds.length) throw new Error(`No se pudo leer ninguna fuente: ${feedErrors.join(' | ')}`)
+    const allFeedsFailed = feeds.length > 0 && feedErrors.length === feeds.length
 
     const cutoff = Date.now() - MAX_AGE_MS
     // Solo cuenta lo que trae SU PROPIA fecha y es reciente. Sin fecha (menús, páginas fijas como un resumen
@@ -64,7 +61,7 @@ async function handler(req: Request) {
       include: { company: { select: { id: true, name: true } } },
     })
 
-    const summary: { company: string; created: number; skipped?: string; error?: string; rejected?: string[]; news?: number }[] = []
+    const summary: { company: string; created: number; skipped?: string; error?: string; rejected?: string[]; news?: number; web?: number }[] = []
 
     for (const profile of profiles) {
       const name = profile.company.name
@@ -87,18 +84,28 @@ async function handler(req: Request) {
             select: { sourceUrl: true },
           })).map((r) => r.sourceUrl),
         )
-        const todo = fresh.filter((i) => !known.has(i.link))
+        const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
+        const history = await topicHistory(profile.companyId)
+        type Candidate = NewsItem & { publishedAt: Date; web?: boolean; sourceName?: string }
+        const todo: Candidate[] = fresh.filter((i) => !known.has(i.link))
+
+        // Además de las fuentes fijas, el investigador busca en la web noticias recientes de contabilidad e impuestos.
+        // Nada de lo que traiga se confía tal cual: cada una se abre y se verifica abajo (con la fecha de la propia página).
+        const web = await discoverNews({ companyName: name, targetAudience: profile.targetAudience, contentPillars: pillars, pastTopics: history.topics })
+        for (const w of web) {
+          if (w.publishedAt.getTime() < cutoff || w.publishedAt.getTime() > now + 24 * 60 * 60 * 1000) continue
+          if (todo.some((t) => t.link === w.link) || history.urls.has(w.link)) continue
+          todo.push({ title: w.title, link: w.link, summary: '', publishedAt: w.publishedAt, web: true, sourceName: w.source })
+        }
         if (todo.length === 0) {
-          summary.push({ company: name, created: 0, skipped: 'sin noticias nuevas' })
+          summary.push({ company: name, created: 0, skipped: 'sin noticias nuevas', web: web.length })
           continue
         }
 
         const selected = profile.autoPlatforms.filter(isAutoPlatform)
         const platforms: string[] = selected.length > 0 ? selected : [...AUTO_PLATFORMS]
-        const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
         const references = referenceLines(profile.references)
         const feedback = [...(await recentFeedback(profile.companyId)), ...(await latestInsights(profile.companyId))]
-        const history = await topicHistory(profile.companyId)
         let created = 0
         let made = 0
         const rejected: string[] = []
@@ -112,7 +119,7 @@ async function handler(req: Request) {
             continue
           }
           // Antes de escribir: el enlace abre, es ESA noticia y su fecha coincide. Si no, se descarta.
-          const check = await verifyArticle(item)
+          const check = await verifyArticle(item, { requirePageDate: item.web })
           if (!check.ok) {
             rejected.push(`"${item.title.slice(0, 60)}": ${check.reason}`)
             continue
@@ -125,13 +132,13 @@ async function handler(req: Request) {
           made++
           item.summary = check.text
           const published = check.date!.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-          const sourceLine = `Fuente oficial verificada: "${item.title}" (${check.releaseId ? `${check.releaseId}, ` : ''}publicada el ${published}) ${item.link}`
+          const sourceLine = `${item.web ? `Fuente verificada en la web${item.sourceName ? ` (${item.sourceName})` : ''}` : 'Fuente oficial verificada'}: "${item.title}" (${check.releaseId ? `${check.releaseId}, ` : ''}publicada el ${published}) ${item.link}`
           const generated = await generateMarketingContent({
             companyName: name,
             platform: GROUP_IMAGE_PLATFORM,
             contentType: 'post',
             topic: [
-              `NOTICIA OFICIAL para explicar a nuestra audiencia: "${item.title}", publicada el ${published}.`,
+              `${item.web ? 'NOTICIA' : 'NOTICIA OFICIAL'} para explicar a nuestra audiencia: "${item.title}", publicada el ${published}.`,
               item.summary ? `Resumen de la fuente: ${item.summary}` : '',
               `Fuente: ${item.link}.`,
               history.topics.length ? `Temas que YA publicamos (no repetir ni parafrasear): ${avoidList(history.topics)}.` : '',
@@ -176,7 +183,7 @@ async function handler(req: Request) {
           const notify = await sendContentReadyEmail({ companyName: name, count: 1, pendingTotal: pending, newsTitle: item.title })
           if (!notify.success) console.error('[cron/news-watch] aviso por correo falló:', notify.error)
         }
-        summary.push({ company: name, created, news: made, ...(rejected.length ? { rejected } : {}) })
+        summary.push({ company: name, created, news: made, web: web.length, ...(rejected.length ? { rejected } : {}) })
       } catch (err) {
         console.error(`[cron/news-watch] ${name}`, err)
         summary.push({ company: name, created: 0, error: String(err) })
@@ -184,6 +191,8 @@ async function handler(req: Request) {
     }
 
     console.log('[cron/news-watch]', JSON.stringify({ summary, feedErrors }))
+    // Si TODAS las fuentes fijas fallaron y la búsqueda en la web tampoco aportó nada, es un error que debe verse.
+    if (allFeedsFailed && summary.every((r) => r.created === 0 && !r.web)) throw new Error(`No se pudo leer ninguna fuente: ${feedErrors.join(' | ')}`)
     return NextResponse.json({
       processed: profiles.length,
       found: items.length,

@@ -39,12 +39,14 @@ export async function callClaude({
   messages,
   maxTokens,
   webSearch = false,
+  maxSearches = 3,
 }: {
   model: string
   system?: string
   messages: Anthropic.MessageParam[]
   maxTokens: number
   webSearch?: boolean
+  maxSearches?: number
 }): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return ''
@@ -60,7 +62,7 @@ export async function callClaude({
   // via a header. Bounded to 3 searches per call to cap cost/latency.
   if (webSearch) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    params.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 } as any]
+    params.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxSearches } as any]
   }
 
   const extractText = (msg: Anthropic.Message) =>

@@ -190,3 +190,52 @@ Responde ÚNICAMENTE con este JSON: {"accept":true|false,"reason":"una frase"}`
     return null
   }
 }
+
+// ───────────────────────── Investigador de noticias (web) ─────────────────────────
+
+export interface DiscoveredNews { title: string; link: string; publishedAt: Date; source: string }
+
+/**
+ * Busca en la web noticias de los últimos 7 días de contabilidad, impuestos y pequeños negocios (más allá de
+ * los feeds fijos). Lo que devuelve NO se publica por confiar en la IA: cada noticia se abre y se verifica
+ * después (la página existe, es esa noticia y su fecha coincide).
+ */
+export async function discoverNews(input: {
+  companyName: string
+  targetAudience: string
+  contentPillars: string[]
+  pastTopics: string[]
+}): Promise<DiscoveredNews[]> {
+  if (!process.env.ANTHROPIC_API_KEY) return []
+  const today = new Date().toISOString().slice(0, 10)
+  const prompt = `Eres el investigador de noticias de "${input.companyName}". Hoy es ${today}.
+Público: ${input.targetAudience}
+Pilares: ${input.contentPillars.join(', ') || 'impuestos y contabilidad para negocios'}
+${input.pastTopics.length ? `Temas que YA publicamos (no repetir): ${input.pastTopics.slice(0, 40).join('; ')}\n` : ''}
+Busca en la web NOTICIAS PUBLICADAS EN LOS ÚLTIMOS 7 DÍAS (con fecha de publicación visible en la página) sobre impuestos, contabilidad, nómina, formación de negocios y finanzas para pequeños negocios y trabajadores independientes en EE.UU. (incluye dueños latinos, ITIN y LLC).
+Fuentes permitidas: oficiales (irs.gov, sba.gov, fincen.gov, dol.gov, treasury.gov, ssa.gov, sitios de estados) o medios de contabilidad reconocidos (journalofaccountancy.com, cpapracticeadvisor.com, accountingtoday.com, etc.). Nada de blogs personales, páginas de ventas, foros ni contenido sin fecha.
+Para cada noticia: el titular EXACTO tal como aparece en la página, la URL EXACTA de esa noticia (no una portada ni un listado), la fecha de publicación que viste (AAAA-MM-DD) y el nombre de la fuente. No inventes: si no estás seguro de la fecha o de la URL, no la incluyas. Si no hay nada reciente y confiable, responde [].
+Responde ÚNICAMENTE con este JSON array (máximo 4):
+[{"title":"…","url":"https://…","date":"AAAA-MM-DD","source":"…"}]`
+  try {
+    const text = await callClaude({ model: AI_MODEL_SMART, messages: [{ role: 'user', content: prompt }], maxTokens: 1500, webSearch: true, maxSearches: 5 })
+    const start = text.indexOf('[')
+    const end = text.lastIndexOf(']')
+    if (start === -1 || end <= start) return []
+    const arr = JSON.parse(text.slice(start, end + 1)) as unknown[]
+    const out: DiscoveredNews[] = []
+    for (const i of arr) {
+      if (typeof i !== 'object' || i === null) continue
+      const o = i as Record<string, unknown>
+      const link = asStr(o.url, 500)
+      const title = asStr(o.title, 300)
+      const date = new Date(`${asStr(o.date, 10)}T12:00:00Z`)
+      if (!/^(https:\/\/|http:\/\/localhost[:/])/.test(link) || !title || isNaN(date.getTime())) continue
+      out.push({ title, link, publishedAt: date, source: asStr(o.source, 80) })
+    }
+    return out.slice(0, 4)
+  } catch (err) {
+    console.error('[discover-news]', err)
+    return []
+  }
+}

@@ -42,3 +42,6 @@ La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra
 
 ## Calendario
 **Command Center → 📅 Calendario:** lo publicado, programado y por aprobar de cada día del mes, por empresa, con sus redes, el enlace al post publicado y la fuente.
+
+## Búsqueda de noticias en la web
+Además de las fuentes fijas (`NEWS_FEED_URLS`), el investigador de noticias busca en la web (Sonnet + búsqueda) noticias de los últimos 7 días de impuestos, contabilidad, nómina y pequeños negocios, solo de fuentes oficiales o medios de contabilidad reconocidos. **No se confía en lo que devuelve:** cada noticia se abre y debe cumplir que la página exista, sea esa noticia y MUESTRE una fecha que coincida (±2 días); luego pasa por la memoria de temas y el revisor. Lo inventado o con fecha dudosa se descarta con su motivo. Funciona aunque no haya feeds configurados. El post trae "Fuente verificada en la web (nombre)" con fecha y enlace.
