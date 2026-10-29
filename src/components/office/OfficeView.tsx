@@ -49,6 +49,24 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [focus, setFocus] = useState<string>('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
+  const [full, setFull] = useState(false)
+  const stageRef = useRef<HTMLDivElement>(null)
+  // Pantalla completa real si el navegador deja (iPhone no); si no, el panel igual cubre toda la ventana.
+  const toggleFull = () => {
+    const next = !full
+    setFull(next)
+    try {
+      if (next) void stageRef.current?.requestFullscreen?.().catch(() => {})
+      else if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    } catch { /* sin pantalla completa nativa */ }
+  }
+  useEffect(() => {
+    const onFs = () => { if (!document.fullscreenElement) setFull(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false) }
+    document.addEventListener('fullscreenchange', onFs)
+    window.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('fullscreenchange', onFs); window.removeEventListener('keydown', onKey) }
+  }, [])
   const [playing, setPlaying] = useState(false)
   const [demoDay, setDemoDay] = useState(1)
   const [demoMin, setDemoMin] = useState(7 * 60)
@@ -160,7 +178,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="relative h-[56vh] min-h-[380px] lg:h-[660px]">
+        <div ref={stageRef} className={full ? 'fixed inset-0 z-[100] bg-[#0d1220] p-2' : 'relative h-[56vh] min-h-[380px] lg:h-[660px]'}>
           <OfficeScene
             departments={departments}
             focus={focus}
@@ -179,6 +197,14 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             {hh(clockMin)}
             <small className="block text-[10px] font-normal text-zinc-400">{DAY_NAMES[clockDay]}{demo ? ' · demostración' : ' · hora Colombia'}</small>
           </div>
+          <button
+            type="button"
+            onClick={toggleFull}
+            aria-label={full ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            className="absolute left-3 top-3 rounded-lg border border-zinc-700 bg-[#0d1220]/85 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:border-indigo-400"
+          >
+            {full ? '✕ Salir' : '⛶ Pantalla completa'}
+          </button>
           <p className="absolute bottom-2 left-3 rounded bg-[#0d1220]/80 px-2 py-1 text-[11px] text-zinc-400">Arrastra para girar · rueda o pellizco para acercar · toca a un agente o a tu oficina</p>
         </div>
 
