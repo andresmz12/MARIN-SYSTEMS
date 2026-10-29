@@ -590,9 +590,20 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
             ))}
             {vs.palette.length < 5 && (
               <>
-                <input type="color" value={vsColor} onChange={(e) => setVsColor(e.target.value)} className="w-8 h-7 bg-transparent border border-zinc-700 rounded cursor-pointer" />
+                <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(vsColor) ? vsColor : "#000000"} onChange={(e) => setVsColor(e.target.value)} className="w-8 h-7 bg-transparent border border-zinc-700 rounded cursor-pointer" />
+                <input
+                  value={vsColor}
+                  onChange={(e) => {
+                    const v = e.target.value.trim()
+                    setVsColor(v.startsWith('#') ? v : `#${v}`)
+                  }}
+                  maxLength={7}
+                  placeholder="#c99a2e"
+                  aria-label="Código del color"
+                  className="w-24 bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs font-mono text-zinc-200"
+                />
                 <button
-                  onClick={() => { if (!vs.palette.includes(vsColor)) setVs({ ...vs, palette: [...vs.palette, vsColor] }) }}
+                  onClick={() => { const c = vsColor.toLowerCase(); if (/^#[0-9a-f]{6}$/.test(c) && !vs.palette.includes(c)) setVs({ ...vs, palette: [...vs.palette, c] }); else if (!/^#[0-9a-f]{6}$/.test(c)) showToast('Escribe el color con 6 letras o números, ej: #c99a2e', 'error') }}
                   className="text-xs text-zinc-200 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
                 >
                   + Agregar color
