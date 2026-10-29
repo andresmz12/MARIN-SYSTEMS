@@ -17,7 +17,7 @@ const Schema = z.object({
     cta: z.string().trim().max(80).optional(),
     face: z.boolean().optional(),
   }).optional(),
-  slides: z.array(z.object({ title: z.string().trim().min(1).max(120), body: z.string().trim().max(400).optional() })).max(10).optional(),
+  slides: z.array(z.object({ title: z.string().trim().min(1).max(120), body: z.string().trim().max(400).optional(), visual: z.string().trim().max(300).optional() })).max(10).optional(),
   copy: z.string().min(1).optional(),
   scheduledDate: z.string().nullable().optional(),
   publishedAt: z.string().nullable().optional(),

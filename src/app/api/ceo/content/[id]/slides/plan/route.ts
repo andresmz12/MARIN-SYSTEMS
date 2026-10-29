@@ -30,13 +30,15 @@ REGLAS:
 - De 6 a 8 láminas en total: 1 portada con un gancho fuerte, de 4 a 6 láminas de contenido y 1 lámina final con la acción ("Guarda este post" y una invitación a escribirnos).
 - UNA sola idea por lámina. Título corto (máximo 8 palabras) y, si hace falta, un texto de apoyo de máximo 25 palabras.
 - Explica cada sigla en español la primera vez que aparece. Incluye al menos una lámina con un ejemplo con números (marcado como ejemplo de referencia) y una con quién califica o quién no.
+- Para CADA lámina propone una imagen ("visual"): una escena o ilustración concreta y relevante, en inglés, sin texto escrito (ej: "a restaurant server counting tips at the end of a shift, warm flat illustration"). La portada y la lámina final pueden usar a nuestra vocera (la mujer de la foto de referencia); las demás NO llevan caras, usan escenas, objetos e íconos.
+- Vocabulario de latinos en EE.UU.: "impuestos", "preparación de impuestos", "declarar tus impuestos", "contador". NO uses "asesoría fiscal", "Hacienda", "fisco" ni "declaración de la renta".
 - Usa SOLO datos del post; no inventes montos, fechas ni requisitos.
 - Acentos y signos ¿ ¡ correctos. Nada de texto en inglés salvo nombres oficiales de formularios.
 
 Responde ÚNICAMENTE con este JSON:
-{"slides":[{"title":"…","body":"…"}]}`
+{"slides":[{"title":"…","body":"…","visual":"…"}]}`
 
-    const text = await callClaude({ model: AI_MODEL_SMART, messages: [{ role: 'user', content: prompt }], maxTokens: 1800 })
+    const text = await callClaude({ model: AI_MODEL_SMART, messages: [{ role: 'user', content: prompt }], maxTokens: 2400 })
     const parsed = extractJson(text) as { slides?: unknown } | null
     const slides = parseSlides(parsed?.slides)
     if (slides.length < 3) return NextResponse.json({ error: 'La IA no devolvió un carrusel válido, intenta de nuevo' }, { status: 502 })

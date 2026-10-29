@@ -169,6 +169,8 @@ export function imagePlatformOf(post: { platform: string; groupId?: string | nul
 export interface Slide {
   title: string
   body?: string
+  /** Imagen o ilustración sugerida para la lámina (en inglés, sin texto escrito). */
+  visual?: string
 }
 
 export const MAX_SLIDES = 10
@@ -182,7 +184,8 @@ export function parseSlides(raw: unknown): Slide[] {
     const title = clean(o.title)
     if (!title) continue
     const body = clean(o.body)
-    out.push({ title, ...(body ? { body } : {}) })
+    const visual = clean(o.visual)
+    out.push({ title, ...(body ? { body } : {}), ...(visual ? { visual } : {}) })
   }
   return out.slice(0, MAX_SLIDES)
 }
@@ -201,7 +204,8 @@ export function buildCarouselPrompt(input: { brandName: string; slides: Slide[];
     '',
     `VISUAL STYLE: ${style.style || 'clean, modern and professional'}.`,
     `COLOR PALETTE: ${style.palette?.length ? style.palette.join(', ') : 'a cohesive palette of 2-3 colors'}; strong contrast between text and background.`,
-    'DESIGN SYSTEM: the same background treatment, fonts, colors, margins and icon style on every slide so they look like one set. Bold modern sans-serif, very large readable text on a phone, ONE idea per slide, a small slide counter (e.g. 2/' + total + ') in a corner and a subtle swipe arrow on all but the last slide.',
+    'DESIGN SYSTEM: the same background treatment, fonts, colors, margins and illustration style on every slide so they look like one set. Bold modern sans-serif, very large readable text on a phone, ONE idea per slide, a small slide counter (e.g. 2/' + total + ') in a corner and a small swipe arrow icon (an arrow only, no words) on all but the last slide.',
+    'IMAGES: do NOT make text-only slides. Generate a real image or illustration for EVERY slide (a polished flat or semi-realistic illustration, an icon scene or a photo-style picture), always in the same visual style, placed so the text stays perfectly readable (e.g. the image fills the top or bottom half, or sits behind a soft overlay). Use the image suggested for each slide below.',
     input.face
       ? 'COVER: use the woman in the attached reference photo (keep her face and features identical) next to the headline. The other slides have NO people.'
       : 'No people or faces on any slide; use simple line icons and shapes.',
@@ -212,8 +216,10 @@ export function buildCarouselPrompt(input: { brandName: string; slides: Slide[];
     const role = i === 0 ? 'COVER' : i === total - 1 ? 'LAST SLIDE (call to action)' : 'CONTENT'
     lines.push(`Slide ${i + 1} of ${total} · ${role}`, `  Title (large, bold): ${q(s.title)}`)
     if (s.body) lines.push(`  Text: ${q(s.body)}`)
+    if (s.visual) lines.push(`  Image to generate (no text inside it): ${s.visual}`)
   })
   if (style.handle) lines.push('', `Small footer on every slide: ${q(style.handle)}`)
+  lines.push('', 'NO EXTRA TEXT: do not add category labels, taglines, section names, logos with words, or any phrase that is not listed above (for example never write "Asesoría Fiscal"). The only text allowed on a slide is its own title and text, the slide counter and the footer.')
   lines.push('', `AVOID: watermarks, fake logos, gibberish or misspelled text, extra words${style.avoid ? `, ${style.avoid}` : ''}.`, 'Output the finished slides so each one can be exported as a PNG.')
   return lines.join('\n')
 }

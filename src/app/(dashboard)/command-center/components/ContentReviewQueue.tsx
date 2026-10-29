@@ -272,7 +272,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   }
 
   async function saveSlides(id: string, slides: Slide[]) {
-    const clean = slides.map((x) => ({ title: x.title.trim(), ...(x.body?.trim() ? { body: x.body.trim() } : {}) })).filter((x) => x.title)
+    const clean = slides.map((x) => ({ title: x.title.trim(), ...(x.body?.trim() ? { body: x.body.trim() } : {}), ...(x.visual?.trim() ? { visual: x.visual.trim() } : {}) })).filter((x) => x.title)
     const res = await fetch(`/api/ceo/content/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -938,6 +938,13 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                             rows={2}
                             placeholder="Texto de apoyo (opcional)"
                             className="w-full bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200 resize-none"
+                          />
+                          <input
+                            value={sl.visual ?? ''}
+                            onChange={(e) => setSlideDraft((m) => ({ ...m, [post.id]: slidesOf(post).map((x, j) => (j === i ? { ...x, visual: e.target.value } : x)) }))}
+                            onBlur={() => saveSlides(post.id, slidesOf(post))}
+                            placeholder="Imagen que generará Gemini (en inglés, sin texto)"
+                            className="w-full bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-sky-200"
                           />
                         </div>
                       ))}
