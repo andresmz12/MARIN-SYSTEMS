@@ -50,6 +50,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
     })
 
+    // Si la IA falló, generateMarketingContent devuelve un texto de relleno:
+    // nunca debe pisar el post real.
+    if (generated.copy.includes('[Contenido de ')) {
+      return NextResponse.json(
+        { error: 'La IA no devolvió contenido válido. Tu post quedó como estaba; intenta de nuevo en un momento.' },
+        { status: 502 },
+      )
+    }
+
     const data = {
       copy: generated.copy,
       hashtags: generated.hashtags,
