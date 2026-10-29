@@ -70,6 +70,7 @@ export function parseFeed(xml: string): NewsItem[] {
 
 const MONTHS: Record<string, number> = {
   january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
   enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5, julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
 }
 
@@ -85,7 +86,7 @@ function datesIn(chunk: string): { at: number; date: Date }[] {
   while ((m = iso.exec(noTags))) add(m.index, new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)))
   const es = /\b(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(20\d{2})\b/gi
   while ((m = es.exec(noTags))) if (MONTHS[m[2].toLowerCase()] !== undefined) add(m.index, new Date(Date.UTC(+m[3], MONTHS[m[2].toLowerCase()], +m[1], 12)))
-  const en = /\b([A-Za-z]+)\s+(\d{1,2}),\s+(20\d{2})\b/g
+  const en = /\b([A-Za-z]+)\.?\s+(\d{1,2}),\s+(20\d{2})\b/g
   while ((m = en.exec(noTags))) if (MONTHS[m[1].toLowerCase()] !== undefined) add(m.index, new Date(Date.UTC(+m[3], MONTHS[m[1].toLowerCase()], +m[2], 12)))
   const us = /\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g
   while ((m = us.exec(noTags))) add(m.index, new Date(Date.UTC(+m[3], +m[1] - 1, +m[2], 12)))
@@ -120,11 +121,63 @@ export function parseListingHtml(html: string, baseUrl: string): NewsItem[] {
     // Los enlaces de menú ("Sala de prensa", "Comunicados de prensa...") son cortos o son listados.
     if (title.length < 25 || /^(news ?releases?|comunicados|sala de prensa|newsroom|ver |más |read more)/i.test(title)) continue
     seen.add(path)
-    const from = Math.max(0, m.index - 400)
-    const around = body.slice(from, Math.min(body.length, m.index + m[0].length + 400))
-    out.push({ title, link: url.toString(), summary: '', publishedAt: findDate(around, m.index - from + m[0].length / 2) })
+    // La fecha de una noticia está DESPUÉS de su título (p. ej. "IR-2026-128, Oct. 23, 2026 — …") y antes del
+    // siguiente enlace. Nunca se toma la de una fila vecina: sin fecha propia, la noticia no se considera nueva.
+    const start = m.index + m[0].length
+    const nextLink = body.slice(start).search(/<a\s/i)
+    const after = body.slice(start, start + (nextLink === -1 ? 400 : Math.min(nextLink, 400)))
+    const dates = datesIn(after).sort((a, b) => a.at - b.at)
+    out.push({ title, link: url.toString(), summary: '', publishedAt: dates[0]?.date ?? null })
   }
   return out
+}
+
+const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ')
+const words = (t: string) => Array.from(new Set(norm(t).split(/\s+/).filter((w) => w.length >= 4)))
+
+export interface ArticleCheck {
+  ok: boolean
+  /** Por qué se descartó (para el registro de la corrida). */
+  reason?: string
+  text: string
+  date: Date | null
+  /** Número de comunicado del IRS (ej. IR-2026-128), si lo trae. */
+  releaseId?: string
+}
+
+/**
+ * Verifica una noticia ANTES de escribir sobre ella: que el enlace abra de verdad, que la página sea ESA noticia
+ * (el título coincide) y que su fecha sea la que dice el listado. Pura: recibe el HTML ya descargado.
+ */
+export function checkArticleHtml(html: string, item: { title: string; publishedAt: Date | null }): ArticleCheck {
+  const main = html.match(/<main[\s\S]*?<\/main>/i)?.[0] ?? html
+  const clean = main.replace(/<(script|style|nav|footer|header)[\s\S]*?<\/\1>/gi, ' ')
+  const heading = stripHtml(clean.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '')
+  const text = Array.from(clean.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)).map((p) => stripHtml(p[1])).filter((p) => p.length > 60).join(' ').slice(0, 4000)
+  const wanted = words(item.title)
+  const have = new Set(words(heading))
+  const overlap = wanted.length ? wanted.filter((w) => have.has(w)).length / wanted.length : 0
+  if (overlap < 0.6) return { ok: false, reason: `la página no corresponde a la noticia ("${heading.slice(0, 80)}")`, text, date: null }
+  if (text.length < 300) return { ok: false, reason: 'la página casi no tiene texto', text, date: null }
+  const releaseId = clean.match(/\bIR-\d{4}-\d{1,4}\b/)?.[0]
+  const pageDates = datesIn(clean.replace(/<[^>]*>/g, ' ')).map((d) => d.date)
+  const DAY = 24 * 60 * 60 * 1000
+  const date = item.publishedAt
+    ? pageDates.find((d) => Math.abs(d.getTime() - item.publishedAt!.getTime()) <= 2 * DAY) ?? null
+    : null
+  if (!date) return { ok: false, reason: 'la fecha de la página no coincide con la del listado', text, date: null, releaseId }
+  return { ok: true, text, date, releaseId }
+}
+
+/** Descarga el enlace y lo verifica (ver checkArticleHtml). */
+export async function verifyArticle(item: { title: string; link: string; publishedAt: Date | null }): Promise<ArticleCheck> {
+  try {
+    const res = await fetch(item.link, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { 'User-Agent': 'CorporacionMarin/1.0 (+news-watch)' } })
+    if (!res.ok) return { ok: false, reason: `el enlace respondió HTTP ${res.status}`, text: '', date: null }
+    return checkArticleHtml((await res.text()).slice(0, MAX_FEED_BYTES), item)
+  } catch (e) {
+    return { ok: false, reason: `no se pudo abrir el enlace (${e instanceof Error ? e.message : 'error'})`, text: '', date: null }
+  }
 }
 
 /** Texto principal de un artículo (para darle a la IA algo más que el titular). */

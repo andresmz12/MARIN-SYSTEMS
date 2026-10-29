@@ -373,6 +373,7 @@ export async function generateMarketingContent(input: ContentGenerationInput): P
 
   const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}${knowledgeLine}${referencesLine}${feedbackLine}
 
+Hoy es ${new Date().toISOString().slice(0, 10)}.
 CALIDAD EDITORIAL (obligatoria): el post debe enseñar algo concreto que la persona no sabía, no repetir un titular.
 - Explica en español simple CADA sigla o término técnico la primera vez que aparece, con su nombre completo (ej: "EITC, el crédito por ingreso del trabajo"). Nunca dejes una sigla sin explicar, ni en el texto ni dentro de la imagen.
 - Incluye un EJEMPLO concreto con números cuando los datos lo permitan (ej: "Una familia con 2 hijos y un ingreso de $45,000 podría recibir…"), marcado como ejemplo de referencia.
@@ -381,7 +382,7 @@ CALIDAD EDITORIAL (obligatoria): el post debe enseñar algo concreto que la pers
 - Si la fuente es un resumen general de una ley o de varias medidas, NO las enumeres todas de forma superficial: elige UNA medida concreta (la que más afecta a nuestra audiencia) y explícala a fondo; menciona que hay más y que pueden escribirnos. Mejor una cosa bien explicada que cinco a medias.
 - Piensa en un post que valga la pena GUARDAR: una lista, un paso a paso o un dato que la persona querrá volver a consultar. Cierra invitando a guardarlo o a escribirnos.
 - Sin relleno ni frases vacías ("es clave revisar"). Cada línea debe aportar un dato, una explicación o una acción.
-- Todo texto que irá escrito en la imagen va en español; solo los nombres oficiales de formularios y créditos pueden ir en inglés, y siempre con su explicación en español.${input.research ? '\n- Antes de escribir, BUSCA en la web en fuentes oficiales (irs.gov y similares) los detalles concretos: montos del año, requisitos, fechas y un ejemplo. Si un dato no está en una fuente oficial, no lo afirmes. Cada dato va en "facts" con su fuente.' : ''}
+- Todo texto que irá escrito en la imagen va en español; solo los nombres oficiales de formularios y créditos pueden ir en inglés, y siempre con su explicación en español.${input.research ? '\n- Antes de escribir, BUSCA en la web en fuentes oficiales (irs.gov y similares) los detalles concretos: montos del año, requisitos, fechas y un ejemplo. Si un dato no está en una fuente oficial, no lo afirmes. Cada dato va en "facts" con su fuente. Usa SOLO información vigente: indica el año de cada monto o fecha y nunca presentes como novedad algo de años anteriores. Si no encuentras información actual y oficial sobre el tema, dilo en \"contentNotes\" en vez de inventar.' : ''}
 
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}

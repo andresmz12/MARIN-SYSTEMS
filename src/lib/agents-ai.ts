@@ -55,7 +55,7 @@ Texto del post:
 """${input.copy.slice(0, 2500)}"""
 ${input.imageHeadline ? `Titular de la imagen: "${input.imageHeadline}"\n` : ''}Datos que declara el post:
 ${claims.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-${input.sourceUrl ? `Fuente original de la noticia: ${input.sourceUrl}\n` : ''}${input.library.length ? `\nBiblioteca del dueño (fuente confiable):\n${input.library.map((k, i) => `[${i + 1}] ${k}`).join('\n')}\n` : ''}
+${input.sourceUrl ? `Fuente original de la noticia: ${input.sourceUrl}\nHoy es ${new Date().toISOString().slice(0, 10)}. Abre esa fuente: confirma que el enlace corresponde a la noticia de la que habla el post y que su fecha es reciente. Si el post la presenta como una novedad y NO lo es (es una noticia vieja o una página fija), o el enlace no corresponde, agrega ese dato como "incorrecto" explicando por qué.\n` : ''}${input.library.length ? `\nBiblioteca del dueño (fuente confiable):\n${input.library.map((k, i) => `[${i + 1}] ${k}`).join('\n')}\n` : ''}
 Para CADA dato concreto (montos, fechas, formularios, porcentajes, plazos, requisitos) del texto, del titular y de la lista, verifícalo con fuentes oficiales (IRS.gov, la biblioteca o la fuente indicada) y clasifícalo:
 - "confirmado": coincide con una fuente oficial.
 - "dudoso": no pudiste confirmarlo del todo o depende de la situación de cada persona.

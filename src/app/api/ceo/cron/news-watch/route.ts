@@ -5,14 +5,14 @@ import { generateMarketingContent } from '@/lib/ai'
 import { buildGroupDrafts, factCheckGroup, latestInsights, recentFeedback, referenceLines } from '@/lib/auto-content'
 import { knowledgeFor } from '@/lib/knowledge'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
-import { fetchArticleText, fetchFeed, newsFeedUrls, type NewsItem } from '@/lib/news'
+import { fetchFeed, newsFeedUrls, verifyArticle, type NewsItem } from '@/lib/news'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
 
 export const maxDuration = 300
 
 // Solo noticias recientes: una noticia vieja ya no es "noticia".
-const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
+const MAX_AGE_MS = 4 * 24 * 60 * 60 * 1000
 // Tope por empresa y por corrida, para no inundar la bandeja de aprobación.
 const MAX_PER_RUN = 2
 const MAX_PENDING_NEWS = 6
@@ -48,19 +48,19 @@ async function handler(req: Request) {
     if (feedErrors.length === feeds.length) throw new Error(`No se pudo leer ninguna fuente: ${feedErrors.join(' | ')}`)
 
     const cutoff = Date.now() - MAX_AGE_MS
-    // Una página de listado sin fecha en cada noticia ("comunicados del mes"): se toman como nuevas
-    // y la deduplicación por enlace evita repetirlas.
+    // Solo cuenta lo que trae SU PROPIA fecha y es reciente. Sin fecha (menús, páginas fijas como un resumen
+    // de una ley) NO es noticia: antes se trataban como nuevas y salían notas viejas.
+    const now = Date.now()
     const fresh = items
-      .map((i) => ({ ...i, publishedAt: i.publishedAt ?? new Date() }))
-      .filter((i) => i.publishedAt.getTime() >= cutoff)
-      .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
+      .filter((i): i is NewsItem & { publishedAt: Date } => !!i.publishedAt && i.publishedAt.getTime() >= cutoff && i.publishedAt.getTime() <= now + 24 * 60 * 60 * 1000)
+      .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
 
     const profiles = await prisma.brandProfile.findMany({
       where: { newsEnabled: true },
       include: { company: { select: { id: true, name: true } } },
     })
 
-    const summary: { company: string; created: number; skipped?: string; error?: string }[] = []
+    const summary: { company: string; created: number; skipped?: string; error?: string; rejected?: string[] }[] = []
 
     for (const profile of profiles) {
       const name = profile.company.name
@@ -83,7 +83,7 @@ async function handler(req: Request) {
             select: { sourceUrl: true },
           })).map((r) => r.sourceUrl),
         )
-        const todo = fresh.filter((i) => !known.has(i.link)).slice(0, MAX_PER_RUN)
+        const todo = fresh.filter((i) => !known.has(i.link))
         if (todo.length === 0) {
           summary.push({ company: name, created: 0, skipped: 'sin noticias nuevas' })
           continue
@@ -95,15 +95,27 @@ async function handler(req: Request) {
         const references = referenceLines(profile.references)
         const feedback = [...(await recentFeedback(profile.companyId)), ...(await latestInsights(profile.companyId))]
         let created = 0
+        let made = 0
+        const rejected: string[] = []
 
         for (const item of todo) {
-          if (!item.summary) item.summary = await fetchArticleText(item.link)
+          if (made >= MAX_PER_RUN) break
+          // Antes de escribir: el enlace abre, es ESA noticia y su fecha coincide. Si no, se descarta.
+          const check = await verifyArticle(item)
+          if (!check.ok) {
+            rejected.push(`"${item.title.slice(0, 60)}": ${check.reason}`)
+            continue
+          }
+          made++
+          item.summary = check.text
+          const published = check.date!.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+          const sourceLine = `Fuente oficial verificada: "${item.title}" (${check.releaseId ? `${check.releaseId}, ` : ''}publicada el ${published}) ${item.link}`
           const generated = await generateMarketingContent({
             companyName: name,
             platform: GROUP_IMAGE_PLATFORM,
             contentType: 'post',
             topic: [
-              `NOTICIA OFICIAL para explicar a nuestra audiencia: "${item.title}".`,
+              `NOTICIA OFICIAL para explicar a nuestra audiencia: "${item.title}", publicada el ${published}.`,
               item.summary ? `Resumen de la fuente: ${item.summary}` : '',
               `Fuente: ${item.link}.`,
               'Usa los datos de este texto y completa los detalles con la fuente oficial (irs.gov): quién califica, montos, fechas y un ejemplo con números. No inventes nada: si un dato importante no aparece en una fuente oficial, no lo afirmes. Pon en "facts" cada dato concreto (montos, fechas, formularios) con su fuente, para que el dueño lo verifique.',
@@ -119,6 +131,7 @@ async function handler(req: Request) {
             forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
           })
           if (generated.copy.includes('[Contenido de ')) throw new Error('La IA no devolvió contenido válido')
+          generated.facts = [sourceLine, ...generated.facts].slice(0, 7)
 
           const drafts = buildGroupDrafts({
               userId: profile.userId,
@@ -138,7 +151,7 @@ async function handler(req: Request) {
           const notify = await sendContentReadyEmail({ companyName: name, count: 1, pendingTotal: pending, newsTitle: item.title })
           if (!notify.success) console.error('[cron/news-watch] aviso por correo falló:', notify.error)
         }
-        summary.push({ company: name, created })
+        summary.push({ company: name, created, ...(rejected.length ? { rejected } : {}) })
       } catch (err) {
         console.error(`[cron/news-watch] ${name}`, err)
         summary.push({ company: name, created: 0, error: String(err) })
