@@ -31,7 +31,7 @@ La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra
 
 ### Oficina 3D: un solo espacio con áreas
 - Un piso abierto con ventanales, dividido en áreas con alfombra y mamparas de vidrio: Monitoreo, una por empresa (con sus agentes) y Finanzas. La oficina de cristal de Andrés Marín (CEO) va aparte, elevada, con una pantalla de lo que necesita su decisión.
-- **Área de descanso:** sofás, sillones y mesa de centro; quien no está trabajando (fuera de horario, de 11 PM a 7 AM o sin tareas) camina hasta allí y se recuesta; al volver a trabajar regresa a su escritorio. Si hay más agentes que asientos, el resto duerme en su puesto.
+- **Sala de descanso:** TV grande con sofá, sillones y puf, zona de juegos (billar, ping-pong, futbolito, arcade), bar de café, agua, impresora y la pizarra con la agenda; quien no está trabajando (fuera de horario, de 11 PM a 7 AM o sin tareas) camina hasta allí y se recuesta; al volver a trabajar regresa a su escritorio. Si hay más agentes que asientos, el resto duerme en su puesto.
 - Las personas están hechas con código (sin modelos externos), con rasgos propios por agente. Trabajan tecleando con las dos manos, descansan con la cabeza baja y levantan la mano cuando algo falla.
 - Nombres: Monitoreo usa los nombres de cada agente (Luisa, Ángela, Alejandro...); en marketing se asignan de la lista Juan, Fernanda, Felipe, Samantha, Tomás, María e Isabel (ver `PEOPLE` en `src/lib/office.ts`).
 

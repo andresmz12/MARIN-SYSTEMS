@@ -34,6 +34,9 @@ const ZONE_GAP = 2.6
 const CEO_W = 9.6
 const CEO_D = 6.4
 const PLATFORM_H = 0.35
+/** Tamaño reservado para la sala de descanso. */
+const LOUNGE_W = 17
+const LOUNGE_D = 12.6
 
 interface ZonePlan {
   dept: OfficeDepartment
@@ -89,10 +92,14 @@ export function planOffice(depts: OfficeDepartment[]): Plan {
   const maxX = Math.max(CEO_W / 2, ...zones.map((z) => z.cx + z.w / 2))
   const minX = Math.min(-CEO_W / 2, ...zones.map((z) => z.cx - z.w / 2))
   const ceo = { x: maxX - CEO_W / 2, z: maxZ + 1.8 + CEO_D / 2 }
+  // La sala de descanso (TV, juegos y bar) ocupa el fondo, a la izquierda de la oficina del CEO: si no cabe, el piso crece.
+  const ceoLeft = ceo.x - CEO_W / 2 - 0.8
+  const floorMinX = Math.min(minX - 2.2, ceoLeft - LOUNGE_W - 1.2)
+  const floorMaxZ = Math.max(ceo.z + CEO_D / 2 + 1.6, maxZ + LOUNGE_D + 1.0)
   return {
     zones,
     ceo,
-    floor: { minX: minX - 2.2, maxX: maxX + 2.2, minZ: -2.2, maxZ: ceo.z + CEO_D / 2 + 1.6 },
+    floor: { minX: floorMinX, maxX: maxX + 2.2, minZ: -2.2, maxZ: floorMaxZ },
   }
 }
 
@@ -225,7 +232,7 @@ interface Move {
   from?: Pt
 }
 
-interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string }
+interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number }
 
 interface Actor {
   id: string
@@ -543,43 +550,249 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     plant(-3.9, 2.0, cg, 0.9)
     root.add(cg)
 
-    // ── Zona de descanso: agua, café, impresora y pizarra con los horarios del equipo ──
-    const breakX0 = floor.minX + 3.2
-    const breakMaxX = plan.ceo.x - CEO_W / 2 - 1.8
-    const hasBreak = breakMaxX - breakX0 > 9
+    const plantAt = (x: number, z: number, sc = 1) => plant(x, z, root, sc)
+    // ── Sala de descanso: TV con sofás, zona de juegos (billar, ping-pong, futbolito, arcade) y bar de café ──
     const propRects: Rect[] = []
     let coffeePoint: Pt | null = null
     let lounge: { seats: LoungeSeat[] } | null = null
-    if (hasBreak) {
-      const wz = floor.maxZ - 1.5
-      const cooler = new THREE.Group()
-      put(box(0.5, 0.9, 0.5, 0xf1f3f6), 0, 0.45, 0, cooler)
-      put(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.55, 14), new THREE.MeshStandardMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.75 })), 0, 1.18, 0, cooler)
-      put(box(0.16, 0.04, 0.12, 0x6fb4e8), 0, 0.7, 0.27, cooler)
-      put(cooler, breakX0, 0, wz, root)
-      propRects.push({ x0: breakX0 - 0.3, x1: breakX0 + 0.3, z0: wz - 0.3, z1: wz + 0.3 })
+    {
+      const X0 = floor.minX + 1.2
+      const MZ = floor.maxZ // pared del fondo
+      const tvX = X0 + 3.8
+      const prop = (cx: number, cz: number, w: number, d: number) => propRects.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 })
+      const rugAt = (w: number, d: number, x: number, z: number, c1: string, c2: string) => {
+        const t = (() => {
+          const cv = document.createElement('canvas')
+          cv.width = 256
+          cv.height = 256
+          const g = cv.getContext('2d')
+          if (g) {
+            g.fillStyle = c1
+            g.fillRect(0, 0, 256, 256)
+            g.strokeStyle = c2
+            g.lineWidth = 10
+            g.strokeRect(14, 14, 228, 228)
+            g.lineWidth = 3
+            g.strokeRect(34, 34, 188, 188)
+          }
+          return new THREE.CanvasTexture(cv)
+        })()
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }))
+        m.rotation.x = -Math.PI / 2
+        m.receiveShadow = true
+        put(m, x, 0.02, z, root)
+      }
+      rugAt(8.6, 6.4, tvX + 0.2, MZ - 4.6, '#cfd8e3', '#7f93ad')
+      rugAt(7.8, 7.4, X0 + 12.9, MZ - 5.9, '#d9e4d3', '#6f9a78')
 
-      const cx2 = breakX0 + 2.8
-      const counter = new THREE.Group()
-      put(box(2.2, 0.95, 0.8, 0xcdac78), 0, 0.475, 0, counter)
-      put(box(2.3, 0.05, 0.9, 0xf3ead8), 0, 0.97, 0, counter)
-      put(box(0.55, 0.55, 0.42, 0x2a2e38), -0.55, 1.27, 0, counter)
-      put(box(0.5, 0.05, 0.4, 0xc23b3b), -0.55, 1.57, 0, counter)
-      ;[0.15, 0.4, 0.65].forEach((dx) => put(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.1, 10), mat(0xf6f6f6)), dx, 1.04, 0.1, counter))
-      put(counter, cx2, 0, wz, root)
-      propRects.push({ x0: cx2 - 1.15, x1: cx2 + 1.15, z0: wz - 0.45, z1: wz + 0.45 })
-      coffeePoint = { x: cx2, z: wz - 1.4 }
+      // — Pared de la TV: panel de madera, pantalla, mueble, bocinas y luz LED —
+      put(box(6.6, 3.7, 0.12, 0x8a5a38), tvX, 2.3, MZ - 0.2, root)
+      for (let i = 0; i < 9; i++) put(box(0.03, 3.7, 0.14, 0x6f4528), tvX - 3.0 + i * 0.75, 2.3, MZ - 0.2, root)
+      const tvTex = (() => {
+        const cv = document.createElement('canvas')
+        cv.width = 1024
+        cv.height = 576
+        const g = cv.getContext('2d')
+        if (g) {
+          const gr = g.createLinearGradient(0, 0, 1024, 576)
+          gr.addColorStop(0, '#1a2a6c')
+          gr.addColorStop(0.5, '#b21f1f')
+          gr.addColorStop(1, '#fdbb2d')
+          g.fillStyle = gr
+          g.fillRect(0, 0, 1024, 576)
+          g.fillStyle = 'rgba(0,0,0,0.35)'
+          g.fillRect(0, 456, 1024, 120)
+          g.fillStyle = '#fff'
+          g.font = '700 62px system-ui, sans-serif'
+          g.fillText('Hora del descanso', 48, 526)
+          g.beginPath()
+          g.arc(512, 250, 72, 0, 7)
+          g.fillStyle = 'rgba(255,255,255,0.85)'
+          g.fill()
+          g.fillStyle = '#b21f1f'
+          g.beginPath()
+          g.moveTo(488, 210)
+          g.lineTo(556, 250)
+          g.lineTo(488, 290)
+          g.fill()
+        }
+        return new THREE.CanvasTexture(cv)
+      })()
+      put(box(4.6, 2.6, 0.1, 0x15171c), tvX, 2.7, MZ - 0.34, root)
+      const tvScr = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 2.4), new THREE.MeshBasicMaterial({ map: tvTex }))
+      tvScr.rotation.y = Math.PI
+      put(tvScr, tvX, 2.7, MZ - 0.41, root)
+      put(box(5.6, 0.8, 0.8, 0x6b4a33), tvX, 0.4, MZ - 0.65, root)
+      put(box(5.7, 0.06, 0.85, 0x4a3223), tvX, 0.83, MZ - 0.65, root)
+      ;[-3.4, 3.4].forEach((dx) => put(box(0.45, 1.4, 0.45, 0x20232a), tvX + dx, 0.7, MZ - 0.7, root))
+      put(box(1.1, 0.12, 0.45, 0x2a2e38), tvX - 1.2, 0.92, MZ - 0.65, root)
+      put(box(5.2, 0.05, 0.05, 0x35e0ff, { emissive: new THREE.Color(0x35e0ff), emissiveIntensity: 1.2 }), tvX, 1.3, MZ - 0.34, root)
+      prop(tvX, MZ - 0.7, 7.4, 0.9)
 
-      const px2 = breakX0 + 5.6
+      // — Muebles —
+      const sofa = (x: number, z: number, rotY: number, color: number, seats: number) => {
+        const w = seats * 0.85 + 0.35
+        const g = new THREE.Group()
+        put(box(w, 0.3, 0.95, deep(color, 0.8)), 0, 0.15, 0, g)
+        put(box(w - 0.35, 0.23, 0.82, color), 0, 0.415, 0.02, g)
+        put(box(w, 0.58, 0.18, deep(color, 0.9)), 0, 0.6, -0.42, g)
+        ;[-1, 1].forEach((sd) => put(box(0.18, 0.5, 0.95, deep(color, 0.85)), sd * (w / 2 - 0.09), 0.28, 0, g))
+        ;[-1, 1].forEach((sd) => { put(box(0.42, 0.34, 0.12, soft(color, 0.55)), sd * (w / 2 - 0.55), 0.74, -0.3, g).rotation.z = sd * 0.12 })
+        g.position.set(x, 0, z)
+        g.rotation.y = rotY
+        root.add(g)
+        contactShadow(w + 0.5, 1.7, x, z, root, 0.2)
+        const horizontal = Math.abs(Math.sin(rotY)) < 0.5
+        prop(x, z, horizontal ? w : 1.0, horizontal ? 1.0 : w)
+      }
+      const armchair = (x: number, z: number, rotY: number, color: number) => {
+        const g = new THREE.Group()
+        put(box(1.05, 0.3, 0.95, deep(color, 0.8)), 0, 0.15, 0, g)
+        put(box(0.72, 0.23, 0.82, color), 0, 0.415, 0.02, g)
+        put(box(1.05, 0.58, 0.18, deep(color, 0.9)), 0, 0.6, -0.42, g)
+        ;[-1, 1].forEach((sd) => put(box(0.16, 0.5, 0.95, deep(color, 0.85)), sd * 0.445, 0.28, 0, g))
+        g.position.set(x, 0, z)
+        g.rotation.y = rotY
+        root.add(g)
+        prop(x, z, 1.1, 1.1)
+      }
+      const beanbag = (x: number, z: number, color: number) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 12), mat(color))
+        m.scale.set(1, 0.72, 1)
+        m.castShadow = true
+        put(m, x, 0.4, z, root)
+        prop(x, z, 1.1, 1.1)
+      }
+      sofa(tvX, MZ - 6.6, 0, 0x5b7a99, 4)
+      armchair(X0 + 0.5, MZ - 4.4, Math.PI / 2, 0x4f8a7b)
+      armchair(X0 + 7.1, MZ - 4.4, -Math.PI / 2, 0x4f8a7b)
+      beanbag(tvX - 1.9, MZ - 2.7, 0xe0b34a)
+      beanbag(tvX + 1.9, MZ - 2.5, 0xc2554b)
+      beanbag(tvX, MZ - 3.1, 0x4a7fb5)
+      put(box(1.8, 0.07, 0.95, 0x7a5a3a), tvX, 0.4, MZ - 4.5, root)
+      ;[[-0.8, -0.38], [0.8, -0.38], [-0.8, 0.38], [0.8, 0.38]].forEach((p) => put(box(0.06, 0.38, 0.06, 0x4a3524), tvX + p[0], 0.19, MZ - 4.5 + p[1], root))
+      put(box(0.1, 0.1, 0.1, 0xf4f4f4), tvX - 0.4, 0.49, MZ - 4.5, root)
+      put(box(0.32, 0.03, 0.24, 0xc2754a), tvX + 0.4, 0.455, MZ - 4.45, root)
+      prop(tvX, MZ - 4.5, 2.0, 1.1)
+      // Rincón de lectura (frente a la izquierda)
+      armchair(X0 + 1.3, MZ - 9.6, Math.PI / 2, 0x6b88a8)
+      put(box(0.7, 0.05, 0.5, 0x6b4a33), X0 + 1.3, 0.62, MZ - 8.4, root)
+      put(box(0.05, 0.62, 0.05, 0x4a3524), X0 + 1.3, 0.31, MZ - 8.4, root)
+      prop(X0 + 1.3, MZ - 8.4, 0.8, 0.6)
+      const lampAt = (x: number, z: number) => {
+        const g = new THREE.Group()
+        put(box(0.05, 1.7, 0.05, 0x2a2e38), 0, 0.85, 0, g)
+        put(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 0.34, 14), new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe3a0, emissiveIntensity: 0.4 })), 0, 1.85, 0, g)
+        put(g, x, 0, z, root)
+      }
+      lampAt(X0 + 0.2, MZ - 10.6)
+      lampAt(tvX + 4.2, MZ - 6.4)
+
+      // — Zona de juegos —
+      const poolX = X0 + 11.0
+      const poolZ = MZ - 5.2
+      const pool = new THREE.Group()
+      put(box(3.6, 0.12, 2.0, 0x6b3f23), 0, 0.86, 0, pool)
+      put(box(3.2, 0.04, 1.6, 0x2f8a56), 0, 0.92, 0, pool)
+      ;[[-1.7, -0.9], [1.7, -0.9], [-1.7, 0.9], [1.7, 0.9], [0, -0.98], [0, 0.98]].forEach((p) => put(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 12), mat(0x0b0c10)), p[0], 0.95, p[1], pool))
+      ;[[-1.6, -0.85], [1.6, -0.85], [-1.6, 0.85], [1.6, 0.85]].forEach((p) => put(box(0.22, 0.84, 0.22, 0x4a2a16), p[0], 0.42, p[1], pool))
+      put(box(3.6, 0.16, 0.14, 0x6b3f23), 0, 0.97, -1.0, pool)
+      put(box(3.6, 0.16, 0.14, 0x6b3f23), 0, 0.97, 1.0, pool)
+      put(box(0.14, 0.16, 2.0, 0x6b3f23), -1.8, 0.97, 0, pool)
+      put(box(0.14, 0.16, 2.0, 0x6b3f23), 1.8, 0.97, 0, pool)
+      ;[[0.5, 0.1, 0xd83b3b], [0.64, 0, 0xe6c229], [0.64, 0.2, 0x2a63d6], [0.78, -0.1, 0x1b1b1f], [0.78, 0.3, 0xe58a2d], [-0.8, 0.05, 0xffffff]].forEach((bl) => put(new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), mat(bl[2] as number)), bl[0] as number, 1.0, bl[1] as number, pool))
+      put(pool, poolX, 0, poolZ, root)
+      contactShadow(4.4, 2.8, poolX, poolZ, root, 0.22)
+      prop(poolX, poolZ, 3.8, 2.2)
+      put(box(2.6, 0.08, 0.7, 0x1c2b22, { emissive: new THREE.Color(0xfff0c0), emissiveIntensity: 0.35 }), poolX, 4.4, poolZ, root)
+      // ping-pong
+      const ppX = X0 + 15.0
+      const pp = new THREE.Group()
+      put(box(2.7, 0.06, 1.5, 0x2563b8), 0, 0.82, 0, pp)
+      put(box(0.03, 0.1, 1.5, 0xffffff), 0, 0.89, 0, pp)
+      put(box(2.6, 0.012, 0.02, 0xffffff), 0, 0.855, 0, pp)
+      ;[[-1.2, -0.6], [1.2, -0.6], [-1.2, 0.6], [1.2, 0.6]].forEach((p) => put(box(0.07, 0.8, 0.07, 0x20232a), p[0], 0.4, p[1], pp))
+      put(box(0.02, 0.18, 1.7, 0xf4f4f4), 0, 0.92, 0, pp)
+      put(pp, ppX, 0, poolZ, root)
+      contactShadow(3.4, 2.2, ppX, poolZ, root, 0.2)
+      prop(ppX, poolZ, 2.9, 1.7)
+      // futbolito
+      const fbX = X0 + 11.0
+      const fbZ = MZ - 9.4
+      const fb = new THREE.Group()
+      fb.rotation.y = Math.PI / 2
+      put(box(2.4, 0.28, 1.3, 0x8a4a24), 0, 0.82, 0, fb)
+      put(box(2.2, 0.04, 1.1, 0x2f8a56), 0, 0.97, 0, fb)
+      for (let i = 0; i < 4; i++) {
+        put(box(0.04, 0.04, 1.6, 0xc8ccd4), -0.7 + i * 0.47, 1.04, 0, fb)
+        put(box(0.1, 0.14, 0.14, i % 2 ? 0xd83b3b : 0x2a63d6), -0.7 + i * 0.47, 1.0, -0.3 + (i % 3) * 0.3, fb)
+      }
+      ;[[-1.0, -0.5], [1.0, -0.5], [-1.0, 0.5], [1.0, 0.5]].forEach((p) => put(box(0.1, 0.7, 0.1, 0x4a2a16), p[0], 0.35, p[1], fb))
+      put(fb, fbX, 0, fbZ, root)
+      contactShadow(2.0, 3.0, fbX, fbZ, root, 0.2)
+      prop(fbX, fbZ, 1.6, 2.7)
+      // máquinas arcade (de cara al frente)
+      const arcade = (x: number, z: number, c1: number, c2: string) => {
+        const a = new THREE.Group()
+        put(box(0.9, 2.1, 0.8, c1), 0, 1.05, 0, a)
+        put(box(0.9, 0.1, 0.9, new THREE.Color(c2).getHex()), 0, 2.1, 0.05, a)
+        const sc = (() => {
+          const cv = document.createElement('canvas')
+          cv.width = 128
+          cv.height = 96
+          const g = cv.getContext('2d')
+          if (g) {
+            g.fillStyle = '#08121c'
+            g.fillRect(0, 0, 128, 96)
+            g.fillStyle = c2
+            for (let i = 0; i < 8; i++) g.fillRect(10 + i * 14, 12 + (i % 3) * 10, 9, 9)
+            g.fillStyle = '#ff5fa8'
+            g.fillRect(56, 70, 18, 8)
+          }
+          return new THREE.CanvasTexture(cv)
+        })()
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.52), new THREE.MeshBasicMaterial({ map: sc }))
+        put(scr, 0, 1.55, 0.41, a)
+        put(box(0.8, 0.08, 0.5, 0x15171c), 0, 1.1, 0.5, a)
+        a.position.set(x, 0, z)
+        a.rotation.y = Math.PI
+        root.add(a)
+        prop(x, z + 0.1, 1.0, 1.1)
+      }
+      arcade(X0 + 14.0, MZ - 10.8, 0x5a3aa8, '#35e0ff')
+      arcade(X0 + 15.1, MZ - 10.8, 0x2a63d6, '#ffcc33')
+      arcade(X0 + 16.2, MZ - 10.8, 0xb83b6b, '#35e0ff')
+
+      // — Bar de café, agua, impresora y la pizarra con la agenda —
+      const barX = X0 + 11.4
+      const bz = MZ - 0.7
+      put(box(2.6, 1.05, 0.9, 0xcdac78), barX, 0.525, bz, root)
+      put(box(2.7, 0.07, 1.0, 0xf3ead8), barX, 1.08, bz, root)
+      put(box(0.55, 0.55, 0.42, 0x2a2e38), barX - 0.7, 1.4, bz, root)
+      put(box(0.5, 0.05, 0.4, 0xc23b3b), barX - 0.7, 1.7, bz, root)
+      ;[0.1, 0.35, 0.6].forEach((dx) => put(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.1, 10), mat(0xf6f6f6)), barX + dx, 1.17, bz - 0.1, root))
+      prop(barX, bz, 2.7, 1.0)
+      const cool = new THREE.Group()
+      put(box(0.5, 0.9, 0.5, 0xf1f3f6), 0, 0.45, 0, cool)
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.55, 14), new THREE.MeshStandardMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.75 })), 0, 1.18, 0, cool)
+      put(cool, X0 + 9.2, 0, bz, root)
+      prop(X0 + 9.2, bz, 0.6, 0.6)
+      put(box(0.9, 1.9, 0.8, 0xd9dde3), X0 + 13.2, 0.95, bz, root)
+      put(box(0.04, 1.1, 0.04, 0x9aa1ad), X0 + 12.8, 1.2, bz - 0.42, root)
+      prop(X0 + 13.2, bz, 1.0, 0.9)
       const printer = new THREE.Group()
       put(box(1.0, 0.8, 0.7, 0xe9e4da), 0, 0.4, 0, printer)
       put(box(0.8, 0.28, 0.5, 0xf4f4f6), 0, 0.94, 0, printer)
       put(box(0.5, 0.02, 0.3, 0xffffff), 0, 1.1, 0.1, printer)
-      put(printer, px2, 0, wz, root)
-      propRects.push({ x0: px2 - 0.55, x1: px2 + 0.55, z0: wz - 0.4, z1: wz + 0.4 })
-
-      // Pizarra con ruedas: los horarios reales de los agentes
-      const bx0 = breakX0 + 8.4
+      put(printer, X0 + 14.7, 0, bz, root)
+      prop(X0 + 14.7, bz, 1.1, 0.8)
+      ;[0, 1].forEach((i) => {
+        put(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 14), mat(0x2a2e38)), barX + 0.2 + i * 1.1, 0.82, bz - 1.4, root)
+        put(box(0.06, 0.8, 0.06, 0x9aa1ad), barX + 0.2 + i * 1.1, 0.4, bz - 1.4, root)
+        prop(barX + 0.2 + i * 1.1, bz - 1.4, 0.5, 0.5)
+      })
+      coffeePoint = { x: barX - 1.0, z: bz - 1.6 }
+      // Pizarra: horarios reales de los agentes (cuelga de la pared, sobre la impresora y el refrigerador)
       const board = document.createElement('canvas')
       board.width = 960
       board.height = 560
@@ -594,76 +807,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         bg.fillRect(40, 100, 300, 8)
         bg.font = '600 38px system-ui, sans-serif'
         const rows: [string, string][] = [['7:00 AM', 'Temas del día'], ['10:00 AM', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–7 AM', 'Todos descansan']]
-        rows.forEach(([a, b], i) => {
+        rows.forEach(([x, y], i) => {
           bg.fillStyle = '#3b6cff'
-          bg.fillText(a, 40, 185 + i * 62)
+          bg.fillText(x, 40, 185 + i * 62)
           bg.fillStyle = '#2a2e38'
-          bg.fillText(b, 340, 185 + i * 62)
+          bg.fillText(y, 340, 185 + i * 62)
         })
       }
       const wb = new THREE.Group()
-      put(box(3.4, 2.0, 0.08, 0xf2f2f2), 0, 1.7, 0, wb)
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.87), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(board) }))
-      face.rotation.y = Math.PI
-      put(face, 0, 1.7, -0.045, wb)
-      ;[-1.4, 1.4].forEach((dx) => put(box(0.08, 1.0, 0.08, 0x6b7280), dx, 0.5, 0, wb))
-      put(wb, bx0, 0, wz + 0.3, root)
-      propRects.push({ x0: bx0 - 1.8, x1: bx0 + 1.8, z0: wz, z1: wz + 0.6 })
+      put(box(3.2, 1.9, 0.08, 0xf2f2f2), 0, 0, 0, wb)
+      const wbFace = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.77), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(board) }))
+      wbFace.rotation.y = Math.PI
+      put(wbFace, 0, 0, -0.045, wb)
+      put(wb, X0 + 16.0, 3.0, MZ - 0.25, root)
+      plantAt(X0 + 8.2, MZ - 1.0, 1.3)
 
-      // ── Área de descanso: sofás, sillones y mesa de centro. Aquí van los agentes cuando no están trabajando ──
-      const zonesMaxZ = plan.ceo.z - 1.8 - CEO_D / 2
-      const lx = breakX0 + 3.7
-      const lz = zonesMaxZ + 4.1
-      const rug = box(9.4, 0.03, 5.8, 0xd9c6a6)
-      rug.castShadow = false
-      put(rug, lx, 0.018, lz, root)
-      contactShadow(10.6, 6.6, lx, lz, root, 0.18)
-      put(box(8.4, 0.012, 4.8, 0xe9dcc3), lx, 0.036, lz, root).castShadow = false
-      const sofa = (x: number, z: number, rotY: number, color: number, seats: number) => {
-        const w = seats * 0.85 + 0.35
-        const g = new THREE.Group()
-        put(box(w, 0.3, 0.95, deep(color, 0.8)), 0, 0.15, 0, g)
-        put(box(w - 0.35, 0.23, 0.82, color), 0, 0.415, 0.02, g)
-        put(box(w, 0.58, 0.18, deep(color, 0.9)), 0, 0.6, -0.42, g)
-        ;[-1, 1].forEach((sd) => put(box(0.18, 0.5, 0.95, deep(color, 0.85)), sd * (w / 2 - 0.09), 0.28, 0, g))
-        // Cojines
-        ;[-1, 1].forEach((sd) => put(box(0.42, 0.34, 0.12, soft(color, 0.55)), sd * (w / 2 - 0.55), 0.74, -0.3, g).rotation.z = sd * 0.12)
-        g.position.set(x, 0, z)
-        g.rotation.y = rotY
-        root.add(g)
-        const half = rotY === 0 || rotY === Math.PI ? [w / 2, 0.5] : [0.5, w / 2]
-        propRects.push({ x0: x - half[0], x1: x + half[0], z0: z - half[1], z1: z + half[1] })
-      }
-      const armchair = (x: number, z: number, rotY: number, color: number) => {
-        const g = new THREE.Group()
-        put(box(1.05, 0.3, 0.95, deep(color, 0.8)), 0, 0.15, 0, g)
-        put(box(0.72, 0.23, 0.82, color), 0, 0.415, 0.02, g)
-        put(box(1.05, 0.58, 0.18, deep(color, 0.9)), 0, 0.6, -0.42, g)
-        ;[-1, 1].forEach((sd) => put(box(0.16, 0.5, 0.95, deep(color, 0.85)), sd * 0.445, 0.28, 0, g))
-        g.position.set(x, 0, z)
-        g.rotation.y = rotY
-        root.add(g)
-        propRects.push({ x0: x - 0.55, x1: x + 0.55, z0: z - 0.55, z1: z + 0.55 })
-      }
-      const SOFA_SEATS = 4
-      const sofaZ = 2.1
-      sofa(lx, lz - sofaZ, 0, 0x51657f, SOFA_SEATS)
-      sofa(lx, lz + sofaZ, Math.PI, 0xb9774a, SOFA_SEATS)
-      armchair(lx - 4.0, lz, Math.PI / 2, 0x4f8a7b)
-      armchair(lx + 4.0, lz, -Math.PI / 2, 0x4f8a7b)
-      // Mesa de centro con una taza y un libro
-      put(box(1.5, 0.06, 0.7, 0x7a5a3a), lx, 0.36, lz, root)
-      ;[[-0.65, -0.28], [0.65, -0.28], [-0.65, 0.28], [0.65, 0.28]].forEach((p) => put(box(0.06, 0.34, 0.06, 0x4a3524), lx + p[0], 0.17, lz + p[1], root))
-      put(box(0.1, 0.1, 0.1, 0xf4f4f4), lx - 0.35, 0.44, lz, root)
-      put(box(0.32, 0.03, 0.24, 0xc2754a), lx + 0.3, 0.405, lz + 0.05, root)
-      propRects.push({ x0: lx - 0.85, x1: lx + 0.85, z0: lz - 0.45, z1: lz + 0.45 })
-      // Lámpara de pie, plantas y el letrero del área
-      const lamp = new THREE.Group()
-      put(box(0.05, 1.6, 0.05, 0x2a2e38), 0, 0.8, 0, lamp)
-      put(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.3, 14), new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe3a0, emissiveIntensity: 0.35 })), 0, 1.7, 0, lamp)
-      put(lamp, lx - 4.2, 0, lz - 1.6, root)
-      plant(lx + 4.2, lz + 2.2, root, 1.2)
-      plant(lx - 4.2, lz + 2.2, root, 1.0)
+      // — Sombras, plantas y el letrero del área —
+      plantAt(X0 + 0.2, MZ - 1.0, 1.5)
+      plantAt(X0 + 16.6, MZ - 1.2, 1.4)
+      plantAt(X0 + 7.4, MZ - 11.0, 1.2)
       const lcv = document.createElement('canvas')
       lcv.width = 960
       lcv.height = 200
@@ -675,24 +837,28 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         lg.font = '800 96px system-ui, sans-serif'
         lg.textAlign = 'center'
         lg.textBaseline = 'middle'
-        lg.fillText('ÁREA DE DESCANSO', 480, 108)
+        lg.fillText('SALA DE DESCANSO', 480, 108)
       }
       const lsign = new THREE.Group()
-      put(new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.7, 0.06), new THREE.MeshStandardMaterial({ color: 0xf6efe0 })), 0, 0, 0, lsign)
-      const lface = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.7 * 0.97), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(lcv) }))
+      put(new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.7, 0.06), new THREE.MeshStandardMaterial({ color: 0xf6efe0 })), 0, 0, 0, lsign)
+      const lface = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 0.7 * 0.97), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(lcv) }))
       lface.rotation.y = Math.PI
       put(lface, 0, 0, -0.035, lsign)
-      ;[-1.6, 1.6].forEach((dx) => put(box(0.06, 1.7, 0.06, 0x7a5a3a), dx, -0.85, 0, lsign))
-      put(lsign, lx, 2.4, lz + 3.0, root)
-      // Asientos (cada uno con el punto libre desde donde se acomoda la persona)
+      ;[-1.7, 1.7].forEach((dx) => put(box(0.06, 1.7, 0.06, 0x7a5a3a), dx, -0.85, 0, lsign))
+      put(lsign, X0 + 6.0, 2.3, MZ - 11.9, root)
+
+      // — Asientos (cada uno con el punto libre desde donde se acomoda la persona) —
       const seatList: LoungeSeat[] = []
-      for (let i = 0; i < SOFA_SEATS; i++) {
-        const dx = (i - (SOFA_SEATS - 1) / 2) * 0.85
-        seatList.push({ x: lx + dx, z: lz - sofaZ - 0.1, face: 0, approach: { x: lx + dx, z: lz - 1.05 } })
-        seatList.push({ x: lx - dx, z: lz + sofaZ + 0.1, face: Math.PI, approach: { x: lx - dx, z: lz + 1.05 } })
+      for (let i = 0; i < 4; i++) {
+        const dx = (i - 1.5) * 0.85
+        seatList.push({ x: tvX + dx, z: MZ - 6.7, face: 0, approach: { x: tvX + dx, z: MZ - 5.55 } })
       }
-      seatList.push({ x: lx - 4.0, z: lz, face: Math.PI / 2, approach: { x: lx - 3.0, z: lz } })
-      seatList.push({ x: lx + 4.0, z: lz, face: -Math.PI / 2, approach: { x: lx + 3.0, z: lz } })
+      seatList.push({ x: X0 + 0.5, z: MZ - 4.4, face: Math.PI / 2, approach: { x: X0 + 1.6, z: MZ - 4.4 } })
+      seatList.push({ x: X0 + 7.1, z: MZ - 4.4, face: -Math.PI / 2, approach: { x: X0 + 6.0, z: MZ - 4.4 } })
+      seatList.push({ x: tvX - 1.9, z: MZ - 2.7, face: 0, y: -0.1, approach: { x: tvX - 1.9, z: MZ - 3.6 } })
+      seatList.push({ x: tvX + 1.9, z: MZ - 2.5, face: 0, y: -0.1, approach: { x: tvX + 1.9, z: MZ - 3.4 } })
+      seatList.push({ x: tvX, z: MZ - 3.1, face: 0, y: -0.1, approach: { x: tvX, z: MZ - 3.9 } })
+      seatList.push({ x: X0 + 1.3, z: MZ - 9.6, face: Math.PI / 2, approach: { x: X0 + 2.4, z: MZ - 9.6 } })
       lounge = { seats: seatList }
     }
 
@@ -909,7 +1075,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const g = o.person.group
       g.parent?.remove(g)
       root.add(g)
-      g.position.set(seat.x, 0, seat.z)
+      g.position.set(seat.x, seat.y ?? 0, seat.z)
       g.rotation.y = seat.face
       o.heading = seat.face
       o.person.stance = 0
@@ -974,7 +1140,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const k = Math.min(1, m.t / 0.9)
         g.position.x = m.from.x + (seat.x - m.from.x) * k
         g.position.z = m.from.z + (seat.z - m.from.z) * k
-        g.position.y += (0 - g.position.y) * Math.min(1, dt * 8)
+        g.position.y += ((seat.y ?? 0) - g.position.y) * Math.min(1, dt * 8)
         o.heading += angDiff(o.heading, seat.face) * Math.min(1, dt * 8)
         g.rotation.y = o.heading
         if (m.t >= 0.9) { m.stage = 'rest'; m.t = 0 }
