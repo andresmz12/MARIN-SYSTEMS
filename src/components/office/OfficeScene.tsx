@@ -555,6 +555,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const propRects: Rect[] = []
     let coffeePoint: Pt | null = null
     let lounge: { seats: LoungeSeat[] } | null = null
+    // Animaciones pequeñas de la sala de descanso (pelota de ping-pong, pantallas, neón, reloj).
+    const loungeTickers: ((time: number) => void)[] = []
     {
       const X0 = floor.minX + 1.2
       const MZ = floor.maxZ // pared del fondo
@@ -714,6 +716,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       ;[[-1.2, -0.6], [1.2, -0.6], [-1.2, 0.6], [1.2, 0.6]].forEach((p) => put(box(0.07, 0.8, 0.07, 0x20232a), p[0], 0.4, p[1], pp))
       put(box(0.02, 0.18, 1.7, 0xf4f4f4), 0, 0.92, 0, pp)
       put(pp, ppX, 0, poolZ, root)
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), mat(0xffa51f))
+      root.add(ball)
+      loungeTickers.push((time) => {
+        const k = Math.sin(time * 2.6)
+        ball.position.set(ppX + k * 1.15, 0.96 + Math.abs(Math.sin(time * 5.2)) * 0.22, poolZ + Math.sin(time * 1.3) * 0.35)
+      })
       contactShadow(3.4, 2.2, ppX, poolZ, root, 0.2)
       prop(ppX, poolZ, 2.9, 1.7)
       // futbolito
@@ -751,8 +759,11 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           }
           return new THREE.CanvasTexture(cv)
         })()
-        const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.52), new THREE.MeshBasicMaterial({ map: sc }))
+        const scrMat = new THREE.MeshBasicMaterial({ map: sc })
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.52), scrMat)
         put(scr, 0, 1.55, 0.41, a)
+        const phase = x * 1.7
+        loungeTickers.push((time) => { scrMat.color.setScalar(0.72 + 0.28 * Math.sin(time * 5 + phase)) })
         put(box(0.8, 0.08, 0.5, 0x15171c), 0, 1.1, 0.5, a)
         a.position.set(x, 0, z)
         a.rotation.y = Math.PI
@@ -821,6 +832,67 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       put(wbFace, 0, 0, -0.045, wb)
       put(wb, X0 + 16.0, 3.0, MZ - 0.25, root)
       plantAt(X0 + 8.2, MZ - 1.0, 1.3)
+
+      // Reloj de pared con la hora real de Colombia
+      const clockCv = document.createElement('canvas')
+      clockCv.width = 256
+      clockCv.height = 256
+      const clockTex = new THREE.CanvasTexture(clockCv)
+      let clockMin = -1
+      const drawClock = () => {
+        const g = clockCv.getContext('2d')
+        if (!g) return
+        const col = new Date(Date.now() - 5 * 3600 * 1000)
+        const h = col.getUTCHours() % 12
+        const m = col.getUTCMinutes()
+        if (m === clockMin) return
+        clockMin = m
+        g.clearRect(0, 0, 256, 256)
+        g.fillStyle = '#fbfbf8'
+        g.beginPath(); g.arc(128, 128, 120, 0, Math.PI * 2); g.fill()
+        g.strokeStyle = '#2f3b5c'; g.lineWidth = 10; g.stroke()
+        g.fillStyle = '#2f3b5c'
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2
+          g.fillRect(128 + Math.sin(a) * 100 - 4, 128 - Math.cos(a) * 100 - 4, 8, 8)
+        }
+        const hand = (ang: number, len: number, w: number, c: string) => {
+          g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'round'
+          g.beginPath(); g.moveTo(128, 128); g.lineTo(128 + Math.sin(ang) * len, 128 - Math.cos(ang) * len); g.stroke()
+        }
+        hand(((h + m / 60) / 12) * Math.PI * 2, 56, 10, '#2a2e38')
+        hand((m / 60) * Math.PI * 2, 86, 6, '#3b6cff')
+        clockTex.needsUpdate = true
+      }
+      drawClock()
+      const clock = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), new THREE.MeshBasicMaterial({ map: clockTex, transparent: true }))
+      clock.rotation.y = Math.PI
+      put(clock, X0 + 11.4, 3.2, MZ - 0.3, root)
+      loungeTickers.push(() => drawClock())
+
+      // Letrero de neón ISM en la pared (palpita suave)
+      const neonCv = document.createElement('canvas')
+      neonCv.width = 512
+      neonCv.height = 192
+      const ng = neonCv.getContext('2d')
+      if (ng) {
+        ng.textAlign = 'center'
+        ng.textBaseline = 'middle'
+        ng.font = '800 120px system-ui, sans-serif'
+        ng.shadowColor = '#ffb42e'
+        ng.shadowBlur = 36
+        ng.fillStyle = '#ffd36a'
+        ng.fillText('ISM', 256, 84)
+        ng.shadowBlur = 0
+        ng.font = '600 34px system-ui, sans-serif'
+        ng.fillStyle = '#ffe7a8'
+        ng.fillText('Consulting Services', 256, 160)
+      }
+      const neonMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(neonCv), transparent: true, depthWrite: false })
+      const neon = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.97), neonMat)
+      neon.rotation.y = Math.PI
+      put(neon, X0 + 7.0, 3.3, MZ - 0.3, root)
+      loungeTickers.push((time) => { neonMat.opacity = 0.82 + 0.18 * Math.sin(time * 2.2) })
 
       // — Sombras, plantas y el letrero del área —
       plantAt(X0 + 0.2, MZ - 1.0, 1.5)
@@ -1273,6 +1345,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           el.style.opacity = fcs === 'all' || fcs === o.deptId ? '' : '0.4'
         }
       })
+      loungeTickers.forEach((fn) => fn(time))
       animatePerson(ceoPerson, 'type', time + 4, dt)
       if (prevPending !== null && cs.pending > prevPending) bubble('ceo', `Tienes ${cs.pending} por aprobar`, '#d6a23b', time)
       prevPending = cs.pending

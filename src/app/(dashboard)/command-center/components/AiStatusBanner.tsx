@@ -24,7 +24,7 @@ export function AiStatusBanner() {
       <p className="text-red-200/90">{st.message}</p>
       <p className="text-xs text-red-200/60">
         Mientras tanto, regenerar y la tanda automática no van a funcionar (tus posts no se pierden).
-        {st.since ? ` Desde ${new Date(st.since).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''} El aviso se quita solo cuando vuelva a funcionar.
+        {st.since ? ` Desde ${new Date(st.since).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` : ''} El aviso se quita solo cuando vuelva a funcionar.
       </p>
       {credits && (
         <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer" className="inline-block text-xs underline text-red-100">
