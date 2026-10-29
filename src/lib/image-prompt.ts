@@ -36,7 +36,7 @@ interface ImageSpec {
 }
 
 export const IMAGE_SPECS: Record<string, ImageSpec> = {
-  instagram: { label: 'Instagram', width: 1080, height: 1350, ratio: '4:5', canvas: 'portrait (2:3)', safe: 'the central 78% of the height', note: 'vertical feed post' },
+  instagram: { label: 'Instagram', width: 1080, height: 1350, ratio: '4:5', canvas: 'portrait (2:3)', safe: 'the central 68% of the height (a clear 16% band of plain background at the very top and at the very bottom)', note: 'vertical feed post' },
   facebook: { label: 'Facebook', width: 1080, height: 1080, ratio: '1:1', canvas: 'square (1:1)', safe: 'the central 85% in both directions', note: 'square post with a friendly, conversational feel' },
   linkedin: { label: 'LinkedIn', width: 1200, height: 628, ratio: '1.91:1', canvas: 'landscape (3:2)', safe: 'the central 72% of the height', note: 'horizontal, sober and professional, informative look' },
   twitter: { label: 'X (Twitter)', width: 1600, height: 900, ratio: '16:9', canvas: 'landscape (3:2)', safe: 'the central 78% of the height', note: 'horizontal; the headline must be readable at thumbnail size' },
@@ -95,7 +95,7 @@ export function buildImagePrompt(input: {
 
   lines.push(
     `Create a finished, ready-to-post social media image for the brand ${q(input.brandName)}, for ${spec.label}.`,
-    `FORMAT: use a ${spec.canvas} canvas. It will be center-cropped afterwards to ${spec.width}x${spec.height} px (${spec.ratio}), so keep ALL text and key elements inside ${spec.safe}; let only background extend beyond it.`,
+    `FORMAT: use a ${spec.canvas} canvas. It will be center-cropped afterwards to ${spec.width}x${spec.height} px (${spec.ratio}), so keep ALL text, logos, buttons and key elements inside ${spec.safe}; only plain background may extend beyond it. The brand logo must NOT touch the top edge and the bottom button/bar must NOT touch the bottom edge: leave a visible empty margin around them.`,
     '',
     `VISUAL STYLE: ${style.style || 'clean, modern and professional'}.`,
     `COLOR PALETTE: ${style.palette?.length ? style.palette.join(', ') : 'a cohesive palette of 2-3 colors'}; strong contrast between text and background.`,

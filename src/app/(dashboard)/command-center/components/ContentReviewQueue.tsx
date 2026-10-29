@@ -274,7 +274,12 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       }
       const d = await res.json().catch(() => null) as { fit?: { platform?: string; action: string; from: { width: number; height: number }; to: { width: number; height: number }; target: string | null } } | null
       const fit = d?.fit
-      if (fit?.action === 'crop') showToast(`Imagen ajustada al formato de la red: ${fit.from.width}×${fit.from.height} → ${fit.to.width}×${fit.to.height}`, 'success')
+      if (fit?.action === 'crop') {
+        // Cuánto se recortó por lado: así se sabe si el logo o el texto pudieron quedar pegados al borde.
+        const tall = fit.from.height / fit.from.width > fit.to.height / fit.to.width
+        const pct = Math.round((tall ? (1 - (fit.from.width * fit.to.height) / fit.to.width / fit.from.height) : (1 - (fit.from.height * fit.to.width) / fit.to.height / fit.from.width)) * 50)
+        showToast(`Imagen ajustada: se recortó ~${pct}% ${tall ? 'arriba y abajo' : 'a cada lado'}. Ábrela y revisa que el logo y el texto no queden pegados al borde.`, 'success')
+      }
       else if (fit?.action === 'mismatch') showToast(`La imagen (${fit.from.width}×${fit.from.height}) no tiene la orientación de ${IMAGE_SPECS[d?.fit?.platform ?? '']?.label ?? 'la red'}${fit.target ? ` (${fit.target})` : ''}. Genérala otra vez con el formato que pide el prompt.`, 'error')
       else showToast('Imagen subida', 'success')
       await load()
@@ -900,7 +905,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 {post.imageUrl ? (
                   <div className="flex items-start gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={localImagePath(post.imageUrl)} alt="" className="w-24 h-24 rounded-md object-cover border border-zinc-700" />
+                    <a href={localImagePath(post.imageUrl)} target="_blank" rel="noreferrer" title="Abrir la imagen completa">
+                      <img src={localImagePath(post.imageUrl)} alt="" className="w-32 rounded-md border border-zinc-700 bg-zinc-900 object-contain" style={{ aspectRatio: post.imageWidth && post.imageHeight ? `${post.imageWidth} / ${post.imageHeight}` : undefined }} />
+                    </a>
                     <div className="space-y-1">
                       {post.imageWidth && post.imageHeight && <p className="text-xs text-zinc-400">{post.imageWidth}×{post.imageHeight}</p>}
                       <button onClick={() => removeImage(post.id)} className="text-xs text-red-300 hover:text-red-200">Quitar</button>
