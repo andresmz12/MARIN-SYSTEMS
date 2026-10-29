@@ -287,6 +287,39 @@ export async function sendAgentRecoveredEmail({
   return sendEmail(to, subject, html, text)
 }
 
+export async function sendMorningStatusEmail({
+  apps,
+}: {
+  apps: { agentName: string; appName: string; status: string; latency: number | null; reason?: string | null }[]
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+
+  const bad = apps.filter((a) => a.status !== 'healthy')
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
+  const subject = bad.length === 0
+    ? `[Corporación Marin] ☀️ Buenos días: tus ${apps.length} apps funcionan bien`
+    : `[Corporación Marin] ⚠️ Buenos días: ${bad.length} de ${apps.length} apps con problemas`
+  const label = (st: string) => (st === 'healthy' ? '🟢 Funciona bien' : st === 'degraded' ? '🟡 Degradada' : st === 'down' ? '🔴 Caída' : '⚪ Sin datos')
+  const rows = apps
+    .map((a) => `<tr><td style="padding:6px 0;color:#e4e4e7;font-size:13px;">${a.agentName} · ${a.appName}</td><td style="padding:6px 0;color:#e4e4e7;font-size:13px;text-align:right;">${label(a.status)}${a.latency != null ? ` · ${a.latency}ms` : ''}${a.reason && a.status !== 'healthy' ? `<br/><span style="color:#a1a1aa;font-size:11px;">${a.reason}</span>` : ''}</td></tr>`)
+    .join('')
+  const intro = bad.length === 0
+    ? 'Revisé tus apps al empezar el día y todas funcionan bien. De noche (11 PM a 7 AM) no se vigila, porque en ese horario las apps casi no se usan.'
+    : 'Revisé tus apps al empezar el día y estas necesitan atención. De noche (11 PM a 7 AM) no se vigila, así que el problema pudo empezar antes.'
+  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
+  <h2 style="margin:0 0 8px;">${bad.length === 0 ? '☀️ Buenos días, Andrés' : '⚠️ Buenos días, Andrés'}</h2>
+  <p style="margin:0 0 16px;color:#a1a1aa;">${intro}</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;margin-bottom:18px;">${rows}</table>
+  <a href="${appUrl}/agentes" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Corporación Marin →</a>
+</div>`
+  const text = `${bad.length === 0 ? 'Buenos días: tus apps funcionan bien.' : 'Buenos días: hay apps con problemas.'}
+${apps.map((a) => `- ${a.agentName} (${a.appName}): ${label(a.status)}`).join('\n')}
+
+Ver: ${appUrl}/agentes`
+  return sendEmail(to, subject, html, text)
+}
+
 export async function sendCronFailureEmail({
   job,
   error,

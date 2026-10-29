@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { runAgentChecks } from '@/lib/agent-monitor'
 import { withCronLog } from '@/lib/cron-run'
 import { isQuietHours } from '@/lib/quiet-hours'
+import { maybeSendMorningReport } from '@/lib/morning-report'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -17,6 +18,7 @@ async function handler(req: Request) {
   if (isQuietHours()) return NextResponse.json({ checked: 0, skipped: 'descanso nocturno (11 PM - 7 AM Colombia)' })
   try {
     const apps = await runAgentChecks()
+    await maybeSendMorningReport(apps).catch((err) => console.error('[morning-report]', err))
     return NextResponse.json({
       checked: apps.length,
       apps: apps.map((a) => ({ agent: a.agentName, status: a.status, streak: a.consecutiveFailures })),

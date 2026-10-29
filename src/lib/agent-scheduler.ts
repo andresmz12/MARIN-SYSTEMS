@@ -1,6 +1,7 @@
 import { runAgentChecks } from '@/lib/agent-monitor'
 import { runLogged } from '@/lib/cron-run'
 import { isQuietHours } from '@/lib/quiet-hours'
+import { maybeSendMorningReport } from '@/lib/morning-report'
 
 // Monitoreo de fondo: chequea los agentes sin necesidad de tener /agentes abierto.
 // Railway corre un proceso Node persistente, así que un intervalo en memoria basta.
@@ -28,9 +29,11 @@ export function startAgentScheduler() {
     try {
       // Las corridas OK del scheduler no se registran en CronRun (serían ~288 al día);
       // solo las fallas, para que aparezcan en el panel y avisen por correo.
-      await runAgentChecks().catch((err) =>
-        runLogged('agent-check', async () => { throw err }).catch(() => {}),
-      )
+      const results = await runAgentChecks().catch((err) => {
+        void runLogged('agent-check', async () => { throw err }).catch(() => {})
+        return null
+      })
+      if (results) await maybeSendMorningReport(results).catch((err) => console.error('[morning-report]', err))
     } finally {
       running = false
     }
