@@ -154,7 +154,11 @@ async function handler(req: Request) {
             voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
             forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
           })
-          if (generated.copy.includes('[Contenido de ')) throw new Error('La IA no devolvió contenido válido')
+          if (generated.copy.includes('[Contenido de ')) {
+            made--
+            rejected.push(`"${item.title.slice(0, 60)}": la IA no devolvió contenido válido, se intentará en la próxima corrida`)
+            continue
+          }
           const again = isRepeat(generated.topic, history.topics)
           if (again) {
             made--

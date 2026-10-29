@@ -99,6 +99,7 @@ async function handler(req: Request) {
         // Memoria de temas: nada que ya se publicó, propuso o rechazó (hasta un año atrás) vuelve a salir.
         const history = await topicHistory(profile.companyId)
         const drafts: Prisma.GeneratedPostCreateManyInput[] = []
+        let failedDays = 0
         const usedAngleIds: string[] = []
 
         const slots = nextSlots(now)
@@ -135,9 +136,11 @@ async function handler(req: Request) {
             console.warn(`[cron/auto-content] ${name}: "${generated.topic}" repite "${dup}", se omite ese día`)
             continue
           }
-          // Claude falló y ai.ts devolvió el texto de relleno: abortar esta marca.
+          // La IA falló aun después de reintentar: se omite ese día y se siguen los demás (antes se perdía toda la tanda).
           if (generated.copy.includes('[Contenido de ')) {
-            throw new Error('La IA no devolvió contenido válido (se descarta toda la tanda)')
+            console.error(`[cron/auto-content] ${name}: la IA no devolvió contenido válido para ${scheduledDate.toISOString().slice(0, 10)}`)
+            failedDays++
+            continue
           }
           drafts.push(...buildGroupDrafts({
             userId: profile.userId,
@@ -152,7 +155,8 @@ async function handler(req: Request) {
           if (angle) usedAngleIds.push(angle.id)
         }
 
-        // Todo o nada: así un fallo a mitad no deja una tanda incompleta.
+        if (drafts.length === 0) throw new Error('La IA no devolvió contenido válido en ningún día (revisa ANTHROPIC_API_KEY, el saldo o el límite de uso en Anthropic)')
+        // Todo o nada al guardar: lo generado se guarda junto.
         await prisma.$transaction([
           prisma.generatedPost.createMany({ data: drafts }),
           prisma.contentAngle.updateMany({ where: { id: { in: usedAngleIds } }, data: { status: 'used' } }),
@@ -170,7 +174,7 @@ async function handler(req: Request) {
           const notify = await sendContentReadyEmail({ companyName: name, count: created, pendingTotal: pending + created })
           if (!notify.success) console.error('[cron/auto-content] aviso por correo falló:', notify.error)
         }
-        summary.push({ company: name, created })
+        summary.push({ company: name, created, ...(failedDays ? { skipped: `${failedDays} día(s) fallaron y se omitieron` } : {}) })
       } catch (err) {
         console.error(`[cron/auto-content] ${name}`, err)
         summary.push({ company: name, created: 0, error: String(err) })

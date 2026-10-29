@@ -94,7 +94,12 @@ export function backgroundCron(job: string, handler: CronHandler): CronHandler {
     if (!process.env.CRON_SECRET || req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    if (req.headers.get('x-wait') === '1') return logged(req)
+    if (req.headers.get('x-wait') === '1') {
+      // Desde la pantalla: se espera el resultado, pero nunca dos corridas del mismo trabajo a la vez (se pisarían y duplicarían).
+      if (runningJobs.has(job)) return NextResponse.json({ error: 'Ya hay una corrida de este trabajo en curso. Espera a que termine (unos minutos) y revisa la bandeja.', running: true }, { status: 409 })
+      runningJobs.add(job)
+      try { return await logged(req) } finally { runningJobs.delete(job) }
+    }
     if (runningJobs.has(job)) return NextResponse.json({ accepted: false, running: true, job }, { status: 202 })
     runningJobs.add(job)
     const copy = req.clone()

@@ -8,19 +8,34 @@ export const AI_MODEL_SMART = 'claude-sonnet-4-6'
 
 /** Extract the first balanced `{…}` JSON object from a raw model response. */
 export function extractJson(text: string): unknown | null {
-  const start = text.indexOf('{')
-  if (start === -1) return null
-  let depth = 0
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++
-    else if (text[i] === '}') {
-      depth--
-      if (depth === 0) {
-        try { return JSON.parse(text.slice(start, i + 1)) } catch { return null }
+  // Recorre el texto buscando objetos JSON de primer nivel (respetando cadenas y escapes, para que una llave dentro de un
+  // texto no rompa la cuenta) y devuelve el ÚLTIMO que se pueda leer: con búsqueda web, el modelo suele comentar antes
+  // y la respuesta final va al final.
+  let found: unknown | null = null
+  let i = 0
+  while (i < text.length) {
+    if (text[i] !== '{') { i++; continue }
+    let depth = 0
+    let inStr = false
+    let esc = false
+    let end = -1
+    for (let j = i; j < text.length; j++) {
+      const c = text[j]
+      if (inStr) {
+        if (esc) esc = false
+        else if (c === '\\') esc = true
+        else if (c === '"') inStr = false
+        continue
       }
+      if (c === '"') inStr = true
+      else if (c === '{') depth++
+      else if (c === '}') { depth--; if (depth === 0) { end = j; break } }
     }
+    if (end === -1) break
+    try { found = JSON.parse(text.slice(i, end + 1)) } catch { /* no era JSON: se sigue buscando */ }
+    i = end + 1
   }
-  return null
+  return found
 }
 
 function str(v: unknown, fallback = ''): string {
@@ -423,12 +438,18 @@ Responde ÚNICAMENTE con este JSON:
   "facts": ["cada dato verificable que usaste en el copy o la imagen: montos, fechas, formularios, porcentajes, plazos, para que el dueño los confirme en IRS.gov"]
 }`
 
+  let text = ''
   try {
-    const text = await callAI(AI_MODEL_SMART, prompt, input.research ? 2500 : 1500, !!input.research)
-    return coerceContent(extractJson(text), input)
-  } catch {
-    return fallbackContent(input)
+    text = await callAI(AI_MODEL_SMART, prompt, input.research ? 4000 : 1500, !!input.research)
+  } catch (err) {
+    console.error('[generate-content] la llamada a la IA falló:', err instanceof Error ? err.message : err)
   }
+  const parsed = extractJson(text)
+  if (parsed && typeof parsed === 'object') return coerceContent(parsed, input)
+  console.error('[generate-content] respuesta sin JSON válido:', text.slice(0, 300))
+  // Si la búsqueda en la web fue lo que falló (límite, tiempo, texto raro), se reintenta sin ella antes de rendirse.
+  if (input.research) return generateMarketingContent({ ...input, research: false })
+  return fallbackContent(input)
 }
 
 // ──────────────────────── Content angles generation ────────────────────────
