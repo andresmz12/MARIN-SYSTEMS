@@ -16,7 +16,7 @@ export interface PersonSpec {
   ghost: boolean
 }
 
-export type PersonPose = 'type' | 'rest' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave'
+export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave'
 
 interface Arm {
   shoulder: THREE.Group
@@ -212,6 +212,13 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.torsoX = 0.32 + breath * 2
     T.headX = 0.6
     T.lS = -0.95; T.rS = -0.95; T.lE = -0.25; T.rE = -0.25
+  } else if (pose === 'lounge') {
+    // Sentado en el sofá, recostado y relajado: respira lento, mira un poco al techo y a los lados.
+    T.torsoX = -0.26 + breath * 2
+    T.headX = -0.12 + Math.sin(t * 0.5 + s) * 0.05
+    T.headY = Math.sin(t * 0.22 + s * 3) * 0.28
+    if (s % 2 === 0) { T.lS = -0.45; T.lE = -1.15; T.rS = -0.45; T.rE = -1.15 } // manos sobre las piernas
+    else { T.lS = -0.15; T.lE = -0.3; T.rS = -2.4; T.rE = -2.0 } // un brazo detrás de la cabeza
   } else if (pose === 'help') {
     T.torsoX = -0.02
     T.headX = -0.05

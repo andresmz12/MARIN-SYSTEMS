@@ -163,15 +163,20 @@ function plant(x: number, z: number, parent: THREE.Object3D, s = 1) {
 // ───────────────────────── Escritorio con su persona ─────────────────────────
 /** Un viaje a pie: se levanta, camina, espera un rato, regresa y se sienta. */
 interface Move {
-  kind: 'coffee' | 'deliver' | 'help'
-  stage: 'stand' | 'out' | 'wait' | 'back' | 'sit'
+  kind: 'coffee' | 'deliver' | 'help' | 'rest' | 'wake'
+  stage: 'stand' | 'out' | 'wait' | 'back' | 'sit' | 'settle' | 'rest'
   path: Pt[]
   i: number
   t: number
   wait: number
   /** Hacia dónde mira al llegar (radianes, 0 = hacia +z). */
   face: number
+  /** Descanso: asiento del salón y punto desde donde se acomoda. */
+  seat?: number
+  from?: Pt
 }
+
+interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string }
 
 interface Actor {
   id: string
@@ -185,6 +190,7 @@ interface Actor {
   screen: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
   zz: THREE.Sprite
   ex: THREE.Sprite
+  zl?: THREE.Sprite
   ghost: boolean
 }
 
@@ -372,6 +378,14 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       root.add(o.wrap)
     }))
 
+    // Una "z" sobre quien duerme en el área de descanso
+    actors.forEach((o) => {
+      const zl = textSprite('z', '#7f8aa3')
+      zl.visible = false
+      root.add(zl)
+      o.zl = zl
+    })
+
     // Oficina de Andrés: plataforma de madera, vidrio y la pantalla central detrás
     const cg = new THREE.Group()
     cg.position.set(plan.ceo.x, 0, plan.ceo.z)
@@ -420,6 +434,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const hasBreak = breakMaxX - breakX0 > 9
     const propRects: Rect[] = []
     let coffeePoint: Pt | null = null
+    let lounge: { seats: LoungeSeat[] } | null = null
     if (hasBreak) {
       const wz = floor.maxZ - 1.5
       const cooler = new THREE.Group()
@@ -463,12 +478,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         bg.fillStyle = '#b8863b'
         bg.fillRect(40, 100, 300, 8)
         bg.font = '600 38px system-ui, sans-serif'
-        const rows: [string, string][] = [['7:00 AM', 'Temas del día'], ['10:00 AM', 'Noticias del IRS'], ['Dom 8:00', 'Métricas de la semana'], ['Dom 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación']]
+        const rows: [string, string][] = [['7:00 AM', 'Temas del día'], ['10:00 AM', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–7 AM', 'Todos descansan']]
         rows.forEach(([a, b], i) => {
           bg.fillStyle = '#3b6cff'
-          bg.fillText(a, 40, 190 + i * 72)
+          bg.fillText(a, 40, 185 + i * 62)
           bg.fillStyle = '#2a2e38'
-          bg.fillText(b, 300, 190 + i * 72)
+          bg.fillText(b, 340, 185 + i * 62)
         })
       }
       const wb = new THREE.Group()
@@ -479,6 +494,90 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       ;[-1.4, 1.4].forEach((dx) => put(box(0.08, 1.0, 0.08, 0x6b7280), dx, 0.5, 0, wb))
       put(wb, bx0, 0, wz + 0.3, root)
       propRects.push({ x0: bx0 - 1.8, x1: bx0 + 1.8, z0: wz, z1: wz + 0.6 })
+
+      // ── Área de descanso: sofás, sillones y mesa de centro. Aquí van los agentes cuando no están trabajando ──
+      const zonesMaxZ = plan.ceo.z - 1.8 - CEO_D / 2
+      const lx = breakX0 + 3.7
+      const lz = zonesMaxZ + 3.4
+      const rug = box(9.4, 0.03, 5.8, 0xd9c6a6)
+      rug.castShadow = false
+      put(rug, lx, 0.018, lz, root)
+      put(box(8.4, 0.012, 4.8, 0xe9dcc3), lx, 0.036, lz, root).castShadow = false
+      const sofa = (x: number, z: number, rotY: number, color: number, seats: number) => {
+        const w = seats * 0.85 + 0.35
+        const g = new THREE.Group()
+        put(box(w, 0.3, 0.95, deep(color, 0.8)), 0, 0.15, 0, g)
+        put(box(w - 0.35, 0.23, 0.82, color), 0, 0.415, 0.02, g)
+        put(box(w, 0.58, 0.18, deep(color, 0.9)), 0, 0.6, -0.42, g)
+        ;[-1, 1].forEach((sd) => put(box(0.18, 0.5, 0.95, deep(color, 0.85)), sd * (w / 2 - 0.09), 0.28, 0, g))
+        // Cojines
+        ;[-1, 1].forEach((sd) => put(box(0.42, 0.34, 0.12, soft(color, 0.55)), sd * (w / 2 - 0.55), 0.74, -0.3, g).rotation.z = sd * 0.12)
+        g.position.set(x, 0, z)
+        g.rotation.y = rotY
+        root.add(g)
+        const half = rotY === 0 || rotY === Math.PI ? [w / 2, 0.5] : [0.5, w / 2]
+        propRects.push({ x0: x - half[0], x1: x + half[0], z0: z - half[1], z1: z + half[1] })
+      }
+      const armchair = (x: number, z: number, rotY: number, color: number) => {
+        const g = new THREE.Group()
+        put(box(1.05, 0.3, 0.95, deep(color, 0.8)), 0, 0.15, 0, g)
+        put(box(0.72, 0.23, 0.82, color), 0, 0.415, 0.02, g)
+        put(box(1.05, 0.58, 0.18, deep(color, 0.9)), 0, 0.6, -0.42, g)
+        ;[-1, 1].forEach((sd) => put(box(0.16, 0.5, 0.95, deep(color, 0.85)), sd * 0.445, 0.28, 0, g))
+        g.position.set(x, 0, z)
+        g.rotation.y = rotY
+        root.add(g)
+        propRects.push({ x0: x - 0.55, x1: x + 0.55, z0: z - 0.55, z1: z + 0.55 })
+      }
+      const SOFA_SEATS = 4
+      const sofaZ = 2.1
+      sofa(lx, lz - sofaZ, 0, 0x51657f, SOFA_SEATS)
+      sofa(lx, lz + sofaZ, Math.PI, 0xb9774a, SOFA_SEATS)
+      armchair(lx - 4.0, lz, Math.PI / 2, 0x4f8a7b)
+      armchair(lx + 4.0, lz, -Math.PI / 2, 0x4f8a7b)
+      // Mesa de centro con una taza y un libro
+      put(box(1.5, 0.06, 0.7, 0x7a5a3a), lx, 0.36, lz, root)
+      ;[[-0.65, -0.28], [0.65, -0.28], [-0.65, 0.28], [0.65, 0.28]].forEach((p) => put(box(0.06, 0.34, 0.06, 0x4a3524), lx + p[0], 0.17, lz + p[1], root))
+      put(box(0.1, 0.1, 0.1, 0xf4f4f4), lx - 0.35, 0.44, lz, root)
+      put(box(0.32, 0.03, 0.24, 0xc2754a), lx + 0.3, 0.405, lz + 0.05, root)
+      propRects.push({ x0: lx - 0.85, x1: lx + 0.85, z0: lz - 0.45, z1: lz + 0.45 })
+      // Lámpara de pie, plantas y el letrero del área
+      const lamp = new THREE.Group()
+      put(box(0.05, 1.6, 0.05, 0x2a2e38), 0, 0.8, 0, lamp)
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.3, 14), new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe3a0, emissiveIntensity: 0.35 })), 0, 1.7, 0, lamp)
+      put(lamp, lx - 4.2, 0, lz - 1.6, root)
+      plant(lx + 4.2, lz + 2.2, root, 1.2)
+      plant(lx - 4.2, lz + 2.2, root, 1.0)
+      const lcv = document.createElement('canvas')
+      lcv.width = 960
+      lcv.height = 200
+      const lg = lcv.getContext('2d')
+      if (lg) {
+        lg.fillStyle = '#f6efe0'
+        lg.fillRect(0, 0, 960, 200)
+        lg.fillStyle = '#7a5a3a'
+        lg.font = '800 96px system-ui, sans-serif'
+        lg.textAlign = 'center'
+        lg.textBaseline = 'middle'
+        lg.fillText('ÁREA DE DESCANSO', 480, 108)
+      }
+      const lsign = new THREE.Group()
+      put(new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.7, 0.06), new THREE.MeshStandardMaterial({ color: 0xf6efe0 })), 0, 0, 0, lsign)
+      const lface = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.7 * 0.97), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(lcv) }))
+      lface.rotation.y = Math.PI
+      put(lface, 0, 0, -0.035, lsign)
+      ;[-1.6, 1.6].forEach((dx) => put(box(0.06, 1.7, 0.06, 0x7a5a3a), dx, -0.85, 0, lsign))
+      put(lsign, lx, 2.4, lz + 3.0, root)
+      // Asientos (cada uno con el punto libre desde donde se acomoda la persona)
+      const seatList: LoungeSeat[] = []
+      for (let i = 0; i < SOFA_SEATS; i++) {
+        const dx = (i - (SOFA_SEATS - 1) / 2) * 0.85
+        seatList.push({ x: lx + dx, z: lz - sofaZ - 0.1, face: 0, approach: { x: lx + dx, z: lz - 1.05 } })
+        seatList.push({ x: lx - dx, z: lz + sofaZ + 0.1, face: Math.PI, approach: { x: lx - dx, z: lz + 1.05 } })
+      }
+      seatList.push({ x: lx - 4.0, z: lz, face: Math.PI / 2, approach: { x: lx - 3.0, z: lz } })
+      seatList.push({ x: lx + 4.0, z: lz, face: -Math.PI / 2, approach: { x: lx + 3.0, z: lz } })
+      lounge = { seats: seatList }
     }
 
     // ── Rutas: los muebles son obstáculos y las personas los rodean ──
@@ -664,11 +763,33 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const ceoFront = (dx: number): Pt => ({ x: plan.ceo.x + dx, z: plan.ceo.z - 1.7 })
     const startTrip = (o: Actor, kind: Move['kind'], dest: Pt, face: number, wait: number): boolean => {
       if (o.mv || o.ghost) return false
-      if (actors.filter((a) => a.mv).length >= 2) return false // nunca más de dos a la vez
+      if (actors.filter((a) => a.mv && a.mv.stage !== 'rest').length >= 2) return false // nunca más de dos a la vez
       const path = nav.findPath(exitPt(o), dest)
       if (!path) return false
       o.mv = { kind, stage: 'stand', path, i: 0, t: 0, wait, face }
       return true
+    }
+    // ── Descanso: quien no trabaja se va al área de descanso y vuelve a su escritorio cuando le toca ──
+    const startRest = (o: Actor): boolean => {
+      if (!lounge || o.mv || o.ghost) return false
+      const free = lounge.seats.map((sd, i) => (sd.by ? -1 : i)).filter((i) => i >= 0)
+      if (free.length === 0) return false
+      const idx = free[Math.floor(Math.random() * free.length)]
+      const seat = lounge.seats[idx]
+      const path = nav.findPath(exitPt(o), seat.approach)
+      if (!path) return false
+      seat.by = o.id
+      o.mv = { kind: 'rest', stage: 'stand', path, i: 0, t: 0, wait: 0, face: seat.face, seat: idx }
+      return true
+    }
+    const wakeUp = (o: Actor) => {
+      const m = o.mv
+      if (!m || m.kind !== 'rest' || !lounge) return
+      if (m.seat !== undefined) delete lounge.seats[m.seat].by
+      m.wait = m.stage === 'rest' ? 0.6 : 0 // si ya estaba sentado, primero se levanta
+      m.kind = 'wake'
+      m.stage = 'wait'
+      m.t = 0
     }
     const stepMove = (o: Actor, dt: number): { pose: PersonPose | null; speed: number } | null => {
       const m = o.mv
@@ -700,7 +821,11 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           g.position.x = target.x
           g.position.z = target.z
           m.i++
-          if (m.i >= m.path.length) { m.stage = m.stage === 'out' ? 'wait' : 'sit'; m.t = 0 }
+          if (m.i >= m.path.length) {
+            if (m.stage === 'out' && m.kind === 'rest') { m.stage = 'settle'; m.from = { x: g.position.x, z: g.position.z } }
+            else m.stage = m.stage === 'out' ? 'wait' : 'sit'
+            m.t = 0
+          }
         } else {
           g.position.x += (dx / dist) * step
           g.position.z += (dz / dist) * step
@@ -709,6 +834,22 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         g.position.y += (up - g.position.y) * Math.min(1, dt * 8)
         g.rotation.y = o.heading
         return { pose: m.stage === 'out' && m.kind === 'deliver' ? 'deliver' : 'walk', speed: 1 }
+      }
+      if (m.stage === 'settle' && lounge && m.seat !== undefined && m.from) {
+        const seat = lounge.seats[m.seat]
+        const k = Math.min(1, m.t / 0.9)
+        g.position.x = m.from.x + (seat.x - m.from.x) * k
+        g.position.z = m.from.z + (seat.z - m.from.z) * k
+        g.position.y += (0 - g.position.y) * Math.min(1, dt * 8)
+        o.heading += angDiff(o.heading, seat.face) * Math.min(1, dt * 8)
+        g.rotation.y = o.heading
+        if (m.t >= 0.9) { m.stage = 'rest'; m.t = 0 }
+        return { pose: k < 0.6 ? 'stand' : 'lounge', speed: 0 }
+      }
+      if (m.stage === 'rest') {
+        o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
+        g.rotation.y = o.heading
+        return { pose: 'lounge', speed: 0 }
       }
       if (m.stage === 'wait') {
         o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
@@ -752,6 +893,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const prev = new Map<string, AgentStatus>()
     let prevPending: number | null = null
     let nextCoffee = 0
+    let nextShift = 0
     const shortText = (t: string, n = 38) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
     const onChange = (o: Actor, before: AgentStatus, now: AgentStatus, time: number) => {
       if (o.ghost) return
@@ -809,6 +951,11 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         else { em.emissive.setHex(0x000000); em.emissiveIntensity = 1 }
         const away = !!o.mv && o.mv.stage !== 'stand'
         o.zz.visible = s === 'sleep' && !o.mv
+        if (o.zl) {
+          const resting = o.mv?.stage === 'rest' && o.mv.kind === 'rest'
+          o.zl.visible = resting
+          if (resting) o.zl.position.set(o.person.group.position.x + 0.15, 1.75 + Math.sin(time * 2) * 0.06, o.person.group.position.z)
+        }
         o.zz.position.y = 1.95 + Math.sin(time * 2) * 0.06
         o.ex.visible = s === 'alert' && !o.mv
         o.ex.position.y = 2.15 + Math.abs(Math.sin(time * 6)) * 0.1
@@ -824,12 +971,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       animatePerson(ceoPerson, 'type', time + 4, dt)
       if (prevPending !== null && cs.pending > prevPending) bubble('ceo', `Tienes ${cs.pending} por aprobar`, '#d6a23b', time)
       prevPending = cs.pending
+      // Descanso: quien no trabaja va al área de descanso y quien vuelve a trabajar regresa a su escritorio.
+      // Se hace de a poco (uno cada ~0,7 s y máximo 4 caminando) para que se vea natural.
+      if (lounge && time > nextShift) {
+        const walking = actors.filter((a) => a.mv && a.mv.stage !== 'rest').length
+        if (walking < 4) {
+          const wake = actors.find((a) => a.mv?.kind === 'rest' && st(a.id) !== 'sleep' && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest'))
+          if (wake) { wakeUp(wake); nextShift = time + 0.5 }
+          else {
+            const go = actors.find((a) => !a.ghost && !a.mv && st(a.id) === 'sleep')
+            if (go && startRest(go)) nextShift = time + 0.7
+          }
+        }
+      }
       // Café de vez en cuando: nunca más de dos personas caminando a la vez
       if (coffeePoint) {
         if (nextCoffee === 0) nextCoffee = time + 12 + Math.random() * 18
         if (time > nextCoffee) {
           nextCoffee = time + 40 + Math.random() * 50
-          const pool = actors.filter((a) => !a.ghost && !a.mv && st(a.id) !== 'alert')
+          const pool = actors.filter((a) => !a.ghost && !a.mv && st(a.id) === 'work')
           if (pool.length) startTrip(pool[Math.floor(Math.random() * pool.length)], 'coffee', coffeePoint, 0, 4.5)
         }
       }
