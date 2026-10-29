@@ -14,7 +14,7 @@ import { sendContentReadyEmail } from '@/lib/sendgrid-client'
 export const maxDuration = 300
 
 // Solo noticias recientes: una noticia vieja ya no es "noticia".
-const MAX_AGE_MS = 4 * 24 * 60 * 60 * 1000
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 // Tope por empresa y por corrida, para no inundar la bandeja de aprobación.
 const MAX_PER_RUN = 2
 const MAX_PENDING_NEWS = 6
@@ -190,7 +190,14 @@ async function handler(req: Request) {
       fresh: fresh.length,
       feedErrors,
       // Lo que vio la lectura (para entender por qué hay o no noticias): título y fecha detectada.
-      sample: items.slice(0, 8).map((i) => ({ title: i.title.slice(0, 90), date: i.publishedAt ? i.publishedAt.toISOString().slice(0, 10) : null })),
+      latest: items.reduce<string | null>((m, i) => { const d = i.publishedAt?.toISOString().slice(0, 10) ?? null; return d && (!m || d > m) ? d : m }, null),
+      undated: items.filter((i) => !i.publishedAt).length,
+      // Solo las que traen fecha (las demás son menús y páginas fijas), de la más reciente a la más antigua.
+      sample: items
+        .filter((i): i is NewsItem & { publishedAt: Date } => !!i.publishedAt)
+        .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
+        .slice(0, 8)
+        .map((i) => ({ title: i.title.slice(0, 90), date: i.publishedAt.toISOString().slice(0, 10) })),
       summary,
     })
   } catch (err) {

@@ -35,7 +35,7 @@ La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra
 - Nombres: Monitoreo usa los nombres de cada agente (Luisa, Ángela, Alejandro...); en marketing se asignan de la lista Juan, Fernanda, Felipe, Samantha, Tomás, María e Isabel (ver `PEOPLE` en `src/lib/office.ts`).
 
 ## Noticias confiables y memoria de temas
-- **Noticias:** solo cuenta lo que trae su propia fecha y es de los últimos 4 días. Antes de escribir, el sistema abre el enlace y comprueba que la página sea esa noticia y que la fecha coincida; luego un revisor (Haiku) la descarta si es un recordatorio genérico, no sirve a la audiencia o repite un tema ya publicado. Lo descartado queda explicado en el registro de la corrida.
+- **Noticias:** solo cuenta lo que trae su propia fecha y es de los últimos 7 días. Antes de escribir, el sistema abre el enlace y comprueba que la página sea esa noticia y que la fecha coincida; luego un revisor (Haiku) la descarta si es un recordatorio genérico, no sirve a la audiencia o repite un tema ya publicado. Lo descartado queda explicado en el registro de la corrida.
 - **Memoria de temas:** todo tema usado o propuesto (publicado, programado, rechazado, hasta un año atrás) se guarda en los propios posts y nunca vuelve a salir: ni por la misma noticia (enlace), ni con otras palabras (parecido de temas). Aplica a noticias, a la tanda semanal y al investigador.
 - **Varias fuentes:** `NEWS_FEED_URLS` acepta varios feeds RSS/Atom o páginas de listado separados por coma (IRS, contabilidad, pequeñas empresas…). Cada noticia debe traer fecha propia.
 - **Aprobar con un dato incorrecto:** si el verificador marcó el post con error, pide confirmación antes de aprobar.

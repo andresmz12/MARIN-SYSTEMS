@@ -92,7 +92,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [generating, setGenerating] = useState(false)
   const [newsBusy, setNewsBusy] = useState(false)
   const [newsResult, setNewsResult] = useState<{
-    found?: number; fresh?: number; skipped?: string; feedErrors?: string[]; sample?: { title: string; date: string | null }[]
+    found?: number; fresh?: number; latest?: string | null; undated?: number; skipped?: string; feedErrors?: string[]; sample?: { title: string; date: string | null }[]
     summary?: { company: string; created: number; news?: number; skipped?: string; error?: string; rejected?: string[] }[]
   } | null>(null)
 
@@ -558,7 +558,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold text-zinc-100">📰 Noticias automáticas</p>
           <p className="text-xs text-zinc-400">
-            Cada día revisa las noticias oficiales (IRS). Si hay una nueva, te prepara el post y te avisa por correo. Tú lo revisas y apruebas.
+            Cada día revisa las noticias oficiales (IRS). Si hay una de los últimos 7 días que sirva, te prepara el post y te avisa por correo. Tú lo revisas y apruebas.
           </p>
         </div>
         <button
@@ -587,7 +587,11 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
               <p>{newsResult.skipped}</p>
             ) : (
               <>
-                <p>Vi <b>{newsResult.found ?? 0}</b> noticias en la fuente; <b>{newsResult.fresh ?? 0}</b> son recientes (últimos 4 días) y traen su fecha.</p>
+                <p>
+                  Vi <b>{newsResult.found ?? 0}</b> enlaces en la fuente; <b>{newsResult.fresh ?? 0}</b> son noticias de los últimos 7 días con su fecha.
+                  {newsResult.latest ? <> La más reciente que encontré es del <b>{newsResult.latest.split('-').reverse().join('/')}</b>.</> : null}
+                  {(newsResult.undated ?? 0) > 0 ? <span className="text-zinc-500"> ({newsResult.undated} enlaces sin fecha, como menús, se ignoran.)</span> : null}
+                </p>
                 {newsResult.summary?.map((r) => (
                   <div key={r.company}>
                     <p>{r.error ? `⚠️ ${r.error}` : r.created > 0 ? `✅ Creé ${r.news ?? 1} ${(r.news ?? 1) === 1 ? 'noticia nueva' : 'noticias nuevas'}. Revísa${(r.news ?? 1) === 1 ? 'la' : 'las'} abajo.` : `Sin posts nuevos${r.skipped ? `: ${r.skipped}` : '.'}`}</p>
@@ -597,9 +601,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 {(newsResult.feedErrors?.length ?? 0) > 0 && newsResult.feedErrors!.map((e) => <p key={e} className="text-red-300">⚠️ {e}</p>)}
                 {(newsResult.sample?.length ?? 0) > 0 && (
                   <details>
-                    <summary className="cursor-pointer text-zinc-400">Lo que leí de la fuente</summary>
+                    <summary className="cursor-pointer text-zinc-400">Las noticias con fecha que leí</summary>
                     <ul className="mt-1 space-y-0.5 pl-3 text-zinc-500">
-                      {newsResult.sample!.map((x) => <li key={x.title}>{x.date ?? 'sin fecha'} · {x.title}</li>)}
+                      {newsResult.sample!.map((x) => <li key={x.title}>{x.date} · {x.title}</li>)}
                     </ul>
                   </details>
                 )}
