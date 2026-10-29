@@ -12,7 +12,10 @@ const Schema = z.object({
   imageText: z.object({
     headline: z.string().trim().min(1).max(140),
     subheadline: z.string().trim().max(240).optional(),
-    bullets: z.array(z.string().trim().min(1).max(100)).max(3).optional(),
+    keyFact: z.string().trim().max(80).optional(),
+    bullets: z.array(z.string().trim().min(1).max(100)).max(5).optional(),
+    cta: z.string().trim().max(80).optional(),
+    face: z.boolean().optional(),
   }).optional(),
   copy: z.string().min(1).optional(),
   scheduledDate: z.string().nullable().optional(),

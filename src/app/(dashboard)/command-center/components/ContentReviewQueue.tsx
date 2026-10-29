@@ -194,8 +194,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     })
   }
 
-  async function saveImageText(p: GeneratedPost) {
-    const t = textOf(p)
+  async function saveImageText(p: GeneratedPost, override?: ImageText) {
+    const t = override ?? textOf(p)
     if (!t.headline.trim()) return
     const res = await fetch(`/api/ceo/content/${p.id}`, {
       method: 'PATCH',
@@ -204,7 +204,10 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         imageText: {
           headline: t.headline.trim(),
           ...(t.subheadline?.trim() ? { subheadline: t.subheadline.trim() } : {}),
-          ...(t.bullets?.length ? { bullets: t.bullets.map((b) => b.trim()).filter(Boolean).slice(0, 3) } : {}),
+          ...(t.keyFact?.trim() ? { keyFact: t.keyFact.trim() } : {}),
+          ...(t.bullets?.some((b) => b.trim()) ? { bullets: t.bullets.map((b) => b.trim()).filter(Boolean).slice(0, 5) } : {}),
+          ...(t.cta?.trim() ? { cta: t.cta.trim() } : {}),
+          ...(t.face !== undefined ? { face: t.face } : {}),
         },
       }),
     })
@@ -762,14 +765,40 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                       placeholder="Subtítulo (opcional)"
                       className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200"
                     />
+                    <input
+                      value={textOf(post).keyFact ?? ''}
+                      onChange={(e) => setImgText((m) => ({ ...m, [post.id]: { ...textOf(post), keyFact: e.target.value } }))}
+                      onBlur={() => saveImageText(post)}
+                      placeholder="Dato destacado en grande: monto, fecha o formulario (opcional)"
+                      className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-amber-200"
+                    />
                     <textarea
                       value={(textOf(post).bullets ?? []).join('\n')}
-                      onChange={(e) => setImgText((m) => ({ ...m, [post.id]: { ...textOf(post), bullets: e.target.value.split('\n').slice(0, 3) } }))}
+                      onChange={(e) => setImgText((m) => ({ ...m, [post.id]: { ...textOf(post), bullets: e.target.value.split('\n').slice(0, 5) } }))}
                       onBlur={() => saveImageText(post)}
-                      rows={3}
-                      placeholder="Hasta 3 puntos, uno por línea (opcional)"
+                      rows={4}
+                      placeholder="De 3 a 5 puntos, uno por línea (opcional)"
                       className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 resize-none"
                     />
+                    <input
+                      value={textOf(post).cta ?? ''}
+                      onChange={(e) => setImgText((m) => ({ ...m, [post.id]: { ...textOf(post), cta: e.target.value } }))}
+                      onBlur={() => saveImageText(post)}
+                      placeholder="Acción final, ej: Agenda tu cita hoy (opcional)"
+                      className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200"
+                    />
+                    <label className="flex items-center gap-2 text-xs text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={!!textOf(post).face}
+                        onChange={(e) => {
+                          const next = { ...textOf(post), face: e.target.checked }
+                          setImgText((m) => ({ ...m, [post.id]: next }))
+                          void saveImageText(post, next)
+                        }}
+                      />
+                      Con la cara de la marca <span className="text-zinc-500">(adjunta su foto en ChatGPT junto al prompt)</span>
+                    </label>
                     <details className="text-xs text-zinc-400">
                       <summary className="cursor-pointer text-zinc-300">Ver el prompt completo</summary>
                       <pre className="mt-1.5 whitespace-pre-wrap rounded-md bg-zinc-950/60 border border-zinc-800 p-2 text-[11px] text-zinc-400">{promptFor(post)}</pre>

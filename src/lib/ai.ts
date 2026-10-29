@@ -395,11 +395,14 @@ Responde ÚNICAMENTE con este JSON:
   "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
   "cta": "llamada a la acción específica y directa",
   "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado",
-  "imagePrompt": "SOLO la escena visual de la imagen, en inglés: sujeto, composición, fondo, ambiente e íconos. Sin texto escrito, sin colores y sin proporciones: eso lo agrega el sistema",
+  "imagePrompt": "SOLO la escena visual de la imagen, en inglés, sin texto escrito, sin colores y sin proporciones (eso lo agrega el sistema). Si imageText.face es true: describe la pose y el entorno de nuestra vocera (NO su apariencia: la imagen de referencia la define), por ejemplo 'sitting at a desk reviewing documents, smiling at the camera'. Si es false: describe una composición de infografía con íconos y formas, SIN personas ni caras",
   "imageText": {
+    "face": "true si el post es un consejo, una noticia que afecta a la gente o una invitación a contactarnos (sale la cara de la marca); false si es de datos duros como fechas límite, montos, listas de formularios o comparaciones (infografía sin personas). Aproximadamente la mitad de los posts debe llevar cara",
     "headline": "texto principal EN la imagen, en español con acentos correctos, máximo 7 palabras, con el dato o gancho más fuerte",
     "subheadline": "una línea de apoyo, máximo 14 palabras",
-    "bullets": ["hasta 3 puntos cortos de máximo 8 palabras cada uno"]
+    "keyFact": "el dato más importante en grande: un monto, una fecha o un formulario, máximo 6 palabras (ej: '$2,000 · 15 de abril'). Solo datos que estén en 'facts'",
+    "bullets": ["de 3 a 5 puntos con información útil y concreta, máximo 8 palabras cada uno"],
+    "cta": "acción final corta, máximo 5 palabras (ej: 'Agenda tu cita hoy')"
   },
   "facts": ["cada dato verificable que usaste en el copy o la imagen: montos, fechas, formularios, porcentajes, plazos, para que el dueño los confirme en IRS.gov"]
 }`

@@ -6,7 +6,13 @@
 export interface ImageText {
   headline: string
   subheadline?: string
+  /** Dato destacado en grande: el monto, la fecha o el formulario (ej: "$2,000 · 15 de abril"). */
+  keyFact?: string
   bullets?: string[]
+  /** Línea de acción al pie (ej: "Agenda tu cita"). */
+  cta?: string
+  /** true = sale la cara de la marca (la persona de la foto de referencia); false = infografía sin personas. */
+  face?: boolean
 }
 
 export interface VisualStyle {
@@ -46,8 +52,17 @@ export function parseImageText(raw: unknown): ImageText | null {
   const headline = clean(o.headline)
   if (!headline) return null
   const subheadline = clean(o.subheadline)
-  const bullets = Array.isArray(o.bullets) ? o.bullets.map(clean).filter(Boolean).slice(0, 3) : []
-  return { headline, ...(subheadline ? { subheadline } : {}), ...(bullets.length ? { bullets } : {}) }
+  const bullets = Array.isArray(o.bullets) ? o.bullets.map(clean).filter(Boolean).slice(0, 5) : []
+  const keyFact = clean(o.keyFact)
+  const cta = clean(o.cta)
+  return {
+    headline,
+    ...(subheadline ? { subheadline } : {}),
+    ...(keyFact ? { keyFact } : {}),
+    ...(bullets.length ? { bullets } : {}),
+    ...(cta ? { cta } : {}),
+    ...(typeof o.face === 'boolean' ? { face: o.face } : {}),
+  }
 }
 
 export function parseVisualStyle(raw: unknown): VisualStyle {
@@ -84,7 +99,9 @@ export function buildImagePrompt(input: {
     '',
     `VISUAL STYLE: ${style.style || 'clean, modern and professional'}.`,
     `COLOR PALETTE: ${style.palette?.length ? style.palette.join(', ') : 'a cohesive palette of 2-3 colors'}; strong contrast between text and background.`,
-    `SCENE / COMPOSITION: ${input.scene?.trim() || 'abstract, minimal composition related to the topic'}.`,
+    input.text?.face
+      ? `SCENE / COMPOSITION: Feature OUR BRAND SPOKESWOMAN — the woman in the reference photo attached to this message. Keep her face, skin tone, hair and features IDENTICAL to the photo; never invent a different person. ${input.scene?.trim() || 'She looks confident and approachable, in a modern office.'} She takes up about 40% of the frame on one side, leaving the other side clean for the information.`
+      : `SCENE / COMPOSITION: Information-first graphic with NO people or faces. ${input.scene?.trim() || 'Abstract, minimal composition related to the topic'}. Use clear line icons and shapes.`,
     '',
   )
 
@@ -95,7 +112,9 @@ export function buildImagePrompt(input: {
       `• Headline (largest, bold): ${q(t.headline)}`,
     )
     if (t.subheadline) lines.push(`• Subheadline: ${q(t.subheadline)}`)
-    if (t.bullets?.length) lines.push(`• Bullet points: ${t.bullets.map(q).join(' / ')}`)
+    if (t.keyFact) lines.push(`• KEY FACT (second largest, inside a glowing badge or highlighted box): ${q(t.keyFact)}`)
+    if (t.bullets?.length) lines.push(`• Info cards (${t.bullets.length}, one short line each, each with its own simple line icon): ${t.bullets.map(q).join(' / ')}`)
+    if (t.cta) lines.push(`• Call to action (in a button-style bar near the bottom): ${q(t.cta)}`)
     if (style.handle) lines.push(`• Footer (small): ${q(style.handle)}`)
   } else {
     lines.push('Do not include any text in the image.')
@@ -103,7 +122,7 @@ export function buildImagePrompt(input: {
 
   lines.push(
     '',
-    `LAYOUT: bold modern sans-serif typography, clear visual hierarchy, easy to read on a phone, generous margins (at least 6% on every side); ${spec.note}.`,
+    `LAYOUT (top to bottom): headline → subheadline → key fact badge → info cards → call to action → footer. Rich in information but organized: a clear visual hierarchy, aligned cards with equal spacing, bold modern sans-serif typography, easy to read on a phone, generous margins (at least 6% on every side); ${spec.note}.`,
     `AVOID: watermarks, fake logos, gibberish or misspelled text, extra words${style.avoid ? `, ${style.avoid}` : ''}.`,
     'Output a single finished image.',
   )
