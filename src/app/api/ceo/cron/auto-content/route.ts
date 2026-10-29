@@ -111,6 +111,7 @@ async function handler(req: Request) {
             platform: GROUP_IMAGE_PLATFORM,
             contentType: 'post',
             topic: avoid.trim(),
+            research: true,
             knowledge: await knowledgeFor(profile.userId, profile.companyId, `${pillar ?? ''} ${angle?.angle ?? ''} ${angle?.hook ?? ''}`),
             tone: profile.tone,
             targetAudience: profile.targetAudience,

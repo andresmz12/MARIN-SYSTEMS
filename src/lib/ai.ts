@@ -289,6 +289,8 @@ export interface ContentGenerationInput {
   feedback?: string[]
   /** Fragmentos de la biblioteca de conocimiento (impuestos, guías): única fuente permitida para datos concretos. */
   knowledge?: string[]
+  /** Permite buscar en la web (fuentes oficiales como irs.gov) para dar detalles concretos antes de escribir. */
+  research?: boolean
 }
 
 import { parseImageText, type ImageText } from './image-prompt'
@@ -371,6 +373,14 @@ export async function generateMarketingContent(input: ContentGenerationInput): P
 
   const prompt = `Eres un creador de contenido experto para negocios latinos en USA y Colombia.${voiceLine}${forbiddenLine}${anglesLine}${pillarLine}${knowledgeLine}${referencesLine}${feedbackLine}
 
+CALIDAD EDITORIAL (obligatoria): el post debe enseñar algo concreto que la persona no sabía, no repetir un titular.
+- Explica en español simple CADA sigla o término técnico la primera vez que aparece, con su nombre completo (ej: "EITC, el crédito por ingreso del trabajo"). Nunca dejes una sigla sin explicar, ni en el texto ni dentro de la imagen.
+- Incluye un EJEMPLO concreto con números cuando los datos lo permitan (ej: "Una familia con 2 hijos y un ingreso de $45,000 podría recibir…"), marcado como ejemplo de referencia.
+- Di quién califica, quién NO, qué debe hacer y hasta cuándo, con datos oficiales.
+- Ángulo para nuestra audiencia: dueños de negocio y trabajadores independientes latinos (self-employed, ITIN, LLC). Explica qué cambia para ellos.
+- Sin relleno ni frases vacías ("es clave revisar"). Cada línea debe aportar un dato, una explicación o una acción.
+- Todo texto que irá escrito en la imagen va en español; solo los nombres oficiales de formularios y créditos pueden ir en inglés, y siempre con su explicación en español.${input.research ? '\n- Antes de escribir, BUSCA en la web en fuentes oficiales (irs.gov y similares) los detalles concretos: montos del año, requisitos, fechas y un ejemplo. Si un dato no está en una fuente oficial, no lo afirmes. Cada dato va en "facts" con su fuente.' : ''}
+
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}
 Plataforma: ${input.platform}
@@ -400,15 +410,15 @@ Responde ÚNICAMENTE con este JSON:
     "face": "true si el post es un consejo, una noticia que afecta a la gente o una invitación a contactarnos (sale la cara de la marca); false si es de datos duros como fechas límite, montos, listas de formularios o comparaciones (infografía sin personas). Aproximadamente la mitad de los posts debe llevar cara",
     "headline": "texto principal EN la imagen, en español con acentos correctos, máximo 7 palabras, con el dato o gancho más fuerte",
     "subheadline": "una línea de apoyo, máximo 14 palabras",
-    "keyFact": "el dato más importante en grande: un monto, una fecha o un formulario, máximo 6 palabras (ej: '$2,000 · 15 de abril'). Solo datos que estén en 'facts'",
-    "bullets": ["de 3 a 5 puntos con información útil y concreta, máximo 8 palabras cada uno"],
+    "keyFact": "el dato más importante en grande, que se entienda SOLO, sin siglas sueltas: un monto, una fecha o un formulario, máximo 8 palabras (ej: 'Hasta $7,830 de crédito por hijos'). Solo datos que estén en 'facts'",
+    "bullets": ["de 3 a 5 puntos con información útil y concreta, máximo 10 palabras cada uno; cada sigla explicada; en español; al menos uno con un ejemplo o una cifra"],
     "cta": "acción final corta, máximo 5 palabras (ej: 'Agenda tu cita hoy')"
   },
   "facts": ["cada dato verificable que usaste en el copy o la imagen: montos, fechas, formularios, porcentajes, plazos, para que el dueño los confirme en IRS.gov"]
 }`
 
   try {
-    const text = await callAI(AI_MODEL_SMART, prompt, 1500)
+    const text = await callAI(AI_MODEL_SMART, prompt, input.research ? 2500 : 1500, !!input.research)
     return coerceContent(extractJson(text), input)
   } catch {
     return fallbackContent(input)

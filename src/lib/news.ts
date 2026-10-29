@@ -137,7 +137,7 @@ export async function fetchArticleText(url: string): Promise<string> {
     const paragraphs = Array.from(main.replace(/<(script|style|nav|footer|header)[\s\S]*?<\/\1>/gi, ' ').matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi))
       .map((p) => stripHtml(p[1]))
       .filter((p) => p.length > 60)
-    return paragraphs.join(' ').slice(0, 1800)
+    return paragraphs.join(' ').slice(0, 4000)
   } catch {
     return ''
   }
