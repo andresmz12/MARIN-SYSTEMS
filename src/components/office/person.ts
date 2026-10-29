@@ -48,8 +48,6 @@ export interface Person {
 const SKINS = [0xf6d3b3, 0xf1c9a5, 0xe8b990, 0xe0ac86, 0xd09a74]
 const HAIRS = [0x4a3424, 0x5c4129, 0x6b4a2b, 0x9a6a3a, 0x7a5535, 0xb08a4f]
 const PANTS = [0x2b3144, 0x3a3f52, 0x232733, 0x4a4036]
-// Trajes de los agentes: tonos sobrios (carbón, grafito, gris, café oscuro). El azul marino con corbata dorada es solo del CEO.
-const JACKETS = [0x2f3441, 0x3b3f4a, 0x4a5160, 0x1e2128, 0x5a2a35, 0x2d4a3e, 0x6b5d52]
 const SIT_Y = 0.6
 const STAND_Y = 1.0
 
@@ -63,15 +61,13 @@ function hashOf(id: string): number {
 export function specFor(id: string, shirt: number, ghost: boolean): PersonSpec {
   const h = hashOf(id)
   const styles: PersonSpec['hairStyle'][] = ['short', 'long', 'bun', 'cap']
-  // Todos los agentes van de traje: saco sobrio, camisa blanca y corbata del color de su rol (así se distingue quién es quién).
-  const jacket = ghost ? 0x9aa1ad : JACKETS[(h >>> 14) % JACKETS.length]
+  // Ropa casual (sport): camiseta del color de su rol y pantalón oscuro. El traje (ver buildPerson) queda solo para el CEO.
   return {
     skin: SKINS[h % SKINS.length],
     hair: HAIRS[(h >>> 3) % HAIRS.length],
     hairStyle: styles[(h >>> 6) % styles.length],
     shirt,
-    suit: { jacket, tie: shirt },
-    pants: new THREE.Color(jacket).multiplyScalar(0.9).getHex(),
+    pants: PANTS[(h >>> 9) % PANTS.length],
     scale: 0.96 + ((h >>> 12) % 9) / 100,
     ghost,
   }
