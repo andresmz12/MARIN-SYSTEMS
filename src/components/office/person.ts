@@ -16,7 +16,7 @@ export interface PersonSpec {
   ghost: boolean
 }
 
-export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave'
+export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave' | 'play'
 
 interface Arm {
   shoulder: THREE.Group
@@ -252,7 +252,7 @@ interface Target {
 export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016, walkSpeed = 0) {
   const k = Math.min(1, dt * 8)
   const s = p.seed
-  const standing = pose === 'walk' || pose === 'stand' || pose === 'coffee' || pose === 'deliver' || pose === 'wave'
+  const standing = pose === 'walk' || pose === 'stand' || pose === 'coffee' || pose === 'deliver' || pose === 'wave' || pose === 'play'
   p.stance = lerp(p.stance, standing ? 1 : 0, Math.min(1, dt * 6))
   p.phase += dt * 7.5 * walkSpeed
 
@@ -305,6 +305,14 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.headX = -0.05
     T.rS = -0.1; T.rZ = -2.55; T.rE = 0; T.rEz = Math.sin(t * 7) * 0.55
     T.lS = -0.05; T.lE = -0.12
+  } else if (pose === 'play') {
+    // Jugando ping-pong: se inclina hacia la mesa y da raquetazos con la mano derecha.
+    const sw = Math.sin(t * 5.2 + s)
+    T.torsoX = 0.2
+    T.headX = 0.1
+    T.headY = Math.sin(t * 2.6 + s) * 0.25
+    T.rS = -1.05 + sw * 0.45; T.rE = -0.9 - Math.max(0, sw) * 0.5
+    T.lS = -0.5; T.lE = -0.7
   } else if (pose === 'stand') {
     T.torsoX = 0.02 + breath
     T.headX = 0.02

@@ -232,7 +232,7 @@ interface Move {
   from?: Pt
 }
 
-interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number }
+interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** De pie jugando ping-pong, no sentado. */ play?: boolean; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number }
 
 interface Actor {
   id: string
@@ -715,15 +715,21 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       put(box(2.6, 0.012, 0.02, 0xffffff), 0, 0.855, 0, pp)
       ;[[-1.2, -0.6], [1.2, -0.6], [-1.2, 0.6], [1.2, 0.6]].forEach((p) => put(box(0.07, 0.8, 0.07, 0x20232a), p[0], 0.4, p[1], pp))
       put(box(0.02, 0.18, 1.7, 0xf4f4f4), 0, 0.92, 0, pp)
+      pp.rotation.y = Math.PI / 2
       put(pp, ppX, 0, poolZ, root)
       const ball = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), mat(0xffa51f))
       root.add(ball)
+      // La pelota solo se mueve cuando hay dos jugando (los dos asientos de pie ocupados y ya en su lugar).
       loungeTickers.push((time) => {
+        const players = lounge ? lounge.seats.filter((sd) => sd.play && sd.by) : []
+        const on = players.length === 2 && players.every((sd) => actors.some((a) => a.id === sd.by && a.mv?.stage === 'rest'))
+        ball.visible = on
+        if (!on) return
         const k = Math.sin(time * 2.6)
-        ball.position.set(ppX + k * 1.15, 0.96 + Math.abs(Math.sin(time * 5.2)) * 0.22, poolZ + Math.sin(time * 1.3) * 0.35)
+        ball.position.set(ppX + Math.sin(time * 1.3) * 0.3, 0.96 + Math.abs(Math.sin(time * 5.2)) * 0.22, poolZ + k * 1.15)
       })
-      contactShadow(3.4, 2.2, ppX, poolZ, root, 0.2)
-      prop(ppX, poolZ, 2.9, 1.7)
+      contactShadow(2.2, 3.4, ppX, poolZ, root, 0.2)
+      prop(ppX, poolZ, 1.7, 2.9)
       // futbolito
       const fbX = X0 + 11.0
       const fbZ = MZ - 9.4
@@ -931,6 +937,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       seatList.push({ x: tvX + 1.9, z: MZ - 2.5, face: 0, y: -0.1, approach: { x: tvX + 1.9, z: MZ - 3.4 } })
       seatList.push({ x: tvX, z: MZ - 3.1, face: 0, y: -0.1, approach: { x: tvX, z: MZ - 3.9 } })
       seatList.push({ x: X0 + 1.3, z: MZ - 9.6, face: Math.PI / 2, approach: { x: X0 + 2.4, z: MZ - 9.6 } })
+      // Dos lugares de pie, uno frente al otro, para jugar ping-pong
+      seatList.push({ x: ppX, z: poolZ - 1.9, face: 0, play: true, approach: { x: ppX, z: poolZ - 2.9 } })
+      seatList.push({ x: ppX, z: poolZ + 1.9, face: Math.PI, play: true, approach: { x: ppX, z: poolZ + 2.9 } })
       lounge = { seats: seatList }
     }
 
@@ -1129,7 +1138,10 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (!lounge || o.mv || o.ghost) return false
       const free = lounge.seats.map((sd, i) => (sd.by ? -1 : i)).filter((i) => i >= 0)
       if (free.length === 0) return false
-      const idx = free[Math.floor(Math.random() * free.length)]
+      // Si ya hay uno esperando en la mesa de ping-pong, el siguiente tiende a unirse para jugar.
+      const playFree = free.filter((i) => lounge!.seats[i].play)
+      const waiting = lounge.seats.filter((sd) => sd.play && sd.by).length === 1
+      const idx = playFree.length > 0 && (waiting ? Math.random() < 0.85 : Math.random() < 0.25) ? playFree[0] : free[Math.floor(Math.random() * free.length)]
       const seat = lounge.seats[idx]
       const path = nav.findPath(exitPt(o), seat.approach)
       if (!path) return false
@@ -1140,7 +1152,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     // Al abrir la pantalla nadie vuelve a caminar desde cero: quien está descansando aparece ya sentado en su lugar.
     const settleNow = (o: Actor): boolean => {
       if (!lounge || o.mv || o.ghost) return false
-      const idx = lounge.seats.findIndex((sd) => !sd.by)
+      // Al cargar, los primeros en descansar aparecen jugando ping-pong (los dos lugares de pie van primero).
+      let idx = lounge.seats.findIndex((sd) => sd.play && !sd.by)
+      if (idx < 0) idx = lounge.seats.findIndex((sd) => !sd.by)
       if (idx < 0) return false
       const seat = lounge.seats[idx]
       seat.by = o.id
@@ -1216,12 +1230,13 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         o.heading += angDiff(o.heading, seat.face) * Math.min(1, dt * 8)
         g.rotation.y = o.heading
         if (m.t >= 0.9) { m.stage = 'rest'; m.t = 0 }
-        return { pose: k < 0.6 ? 'stand' : 'lounge', speed: 0 }
+        return { pose: k < 0.6 ? 'stand' : seat.play ? 'play' : 'lounge', speed: 0 }
       }
       if (m.stage === 'rest') {
         o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
         g.rotation.y = o.heading
-        return { pose: 'lounge', speed: 0 }
+        const mySeat = lounge && m.seat !== undefined ? lounge.seats[m.seat] : null
+        return { pose: mySeat?.play ? 'play' : 'lounge', speed: 0 }
       }
       if (m.stage === 'wait') {
         o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
