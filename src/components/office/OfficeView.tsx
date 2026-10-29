@@ -26,6 +26,11 @@ const ago = (iso: string | null, now: number) => {
   return `hace ${Math.round(min / 1440)} días`
 }
 
+/** Descanso de la oficina: de 11 PM a 7 AM todos duermen. Si algo falla, el aviso sigue despertando a quien corresponda. */
+export const NIGHT_FROM = 23 * 60
+export const NIGHT_TO = 7 * 60
+const isNight = (minutes: number) => minutes >= NIGHT_FROM || minutes < NIGHT_TO
+
 function scheduledNow(a: OfficeAgent, day: number, minutes: number) {
   return a.slots.some((s) => (s.day === null || s.day === day) && minutes >= s.from && minutes < s.to)
 }
@@ -125,9 +130,10 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
     const a = everyone.find((x) => x.a.id === id)?.a
     if (!a) return 'sleep'
     if (a.status === 'ghost') return 'ghost'
-    if (!demo) return a.status
-    return scheduledNow(a, demoDay, demoMin) ? 'work' : a.status === 'alert' ? 'alert' : 'sleep'
-  }, [everyone, demo, demoDay, demoMin])
+    if (a.status === 'alert') return 'alert'
+    if (!demo) return isNight(real.minutes) ? 'sleep' : a.status
+    return scheduledNow(a, demoDay, demoMin) && !isNight(demoMin) ? 'work' : 'sleep'
+  }, [everyone, demo, demoDay, demoMin, real.minutes])
 
   if (!departments) {
     return <div className="h-[60vh] animate-pulse rounded-xl bg-zinc-800/60">{error && <p className="p-4 text-sm text-red-300">{error}</p>}</div>
