@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { runAgentChecks } from '@/lib/agent-monitor'
 import { withCronLog } from '@/lib/cron-run'
+import { isQuietHours } from '@/lib/quiet-hours'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -13,6 +14,7 @@ async function handler(req: Request) {
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (isQuietHours()) return NextResponse.json({ checked: 0, skipped: 'descanso nocturno (11 PM - 7 AM Colombia)' })
   try {
     const apps = await runAgentChecks()
     return NextResponse.json({

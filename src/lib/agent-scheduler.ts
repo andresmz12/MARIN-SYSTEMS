@@ -1,5 +1,6 @@
 import { runAgentChecks } from '@/lib/agent-monitor'
 import { runLogged } from '@/lib/cron-run'
+import { isQuietHours } from '@/lib/quiet-hours'
 
 // Monitoreo de fondo: chequea los agentes sin necesidad de tener /agentes abierto.
 // Railway corre un proceso Node persistente, así que un intervalo en memoria basta.
@@ -22,6 +23,7 @@ export function startAgentScheduler() {
   let running = false
   const tick = async () => {
     if (running) return // un chequeo lento no se solapa con el siguiente
+    if (isQuietHours()) return // descanso nocturno (11 PM - 7 AM Colombia): no vigila ni manda correos
     running = true
     try {
       // Las corridas OK del scheduler no se registran en CronRun (serían ~288 al día);

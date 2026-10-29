@@ -26,7 +26,7 @@ const ago = (iso: string | null, now: number) => {
   return `hace ${Math.round(min / 1440)} días`
 }
 
-/** Descanso de la oficina: de 11 PM a 7 AM todos duermen. Si algo falla, el aviso sigue despertando a quien corresponda. */
+/** Descanso: de 11 PM a 7 AM todos duermen (la vigilancia de apps también se pausa; ver src/lib/quiet-hours.ts). */
 export const NIGHT_FROM = 23 * 60
 export const NIGHT_TO = 7 * 60
 const isNight = (minutes: number) => minutes >= NIGHT_FROM || minutes < NIGHT_TO

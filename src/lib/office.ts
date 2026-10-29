@@ -94,7 +94,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       role: a.role ?? `Vigila ${a.name}`,
       color: a.color,
       status: bad ? 'alert' : a.lastCheckAt ? 'work' : 'sleep',
-      schedule: 'Cada 5 minutos · duerme de 11 PM a 7 AM (si algo cae, se despierta y te avisa)',
+      schedule: 'Cada 5 minutos, de 7 AM a 11 PM (de noche descansa y no envía avisos)',
       model: 'Sin IA (chequeo de salud)',
       lastReport: short(`${a.name}: ${detail}`),
       lastAt: a.lastCheckAt?.toISOString() ?? null,

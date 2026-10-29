@@ -45,3 +45,6 @@ La vista "Oficina" de **Agentes** (`/agentes`; `/oficina` redirige ahí) muestra
 
 ## Búsqueda de noticias en la web
 Además de las fuentes fijas (`NEWS_FEED_URLS`), el investigador de noticias busca en la web (Sonnet + búsqueda) noticias de los últimos 7 días de impuestos, contabilidad, nómina y pequeños negocios, solo de fuentes oficiales o medios de contabilidad reconocidos. **No se confía en lo que devuelve:** cada noticia se abre y debe cumplir que la página exista, sea esa noticia y MUESTRE una fecha que coincida (±2 días); luego pasa por la memoria de temas y el revisor. Lo inventado o con fecha dudosa se descarta con su motivo. Funciona aunque no haya feeds configurados. El post trae "Fuente verificada en la web (nombre)" con fecha y enlace.
+
+## Descanso nocturno
+De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía avisos de monitoreo (`src/lib/quiet-hours.ts`): ni el vigilante interno ni el disparador externo `/api/agents/cron/check`. A las 7:00 AM retoma. En la oficina, todos aparecen dormidos en ese horario. Para vigilar también de noche, pon `AGENT_MONITOR_QUIET=off` en Railway. El botón "Refrescar ahora" sigue funcionando a cualquier hora.
