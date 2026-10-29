@@ -1,5 +1,6 @@
 import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { AI_BLOCK_TYPES } from './ceo'
+import { classifyAiError, failureOf, recordAiFailure, recordAiOk, type AiFailure } from './ai-health'
 
 export const AI_MODEL = 'claude-haiku-4-5-20251001'
 export const AI_MODEL_SMART = 'claude-sonnet-4-6'
@@ -98,6 +99,7 @@ export async function callClaude({
         convo = [...convo, { role: 'assistant', content: msg.content }]
         msg = await client.messages.create({ ...params, messages: convo })
       }
+      void recordAiOk()
       return extractText(msg)
     } catch (err) {
       const status = err instanceof APIError ? (err.status ?? 0) : 0
@@ -105,6 +107,7 @@ export async function callClaude({
         await new Promise((r) => setTimeout(r, delays[attempt]))
         continue
       }
+      await recordAiFailure(classifyAiError(err))
       throw err
     }
   }
@@ -324,6 +327,8 @@ export interface GeneratedContent {
   imageText: ImageText | null
   /** Datos concretos del post (montos, fechas, formularios) para que el dueño los verifique. */
   facts: string[]
+  /** Solo si la IA falló y el texto es de relleno: por qué falló. */
+  failure?: AiFailure
 }
 
 function fallbackContent(input: ContentGenerationInput): GeneratedContent {
@@ -364,7 +369,7 @@ function coerceContent(parsed: unknown, input: ContentGenerationInput): Generate
 
 /** Generate a complete marketing post ready to publish. Falls back gracefully. */
 export async function generateMarketingContent(input: ContentGenerationInput): Promise<GeneratedContent> {
-  if (!process.env.ANTHROPIC_API_KEY) return fallbackContent(input)
+  if (!process.env.ANTHROPIC_API_KEY) return { ...fallbackContent(input), failure: failureOf('no_key') }
 
   const voiceLine = input.voiceSamples?.length
     ? `\nEscribe imitando el tono de estos ejemplos escritos por el dueño de la marca:\n${input.voiceSamples.map((s, i) => `${i + 1}. "${s}"`).join('\n')}`
@@ -439,17 +444,21 @@ Responde ÚNICAMENTE con este JSON:
 }`
 
   let text = ''
+  let failure: AiFailure | undefined
   try {
     text = await callAI(AI_MODEL_SMART, prompt, input.research ? 4000 : 1500, !!input.research)
   } catch (err) {
     console.error('[generate-content] la llamada a la IA falló:', err instanceof Error ? err.message : err)
+    failure = classifyAiError(err)
   }
   const parsed = extractJson(text)
   if (parsed && typeof parsed === 'object') return coerceContent(parsed, input)
   console.error('[generate-content] respuesta sin JSON válido:', text.slice(0, 300))
   // Si la búsqueda en la web fue lo que falló (límite, tiempo, texto raro), se reintenta sin ella antes de rendirse.
-  if (input.research) return generateMarketingContent({ ...input, research: false })
-  return fallbackContent(input)
+  // Sin crédito o con la clave mala no sirve reintentar.
+  const hopeless = failure?.kind === 'credits' || failure?.kind === 'auth'
+  if (input.research && !hopeless) return generateMarketingContent({ ...input, research: false })
+  return { ...fallbackContent(input), failure: failure ?? failureOf('other') }
 }
 
 // ──────────────────────── Content angles generation ────────────────────────

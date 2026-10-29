@@ -26,6 +26,17 @@ const STATUS: Record<string, { label: string; dot: string; chip: string }> = {
   failed: { label: 'Falló', dot: 'bg-red-400', chip: 'border-red-500/40 text-red-300' },
   rejected: { label: 'Rechazado', dot: 'bg-zinc-600', chip: 'border-zinc-700 text-zinc-500' },
 }
+const TINT: Record<string, string> = {
+  failed: 'bg-red-500/10 border-red-500/40',
+  pending_review: 'bg-amber-500/10 border-amber-500/30',
+  draft: 'bg-amber-500/10 border-amber-500/30',
+  approved: 'bg-sky-500/10 border-sky-500/30',
+  ready: 'bg-sky-500/10 border-sky-500/30',
+  publishing: 'bg-sky-500/10 border-sky-500/30',
+  published: 'bg-emerald-500/10 border-emerald-500/30',
+}
+const TINT_RANK = ['failed', 'pending_review', 'draft', 'publishing', 'approved', 'ready', 'published']
+const NET_EMOJI: Record<string, string> = { instagram: '📸', facebook: '👍', linkedin: '💼', twitter: '𝕏', tiktok: '🎵' }
 const NETWORK: Record<string, string> = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', twitter: 'X', tiktok: 'TikTok' }
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const WEEK = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -108,6 +119,13 @@ export function ContentCalendar({ companies }: { companies: CEOCompany[] }) {
         {count(['failed']) > 0 && <span><b className="text-red-300">{count(['failed'])}</b> con error</span>}
       </div>
 
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-400">
+        {[['bg-emerald-400', 'Publicado'], ['bg-sky-400', 'Programado'], ['bg-amber-400', 'Por aprobar'], ['bg-red-400', 'Falló']].map(([c, l]) => (
+          <span key={l} className="inline-flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${c}`} />{l}</span>
+        ))}
+        <span>📸 Instagram · 👍 Facebook · 💼 LinkedIn · 𝕏 X</span>
+      </div>
+
       {error && <p className="text-sm text-red-300">{error}</p>}
 
       <div className={`grid grid-cols-7 gap-1 ${loading ? 'opacity-60' : ''}`}>
@@ -117,11 +135,13 @@ export function ContentCalendar({ companies }: { companies: CEOCompany[] }) {
           const key = `${monthKey(cursor.y, cursor.m)}-${pad(d)}`
           const items = visible(key)
           const on = key === selected
+          const worst = TINT_RANK.find((r) => items.some((i) => i.status === r))
+          const nets = Array.from(new Set(items.flatMap((i) => i.platforms.map((p) => p.platform))))
           return (
             <button
               key={key}
               onClick={() => setSelected(key)}
-              className={`min-h-[72px] rounded-lg border p-1 text-left align-top transition-colors ${on ? 'border-indigo-400 bg-indigo-500/10' : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'} ${key === today ? 'ring-1 ring-amber-400/60' : ''}`}
+              className={`min-h-[64px] sm:min-h-[84px] rounded-lg border p-1 text-left align-top transition-colors ${on ? 'border-indigo-400 bg-indigo-500/20' : worst ? `${TINT[worst]} hover:border-zinc-500` : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'} ${key === today ? 'ring-1 ring-amber-400/60' : ''}`}
             >
               <span className={`text-[11px] ${key === today ? 'font-bold text-amber-300' : 'text-zinc-400'}`}>{d}</span>
               <div className="mt-0.5 space-y-0.5">
@@ -132,6 +152,7 @@ export function ContentCalendar({ companies }: { companies: CEOCompany[] }) {
                   </div>
                 ))}
                 {items.length > 3 && <div className="text-[10px] text-zinc-500">+{items.length - 3} más</div>}
+                {nets.length > 0 && <div className="text-[10px] leading-none tracking-wide">{nets.map((n) => NET_EMOJI[n] ?? '•').join(' ')}</div>}
               </div>
             </button>
           )

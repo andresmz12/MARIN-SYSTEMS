@@ -454,6 +454,8 @@ model GeneratedPost {
   // Carrusel: texto de cada lámina [{ title, body? }] y enlaces públicos de las imágenes en orden (la primera = imageUrl).
   slides         Json?
   slideImageUrls String[]     @default([])
+  // Versión anterior del texto (antes de regenerar) para poder volver atrás.
+  previousVersion Json?
   imageWidth     Int?
   imageHeight    Int?
   // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).
@@ -898,4 +900,14 @@ model KnowledgeDoc {
 
   @@index([userId])
   @@index([companyId])
+}
+
+// Estado de la IA (una sola fila 'main'): si el último intento falló y por qué (sin crédito, límite, etc.).
+model AiStatus {
+  id          String    @id
+  okAt        DateTime?
+  failAt      DateTime?
+  failKind    String?
+  failMessage String?
+  updatedAt   DateTime  @updatedAt
 }

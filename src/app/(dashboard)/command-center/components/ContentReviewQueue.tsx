@@ -7,6 +7,8 @@ import { PLATFORM_CONFIG, POST_STATUS_CONFIG } from '../utils'
 import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
 import { FactCheckPanel } from './FactCheckPanel'
 import { MetricsForm } from './MetricsForm'
+import { PostPreview } from './PostPreview'
+import { PublishBoard } from './PublishBoard'
 import { AgentReportsPanel } from './AgentReportsPanel'
 import { IMAGE_SPECS, buildCarouselPrompt, buildImagePrompt, imagePlatformOf, parseImageText, parseSlides, parseVisualStyle, type ImageText, type Slide } from '@/lib/image-prompt'
 
@@ -45,6 +47,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [refNote, setRefNote] = useState('')
   const [imgText, setImgText] = useState<Record<string, ImageText>>({})
   const [cropMode, setCropMode] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({})
+  const [selected, setSelected] = useState<string[]>([])
   const [slideDraft, setSlideDraft] = useState<Record<string, Slide[]>>({})
   const [vs, setVs] = useState({ style: '', handle: '', avoid: '', palette: [] as string[] })
   const [vsColor, setVsColor] = useState('#22d3ee')
@@ -462,7 +466,11 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: notes[id] ?? '', ...(only ? { only } : {}) }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        showToast(data.error ?? 'No se pudo regenerar', 'error')
+        return
+      }
       setEdits((e) => { const { [id]: _, ...rest } = e; return rest })
       setImgText((m) => { const { [id]: _, ...rest } = m; return rest })
       showToast(only === 'image' ? 'Propuesta de imagen nueva (el texto no cambió)' : 'Post regenerado', 'success')
@@ -472,6 +480,42 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     } finally {
       setBusyId(null)
     }
+  }
+
+  async function restoreVersion(id: string) {
+    setBusyId(id)
+    try {
+      const res = await fetch(`/api/ceo/content/${id}/restore`, { method: 'POST' })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        showToast(data.error ?? 'No se pudo volver a la versión anterior', 'error')
+        return
+      }
+      setEdits((e) => { const { [id]: _, ...rest } = e; return rest })
+      setImgText((m) => { const { [id]: _, ...rest } = m; return rest })
+      showToast('Texto anterior recuperado', 'success')
+      await load()
+    } catch {
+      showToast('No se pudo volver a la versión anterior', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Aprueba varios posts a la vez (solo los que tienen imagen y sin error de datos).
+  async function approveMany(ids: string[]) {
+    let ok = 0
+    for (const id of ids) {
+      const res = await fetch(`/api/ceo/content/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved', ...(edits[id] !== undefined ? { copy: edits[id] } : {}) }),
+      }).catch(() => null)
+      if (res?.ok) ok++
+    }
+    setSelected([])
+    showToast(ok === ids.length ? `${ok} ${ok === 1 ? 'post aprobado' : 'posts aprobados'}` : `Se aprobaron ${ok} de ${ids.length}`, ok === ids.length ? 'success' : 'error')
+    await load()
   }
 
   // Un mismo contenido para varias redes se muestra como UNA tarjeta (la primera del grupo).
@@ -868,7 +912,14 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           return (
             <div key={post.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="flex flex-wrap gap-1">
+                <span className="flex flex-wrap items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(post.id)}
+                    onChange={(e) => setSelected((x) => (e.target.checked ? [...x, post.id] : x.filter((i) => i !== post.id)))}
+                    className="mr-1 h-4 w-4 accent-indigo-500"
+                    title="Seleccionar para aprobar varios a la vez"
+                  />
                   {members.map((m) => (
                     <span key={m.id} className={`text-xs px-2 py-0.5 rounded-full border ${PLATFORM_CONFIG[m.platform]?.cls ?? ''}`}>
                       {PLATFORM_CONFIG[m.platform]?.emoji} {PLATFORM_CONFIG[m.platform]?.label ?? m.platform}
@@ -1091,6 +1142,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   </>
                 )}
               </div>
+              {previewOpen[post.id] && (
+                <PostPreview copy={copy} post={post} platforms={members.map((m) => m.platform)} brand={brandOf(post)} />
+              )}
               <input
                 value={notes[post.id] ?? ''}
                 onChange={(e) => setNotes((x) => ({ ...x, [post.id]: e.target.value }))}
@@ -1114,6 +1168,22 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-200 border border-zinc-700 hover:border-zinc-500 disabled:opacity-40"
                 >
                   {busy ? 'Trabajando…' : 'Regenerar texto'}
+                </button>
+                {post.previousVersion && (
+                  <button
+                    disabled={busy}
+                    onClick={() => restoreVersion(post.id)}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-amber-200 border border-amber-500/40 hover:bg-amber-500/10 disabled:opacity-40"
+                    title="Recupera el texto que había antes de regenerar"
+                  >
+                    ↩ Volver a la versión anterior
+                  </button>
+                )}
+                <button
+                  onClick={() => setPreviewOpen((x) => ({ ...x, [post.id]: !x[post.id] }))}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-200 border border-zinc-700 hover:border-zinc-500"
+                >
+                  👁 {previewOpen[post.id] ? 'Ocultar vista previa' : 'Vista previa'}
                 </button>
                 <button
                   disabled={busy}
@@ -1167,8 +1237,31 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           </div>
         )
         const both = fresh.length > 0 && legacy.length > 0
+        const readyIds = pending.filter((p) => !!p.imageUrl && p.factCheck?.verdict !== 'error' && !p.copy.includes('[Contenido de ')).map((p) => p.id)
+        const selIds = selected.filter((id) => pending.some((p) => p.id === id))
         return (
           <div className="space-y-8">
+            {pending.length > 1 && (
+              <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur px-3 py-2">
+                <span className="text-xs text-zinc-400 flex-1 min-w-[180px]">
+                  {selIds.length > 0 ? `${selIds.length} seleccionados` : `${readyIds.length} de ${pending.length} están listos (con imagen y sin errores de datos)`}
+                </span>
+                {selIds.length > 0 ? (
+                  <>
+                    <button onClick={() => approveMany(selIds)} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/50">Aprobar seleccionados</button>
+                    <button onClick={() => setSelected([])} className="text-xs text-zinc-400 hover:text-zinc-200">Quitar selección</button>
+                  </>
+                ) : (
+                  <button
+                    disabled={readyIds.length === 0}
+                    onClick={() => { if (window.confirm(`¿Aprobar los ${readyIds.length} posts que están listos? Revisa antes que los datos estén verificados.`)) approveMany(readyIds) }}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-40"
+                  >
+                    Aprobar todos los listos
+                  </button>
+                )}
+              </div>
+            )}
             {section(both ? 'Tanda nueva' : null, 'Un solo post para todas las redes', fresh)}
             {section('Tanda anterior', 'Posts viejos: una tarjeta por red. Apruébalos o recházalos para dejar paso a la tanda nueva.', legacy, (
               <button
@@ -1209,6 +1302,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           ))}
         </div>
       )}
+
+      <PublishBoard posts={posts} onRetry={publishNow} busyId={busyId} canPublish={publishOn} publishPlatforms={publishPlatforms} />
 
       {scheduled.length > 0 && (
         <div className="space-y-2">

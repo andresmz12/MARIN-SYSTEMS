@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // nunca debe pisar el post real.
     if (generated.copy.includes('[Contenido de ')) {
       return NextResponse.json(
-        { error: 'La IA no devolvió contenido válido. Tu post quedó como estaba; intenta de nuevo en un momento.' },
+        { error: `${generated.failure?.message ?? 'La IA no devolvió contenido válido.'} Tu post quedó como estaba.`, kind: generated.failure?.kind ?? 'other' },
         { status: 502 },
       )
     }
@@ -77,7 +77,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json(updated)
     }
 
+    // Guarda lo que había para poder volver atrás ("Volver a la versión anterior").
+    const previousVersion = {
+      copy: post.copy,
+      hashtags: post.hashtags,
+      cta: post.cta,
+      contentNotes: post.contentNotes,
+      imagePrompt: post.imagePrompt,
+      imageText: post.imageText ?? null,
+      facts: post.facts,
+      topic: post.topic,
+      savedAt: new Date().toISOString(),
+    }
+
     const data = {
+      previousVersion: previousVersion as never,
       copy: generated.copy,
       hashtags: generated.hashtags,
       cta: generated.cta,

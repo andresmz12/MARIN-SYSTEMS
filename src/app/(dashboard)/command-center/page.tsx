@@ -7,16 +7,19 @@ import { CompanyManager } from './components/CompanyManager'
 import { ContentReviewQueue } from './components/ContentReviewQueue'
 import { KnowledgeLibrary } from './components/KnowledgeLibrary'
 import { ContentCalendar } from './components/ContentCalendar'
+import { HomePanel } from './components/HomePanel'
+import { AiStatusBanner } from './components/AiStatusBanner'
 
 const MANAGE = '__manage__'
 const LIBRARY = '__library__'
 const CALENDAR = '__calendar__'
+const HOME = '__home__'
 
 export default function CommandCenterPage() {
   const { showToast } = useToast()
   const [companies, setCompanies] = useState<CEOCompany[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<string>('')
+  const [tab, setTab] = useState<string>(HOME)
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -31,7 +34,8 @@ export default function CommandCenterPage() {
   useEffect(() => { loadCompanies() }, [loadCompanies])
 
   const active = companies.filter((c) => c.isActive)
-  const current = tab === MANAGE || tab === LIBRARY || tab === CALENDAR ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
+  const current = tab === MANAGE || tab === LIBRARY || tab === CALENDAR || tab === HOME ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
+  const showHome = tab === HOME && active.length > 0
   const showLibrary = tab === LIBRARY
   const showCalendar = tab === CALENDAR
   const showManage = tab === MANAGE || (!loading && active.length === 0)
@@ -47,9 +51,19 @@ export default function CommandCenterPage() {
         <p className="text-sm text-zinc-500 mt-0.5">Elige una empresa para ver y aprobar su contenido.</p>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3">
+      <AiStatusBanner />
+
+      <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap border-b border-zinc-800 pb-3 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+        <button
+          onClick={() => setTab(HOME)}
+          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            showHome ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          🏠 Inicio
+        </button>
         {active.map((c) => {
-          const on = !showManage && !showLibrary && !showCalendar && current?.id === c.id
+          const on = !showManage && !showLibrary && !showCalendar && !showHome && current?.id === c.id
           return (
             <button
               key={c.id}
@@ -88,7 +102,9 @@ export default function CommandCenterPage() {
         </button>
       </div>
 
-      {showCalendar && active.length > 0 ? (
+      {showHome ? (
+        <HomePanel onGoCompany={(id) => setTab(active.find((c) => c.id === id)?.id ?? active[0].id)} />
+      ) : showCalendar && active.length > 0 ? (
         <ContentCalendar companies={active} />
       ) : showLibrary ? (
         <KnowledgeLibrary companies={active} />
