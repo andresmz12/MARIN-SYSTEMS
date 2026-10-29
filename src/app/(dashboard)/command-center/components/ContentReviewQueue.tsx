@@ -118,17 +118,24 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     }
   }
 
-  async function generateWeek() {
+  async function generateWeek(force = false) {
     setGenerating(true)
     try {
       const res = await fetch('/api/ceo/content/generate-week', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId }),
+        body: JSON.stringify({ companyId, ...(force ? { force: true } : {}) }),
       })
       const d = await res.json().catch(() => ({})) as { created?: number; skipped?: string | null; error?: string }
       if (!res.ok) throw new Error(d.error ?? 'No se pudo generar la tanda')
-      if (d.skipped) showToast(`No se generó: ${d.skipped}. Aprueba, rechaza o publica lo pendiente primero.`, 'info')
+      if (d.skipped) {
+        showToast(`No se generó: ${d.skipped}.`, 'info')
+        if (!force && window.confirm(`No se generó porque ${d.skipped}.\n\n¿Generar la tanda nueva igual? Se sumará a lo que ya tienes.`)) {
+          setGenerating(false)
+          await generateWeek(true)
+          return
+        }
+      }
       else showToast(`Tanda nueva lista: ${d.created} posts. Revísala abajo.`, 'success')
       await load()
     } catch (e) {
@@ -544,7 +551,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         </button>
         {auto?.autoEnabled && (
           <button
-            onClick={generateWeek}
+            onClick={() => generateWeek()}
             disabled={generating}
             title="Crea ahora la tanda de la semana, sin esperar al domingo"
             className="px-3.5 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-50"

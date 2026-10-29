@@ -62,8 +62,8 @@ async function handler(req: Request) {
         const now = new Date()
         const [upcoming, pending] = await Promise.all([
           prisma.generatedPost.count({
-            // Lo rechazado no cuenta: así, descartar una tanda deja generar otra.
-            where: { companyId: profile.companyId, source: 'auto', scheduledDate: { gt: now }, status: { not: 'rejected' } },
+            // Lo rechazado y lo ya publicado no cuentan: así, descartar una tanda (o publicarla a mano antes de su hora) deja generar otra.
+            where: { companyId: profile.companyId, source: 'auto', scheduledDate: { gt: now }, status: { notIn: ['rejected', 'published'] } },
           }),
           prisma.generatedPost.count({
             where: { companyId: profile.companyId, status: 'pending_review' },

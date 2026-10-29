@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!process.env.CRON_SECRET) return NextResponse.json({ error: 'CRON_SECRET no configurado' }, { status: 500 })
 
-  const { companyId } = (await req.json().catch(() => ({}))) as { companyId?: string }
+  const { companyId, force } = (await req.json().catch(() => ({}))) as { companyId?: string; force?: boolean }
   if (!companyId) return NextResponse.json({ error: 'companyId requerido' }, { status: 400 })
   const company = await prisma.cEOCompany.findFirst({ where: { id: companyId, userId: session.user.id }, select: { id: true } })
   if (!company) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const res = await runAutoContent(new Request(req.url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.CRON_SECRET}`, 'Content-Type': 'application/json', 'x-wait': '1' },
-    body: JSON.stringify({ companyId }),
+    body: JSON.stringify({ companyId, ...(force === true ? { force: true } : {}) }),
   }))
   const data = (await res.json().catch(() => ({}))) as { summary?: { created: number; skipped?: string; error?: string }[]; error?: string }
   if (!res.ok) return NextResponse.json({ error: data.error ?? 'No se pudo generar la tanda' }, { status: res.status })
