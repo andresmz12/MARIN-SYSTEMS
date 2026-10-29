@@ -454,18 +454,18 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     }
   }
 
-  async function regenerate(id: string) {
+  async function regenerate(id: string, only?: 'image') {
     setBusyId(id)
     try {
       const res = await fetch(`/api/ceo/content/${id}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: notes[id] ?? '' }),
+        body: JSON.stringify({ note: notes[id] ?? '', ...(only ? { only } : {}) }),
       })
       if (!res.ok) throw new Error()
       setEdits((e) => { const { [id]: _, ...rest } = e; return rest })
       setImgText((m) => { const { [id]: _, ...rest } = m; return rest })
-      showToast('Post regenerado', 'success')
+      showToast(only === 'image' ? 'Propuesta de imagen nueva (el texto no cambió)' : 'Post regenerado', 'success')
       await load()
     } catch {
       showToast('No se pudo regenerar', 'error')
@@ -1113,7 +1113,14 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   onClick={() => regenerate(post.id)}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-200 border border-zinc-700 hover:border-zinc-500 disabled:opacity-40"
                 >
-                  {busy ? 'Trabajando…' : 'Regenerar'}
+                  {busy ? 'Trabajando…' : 'Regenerar texto'}
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => regenerate(post.id, 'image')}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-200 border border-zinc-700 hover:border-zinc-500 disabled:opacity-40"
+                >
+                  Regenerar solo imagen
                 </button>
                 <button
                   disabled={busy}

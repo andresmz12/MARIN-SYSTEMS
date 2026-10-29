@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { note } = (await req.json().catch(() => ({}))) as { note?: string }
+    const { note, only } = (await req.json().catch(() => ({}))) as { note?: string; only?: 'image' }
 
     const post = await prisma.generatedPost.findFirst({
       where: { id: params.id, userId: session.user.id },
@@ -28,7 +28,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const profile = post.brandProfile
-    const guidance = note?.trim()
+    const imageOnly = only === 'image'
+    const guidance = imageOnly
+      ? `Este post YA está escrito y aprobado en su contenido. Mantén exactamente los mismos datos y el mismo tema: "${post.topic}". Texto del post: "${post.copy.slice(0, 900)}".${note?.trim() ? ` Ajuste pedido para la imagen: ${note.trim().slice(0, 300)}.` : ''} Solo necesito una propuesta distinta para la imagen (escena y textos de la imagen).`
+      : note?.trim()
       ? `Reescribe este post: "${post.topic}". Ajuste pedido por el dueño: ${note.trim().slice(0, 300)}.`
       : `Reescribe este post con un enfoque distinto sobre: "${post.topic}".`
 
@@ -57,6 +60,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         { error: 'La IA no devolvió contenido válido. Tu post quedó como estaba; intenta de nuevo en un momento.' },
         { status: 502 },
       )
+    }
+
+    if (imageOnly) {
+      const imgData = {
+        imagePrompt: generated.imagePrompt,
+        imageText: (generated.imageText ?? undefined) as never,
+      }
+      if (post.groupId) {
+        await prisma.generatedPost.updateMany({
+          where: { groupId: post.groupId, userId: session.user.id, id: { not: post.id }, status: { notIn: ['published', 'publishing'] } },
+          data: imgData,
+        })
+      }
+      const updated = await prisma.generatedPost.update({ where: { id: post.id }, data: imgData, include: { company: true } })
+      return NextResponse.json(updated)
     }
 
     const data = {
