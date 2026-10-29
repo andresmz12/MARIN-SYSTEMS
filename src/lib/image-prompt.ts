@@ -100,7 +100,7 @@ export function buildImagePrompt(input: {
     `VISUAL STYLE: ${style.style || 'clean, modern and professional'}.`,
     `COLOR PALETTE: ${style.palette?.length ? style.palette.join(', ') : 'a cohesive palette of 2-3 colors'}; strong contrast between text and background.`,
     input.text?.face
-      ? `SCENE / COMPOSITION: Feature OUR BRAND SPOKESWOMAN — the woman in the reference photo attached to this message. Keep her face, skin tone, hair and features IDENTICAL to the photo; never invent a different person. ${input.scene?.trim() || 'She looks confident and approachable, in a modern office.'} She takes up about 40% of the frame on one side, leaving the other side clean for the information.`
+      ? `SCENE / COMPOSITION: Feature OUR BRAND SPOKESWOMAN — the woman in the reference photo attached to this message. Keep her face, skin tone, hair and features IDENTICAL to the photo; never invent a different person. Pose and setting: ${(input.scene?.trim() || 'she looks confident and approachable, in a modern office').replace(/[.\s]+$/, '')}. She takes up about 40% of the frame on one side, leaving the other side clean for the information.`
       : `SCENE / COMPOSITION: Information-first graphic with NO people or faces. ${input.scene?.trim() || 'Abstract, minimal composition related to the topic'}. Use clear line icons and shapes.`,
     '',
   )
