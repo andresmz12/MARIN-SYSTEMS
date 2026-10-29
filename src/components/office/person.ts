@@ -49,7 +49,7 @@ const SKINS = [0xf6d3b3, 0xf1c9a5, 0xe8b990, 0xe0ac86, 0xd09a74]
 const HAIRS = [0x4a3424, 0x5c4129, 0x6b4a2b, 0x9a6a3a, 0x7a5535, 0xb08a4f]
 const PANTS = [0x2b3144, 0x3a3f52, 0x232733, 0x4a4036]
 // Trajes de los agentes: tonos sobrios (carbón, grafito, gris, café oscuro). El azul marino con corbata dorada es solo del CEO.
-const JACKETS = [0x2f3441, 0x3b3f4a, 0x44474f, 0x262a33, 0x4a4540, 0x34393f]
+const JACKETS = [0x2f3441, 0x3b3f4a, 0x4a5160, 0x1e2128, 0x5a2a35, 0x2d4a3e, 0x6b5d52]
 const SIT_Y = 0.6
 const STAND_Y = 1.0
 
@@ -64,49 +64,78 @@ export function specFor(id: string, shirt: number, ghost: boolean): PersonSpec {
   const h = hashOf(id)
   const styles: PersonSpec['hairStyle'][] = ['short', 'long', 'bun', 'cap']
   // Todos los agentes van de traje: saco sobrio, camisa blanca y corbata del color de su rol (así se distingue quién es quién).
-  const jacket = ghost ? 0x9aa1ad : JACKETS[(h >> 14) % JACKETS.length]
+  const jacket = ghost ? 0x9aa1ad : JACKETS[(h >>> 14) % JACKETS.length]
   return {
     skin: SKINS[h % SKINS.length],
-    hair: HAIRS[(h >> 3) % HAIRS.length],
-    hairStyle: styles[(h >> 6) % styles.length],
+    hair: HAIRS[(h >>> 3) % HAIRS.length],
+    hairStyle: styles[(h >>> 6) % styles.length],
     shirt,
     suit: { jacket, tie: shirt },
     pants: new THREE.Color(jacket).multiplyScalar(0.9).getHex(),
-    scale: 0.96 + ((h >> 12) % 9) / 100,
+    scale: 0.96 + ((h >>> 12) % 9) / 100,
     ghost,
   }
 }
 
-function part(geo: THREE.BufferGeometry, color: number, rough = 0.85): THREE.Mesh {
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.02 }))
+const fabricCache = new Map<number, THREE.CanvasTexture>()
+/** Tela con rayas finas (cada traje con su color): le da aspecto de saco de verdad y no de bloque liso. */
+function fabric(color: number): THREE.CanvasTexture {
+  let t = fabricCache.get(color)
+  if (t) return t
+  const c = document.createElement('canvas')
+  c.width = 32
+  c.height = 32
+  const g = c.getContext('2d')
+  if (g) {
+    const base = new THREE.Color(color)
+    g.fillStyle = `#${base.getHexString()}`
+    g.fillRect(0, 0, 32, 32)
+    g.fillStyle = `#${base.clone().lerp(new THREE.Color(0xffffff), 0.14).getHexString()}`
+    g.fillRect(7, 0, 1, 32)
+    g.fillRect(23, 0, 1, 32)
+  }
+  t = new THREE.CanvasTexture(c)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(2, 3)
+  fabricCache.set(color, t)
+  return t
+}
+
+function part(geo: THREE.BufferGeometry, color: number, rough = 0.85, cloth = false): THREE.Mesh {
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial(cloth ? { color: 0xffffff, map: fabric(color), roughness: rough, metalness: 0.02 } : { color, roughness: rough, metalness: 0.02 }))
   m.castShadow = true
   return m
 }
 const bx = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d)
 const at = <T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T => { o.position.set(x, y, z); return o }
 
-function buildArm(side: 1 | -1, sleeve: number, skin: number): Arm {
+function buildArm(side: 1 | -1, sleeve: number, skin: number, suited = false): Arm {
   const shoulder = new THREE.Group()
   shoulder.position.set(side * 0.24, 0.46, 0)
-  shoulder.add(at(part(bx(0.1, 0.3, 0.1), sleeve), 0, -0.15, 0))
+  shoulder.add(at(part(bx(0.1, 0.3, 0.1), sleeve, 0.85, suited), 0, -0.15, 0))
   const elbow = new THREE.Group()
   elbow.position.y = -0.3
   shoulder.add(elbow)
-  elbow.add(at(part(bx(0.085, 0.27, 0.085), skin), 0, -0.135, 0))
+  // De traje, la manga del saco llega hasta la muñeca y asoma el puño blanco de la camisa.
+  elbow.add(at(part(bx(0.085, 0.27, 0.085), suited ? sleeve : skin, 0.85, suited), 0, -0.135, 0))
+  if (suited) elbow.add(at(part(bx(0.092, 0.03, 0.092), 0xf6f6f8), 0, -0.265, 0))
   const hand = at(part(bx(0.095, 0.1, 0.07), skin), 0, -0.31, 0)
   elbow.add(hand)
   return { shoulder, elbow, hand }
 }
 
-function buildLeg(side: 1 | -1, pants: number): Leg {
+function buildLeg(side: 1 | -1, pants: number, suited = false): Leg {
   const hip = new THREE.Group()
   hip.position.set(side * 0.1, 0, 0)
-  hip.add(at(part(bx(0.16, 0.46, 0.16), pants), 0, -0.23, 0))
+  hip.add(at(part(bx(0.16, 0.46, 0.16), pants, 0.85, suited), 0, -0.23, 0))
   const knee = new THREE.Group()
   knee.position.y = -0.46
   hip.add(knee)
-  knee.add(at(part(bx(0.14, 0.46, 0.14), pants), 0, -0.23, 0))
-  knee.add(at(part(bx(0.14, 0.08, 0.25), 0x14151b), 0, -0.5, 0.06))
+  knee.add(at(part(bx(0.14, 0.46, 0.14), pants, 0.85, suited), 0, -0.23, 0))
+  // Zapato de vestir (lustroso) y calcetín oscuro
+  if (suited) knee.add(at(part(bx(0.12, 0.04, 0.12), 0x15161b), 0, -0.47, 0))
+  const shoe = part(bx(0.14, 0.08, 0.26), suited ? 0x0f1014 : 0x14151b, suited ? 0.3 : 0.85)
+  knee.add(at(shoe, 0, -0.5, 0.06))
   return { hip, knee }
 }
 
@@ -119,26 +148,55 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   const hips = new THREE.Group()
   hips.position.y = SIT_Y
   g.add(hips)
-  hips.add(part(bx(0.4, 0.18, 0.26), spec.pants))
-  const legL = buildLeg(1, spec.pants)
-  const legR = buildLeg(-1, spec.pants)
+  hips.add(part(bx(0.4, 0.18, 0.26), spec.pants, 0.85, !!suit))
+  const legL = buildLeg(1, spec.pants, !!suit)
+  const legR = buildLeg(-1, spec.pants, !!suit)
   hips.add(legL.hip, legR.hip)
 
   const torso = new THREE.Group()
   torso.position.set(0, 0.08, 0)
   hips.add(torso)
-  torso.add(at(part(bx(0.42, 0.52, 0.25), top), 0, 0.26, 0))
-  if (suit) {
-    torso.add(at(part(bx(0.12, 0.38, 0.01), 0xf4f4f6), 0, 0.3, 0.128))
-    torso.add(at(part(bx(0.05, 0.3, 0.012), suit.tie), 0, 0.27, 0.135))
-    // Solapas del saco y un pañuelo en el bolsillo
-    const lapel = new THREE.Color(suit.jacket).multiplyScalar(0.8).getHex()
+  const woman = spec.hairStyle === 'long' || spec.hairStyle === 'bun'
+  if (!suit) {
+    torso.add(at(part(bx(0.42, 0.52, 0.25), top), 0, 0.26, 0))
+  } else {
+    const jacket = suit.jacket
+    const dark = new THREE.Color(jacket).multiplyScalar(0.78).getHex()
+    // Saco entallado: pecho amplio, cintura más angosta, faldón sobre la cadera y hombreras.
+    torso.add(at(part(bx(0.44, 0.3, 0.27), jacket, 0.85, true), 0, 0.37, 0))
+    torso.add(at(part(bx(0.4, 0.26, 0.25), jacket, 0.85, true), 0, 0.12, 0))
+    torso.add(at(part(bx(0.45, 0.14, 0.285), jacket, 0.85, true), 0, -0.04, 0))
+    ;([1, -1] as const).forEach((sd) => torso.add(at(part(bx(0.12, 0.07, 0.275), jacket, 0.85, true), sd * 0.2, 0.5, 0)))
+    // Camisa en V y cuello
+    torso.add(at(part(bx(0.13, 0.4, 0.01), woman ? spec.shirt : 0xf4f4f6), 0, 0.31, 0.134))
     ;([1, -1] as const).forEach((sd) => {
-      const l = at(part(bx(0.07, 0.3, 0.012), lapel), sd * 0.1, 0.33, 0.131)
-      l.rotation.z = sd * -0.28
+      const col = at(part(bx(0.06, 0.05, 0.02), woman ? spec.shirt : 0xf8f8fa), sd * 0.045, 0.545, 0.128)
+      col.rotation.z = sd * -0.35
+      torso.add(col)
+    })
+    if (woman) {
+      // Blusa del color del rol y un collar fino de perlas
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 6) * Math.PI
+        torso.add(at(part(new THREE.SphereGeometry(0.014, 8, 8), 0xf3ece0, 0.4), Math.cos(a) * 0.06, 0.5 - Math.sin(a) * 0.07, 0.14))
+      }
+    } else {
+      // Corbata con nudo y pala ancha, del color del rol
+      torso.add(at(part(bx(0.06, 0.05, 0.022), suit.tie, 0.5), 0, 0.5, 0.14))
+      torso.add(at(part(bx(0.055, 0.3, 0.014), suit.tie, 0.5), 0, 0.33, 0.142))
+      torso.add(at(part(bx(0.06, 0.03, 0.016), suit.tie, 0.5), 0, 0.17, 0.142))
+    }
+    // Solapas, botones y pañuelo
+    ;([1, -1] as const).forEach((sd) => {
+      const l = at(part(bx(0.075, 0.34, 0.014), dark), sd * 0.105, 0.34, 0.136)
+      l.rotation.z = sd * -0.3
       torso.add(l)
     })
-    torso.add(at(part(bx(0.06, 0.04, 0.012), 0xf4f4f6), -0.13, 0.4, 0.132))
+    ;[0.2, 0.1].forEach((yy) => torso.add(at(part(bx(0.022, 0.022, 0.012), 0x14151b, 0.4), 0, yy, 0.139)))
+    torso.add(at(part(bx(0.06, 0.04, 0.012), 0xf4f4f6), -0.14, 0.42, 0.139))
+    // Cinturón con hebilla
+    torso.add(at(part(bx(0.41, 0.03, 0.26), 0x14151b, 0.5), 0, -0.1, 0))
+    torso.add(at(part(bx(0.04, 0.03, 0.01), 0xc9a24a, 0.3), 0, -0.1, 0.133))
   }
   torso.add(at(part(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 10), spec.skin), 0, 0.56, 0))
 
@@ -158,8 +216,8 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   if (spec.hairStyle === 'short') hairPart(bx(0.3, 0.07, 0.05), 0, 0.12, -0.13)
   if (spec.hairStyle === 'cap') hairPart(bx(0.3, 0.1, 0.1), 0, 0.12, -0.1)
 
-  const armL = buildArm(1, top, spec.skin)
-  const armR = buildArm(-1, top, spec.skin)
+  const armL = buildArm(1, top, spec.skin, !!suit)
+  const armR = buildArm(-1, top, spec.skin, !!suit)
   torso.add(armL.shoulder, armR.shoulder)
 
   // Objetos que lleva en la mano: una taza (café) y un papel (entregas)

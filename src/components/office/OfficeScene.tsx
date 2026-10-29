@@ -132,20 +132,68 @@ function textSprite(text: string, color: string, size = 84) {
 }
 function floorTexture(repX: number, repY: number) {
   const c = document.createElement('canvas')
-  c.width = 256
-  c.height = 256
+  c.width = 512
+  c.height = 512
   const g = c.getContext('2d')
   if (g) {
-    g.fillStyle = '#e8e2d6'
-    g.fillRect(0, 0, 256, 256)
-    g.strokeStyle = 'rgba(120,105,85,0.20)'
-    g.lineWidth = 2
-    g.strokeRect(1, 1, 254, 254)
+    // Tablones de roble claro con vetas, juntas desfasadas y un tono ligeramente distinto en cada uno.
+    const rows = 8
+    const ph = 512 / rows
+    let seed = 7
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+    for (let r = 0; r < rows; r++) {
+      let x = -rnd() * 220
+      while (x < 512) {
+        const len = 200 + rnd() * 170
+        const tone = 0.93 + rnd() * 0.12
+        const base = [196 * tone, 168 * tone, 132 * tone].map((v) => Math.min(255, Math.round(v)))
+        g.fillStyle = `rgb(${base[0]},${base[1]},${base[2]})`
+        g.fillRect(x, r * ph, len, ph)
+        // vetas
+        for (let k = 0; k < 7; k++) {
+          g.strokeStyle = `rgba(120,88,52,${0.05 + rnd() * 0.07})`
+          g.lineWidth = 1
+          const yy = r * ph + 4 + rnd() * (ph - 8)
+          g.beginPath()
+          g.moveTo(x + 2, yy)
+          g.bezierCurveTo(x + len * 0.3, yy + (rnd() - 0.5) * 6, x + len * 0.7, yy + (rnd() - 0.5) * 6, x + len - 2, yy + (rnd() - 0.5) * 3)
+          g.stroke()
+        }
+        g.strokeStyle = 'rgba(90,64,36,0.28)'
+        g.lineWidth = 1.5
+        g.strokeRect(x, r * ph, len, ph)
+        x += len
+      }
+    }
   }
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.repeat.set(repX, repY)
   return t
+}
+
+/** Sombra suave bajo los muebles: los apoya en el piso y le da profundidad a la escena. */
+let blobTex: THREE.CanvasTexture | null = null
+function contactShadow(w: number, d: number, x: number, z: number, parent: THREE.Object3D, opacity = 0.32) {
+  if (!blobTex) {
+    const c = document.createElement('canvas')
+    c.width = 128
+    c.height = 128
+    const g = c.getContext('2d')
+    if (g) {
+      const grad = g.createRadialGradient(64, 64, 8, 64, 64, 62)
+      grad.addColorStop(0, 'rgba(40,30,20,0.85)')
+      grad.addColorStop(0.65, 'rgba(40,30,20,0.35)')
+      grad.addColorStop(1, 'rgba(40,30,20,0)')
+      g.fillStyle = grad
+      g.fillRect(0, 0, 128, 128)
+    }
+    blobTex = new THREE.CanvasTexture(c)
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, opacity, depthWrite: false }))
+  m.rotation.x = -Math.PI / 2
+  put(m, x, 0.024, z, parent)
+  return m
 }
 
 function plant(x: number, z: number, parent: THREE.Object3D, s = 1) {
@@ -158,6 +206,7 @@ function plant(x: number, z: number, parent: THREE.Object3D, s = 1) {
   })
   g.position.set(x, 0, z)
   parent.add(g)
+  contactShadow(0.95 * s, 0.95 * s, x, z, parent, 0.3)
 }
 
 // ───────────────────────── Escritorio con su persona ─────────────────────────
@@ -206,6 +255,10 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
   put(screen, 0, 1.3, -0.3, desk)
   put(box(0.62, 0.025, 0.2, 0xcfd3da), 0, 0.85, 0.2, desk)
   put(box(0.1, 0.1, 0.1, 0xf4f4f4), 0.75, 0.9, 0.05, desk) // taza
+  put(box(0.14, 0.02, 0.14, 0x2a2e38), -0.82, 0.85, -0.3, desk) // lámpara de escritorio
+  put(box(0.02, 0.32, 0.02, 0x2a2e38), -0.82, 1.02, -0.3, desk)
+  put(box(0.2, 0.05, 0.12, 0xd6b35a), -0.76, 1.2, -0.3, desk)
+  put(box(0.16, 0.012, 0.1, 0xf6efe0), 0.58, 0.845, 0.14, desk) // mouse pad
   put(box(0.34, 0.012, 0.24, 0xf6efe0), -0.7, 0.845, 0.1, desk) // cuaderno
   // Silla con el color del área
   const chairColor = deep(accent, 0.78)
@@ -214,6 +267,7 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
   put(box(0.07, 0.46, 0.07, 0x3a3f4a), 0, 0.24, 0.95, desk)
   put(box(0.5, 0.04, 0.5, 0x3a3f4a), 0, 0.03, 0.95, desk)
 
+  contactShadow(2.9, 2.6, 0, 0.55, desk, 0.34)
   const seat = new THREE.Group()
   seat.position.set(0, 0, 0.95)
   seat.rotation.y = Math.PI // mira hacia el monitor
@@ -242,6 +296,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   live.current = { statusOf, minutes, selectedId, focus, ceo }
   const selectRef = useRef(onSelect)
   selectRef.current = onSelect
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
 
   // La escena se reconstruye solo si cambia la estructura (zonas y agentes), no por el estado.
   const structure = departments.map((d) => `${d.id}:${d.name}:${d.accent}:${d.agents.map((a) => `${a.id}${a.name}${a.status === 'ghost' ? 'g' : ''}${a.color}`).join(',')}`).join('|')
@@ -276,7 +332,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     scene.add(root)
 
     // Piso cálido y paredes del fondo con ventanales (un solo espacio abierto)
-    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.3, fd), new THREE.MeshStandardMaterial({ map: floorTexture(fw / 2.4, fd / 2.4), roughness: 0.85 }))
+    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.3, fd), new THREE.MeshStandardMaterial({ map: floorTexture(fw / 4.2, fd / 4.2), roughness: 0.62 }))
     floorMesh.receiveShadow = true
     put(floorMesh, fcx, -0.15, fcz, root)
     const wallColor = 0xf3f0e9
@@ -301,7 +357,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 1.75), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }))
     sign.rotation.y = Math.PI
     put(sign, floor.minX + fw * 0.34, 5.0, floor.maxZ - 0.12, root)
-    const glass = new THREE.MeshBasicMaterial({ color: 0xc4e1f6 })
+    const glass = new THREE.MeshBasicMaterial({ color: 0xcfe6f7, transparent: true, opacity: 0.4, depthWrite: false })
     const winFrame = (w: number, h: number, d: number) => box(w, h, d, 0xffffff)
     const backWins = Math.max(2, Math.floor(fw / 4.6))
     for (let i = 0; i < backWins; i++) {
@@ -323,6 +379,65 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       put(winFrame(0.12, 0.1, 3.0), floor.maxX - 0.1, 1.15, wz, root)
       put(winFrame(0.12, 2.1, 0.08), floor.maxX - 0.1, 2.2, wz, root)
     }
+    // La ciudad que se ve por los ventanales: edificios de distintas alturas con ventanas iluminadas
+    const cityTex = (() => {
+      const cv = document.createElement('canvas')
+      cv.width = 128
+      cv.height = 256
+      const g = cv.getContext('2d')
+      if (g) {
+        g.fillStyle = '#b9c7d6'
+        g.fillRect(0, 0, 128, 256)
+        for (let y = 8; y < 250; y += 14) {
+          for (let x = 8; x < 120; x += 14) {
+            g.fillStyle = (x * 7 + y * 3) % 5 === 0 ? '#ffe9b0' : '#8fa4ba'
+            g.fillRect(x, y, 8, 8)
+          }
+        }
+      }
+      const t = new THREE.CanvasTexture(cv)
+      t.wrapS = t.wrapT = THREE.RepeatWrapping
+      return t
+    })()
+    let cs = 11
+    const crnd = () => { cs = (cs * 16807) % 2147483647; return cs / 2147483647 }
+    const tower = (x: number, z: number, w: number, d: number, h: number) => {
+      const t = cityTex.clone()
+      t.needsUpdate = true
+      t.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(h / 4)))
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ map: t, color: 0xdfe8f2 }))
+      put(m, x, h / 2 - 0.4, z, root)
+    }
+    for (let x = floor.minX - 6; x < floor.maxX + 14; ) {
+      const w = 3 + crnd() * 4
+      tower(x + w / 2, floor.maxZ + 9 + crnd() * 10, w, 4 + crnd() * 4, 10 + crnd() * 22)
+      x += w + 0.6 + crnd() * 1.6
+    }
+    for (let z = floor.minZ - 6; z < floor.maxZ + 6; ) {
+      const d = 3 + crnd() * 4
+      tower(floor.maxX + 9 + crnd() * 10, z + d / 2, 4 + crnd() * 4, d, 10 + crnd() * 22)
+      z += d + 0.6 + crnd() * 1.6
+    }
+
+    // Revestimiento de madera en la parte baja de las paredes, moldura superior y cuadros entre las ventanas
+    put(box(fw, 1.0, 0.08, 0xe7dccb), fcx, 0.5, floor.maxZ - 0.14, root)
+    put(box(fw, 0.06, 0.12, 0xcdb89a), fcx, 1.03, floor.maxZ - 0.14, root)
+    put(box(0.08, 1.0, fd, 0xe7dccb), floor.maxX - 0.14, 0.5, fcz, root)
+    put(box(0.12, 0.06, fd, 0xcdb89a), floor.maxX - 0.14, 1.03, fcz, root)
+    put(box(fw, 0.14, 0.26, 0xfaf7f0), fcx, WALL_H - 0.07, floor.maxZ - 0.05, root)
+    const frameAt = (x: number, y: number, z: number, w: number, h: number, rotY: number, color: number) => {
+      const fr = new THREE.Group()
+      put(box(w, h, 0.06, 0x4a3524), 0, 0, 0, fr)
+      put(box(w - 0.14, h - 0.14, 0.07, color), 0, 0, 0.005, fr)
+      put(box((w - 0.14) * 0.55, (h - 0.14) * 0.4, 0.075, 0xf3ead8), 0, 0.12, 0.01, fr)
+      put(fr, x, y, z, root)
+      fr.rotation.y = rotY
+    }
+    for (let i = 0; i < sideWins - 1; i++) {
+      const wz = floor.minZ + ((i + 1) * fd) / sideWins
+      frameAt(floor.maxX - 0.2, 2.6, wz, 0.95, 1.3, -Math.PI / 2, i % 2 ? 0x6e8fa8 : 0xc08a4a)
+    }
+
     // Zócalo y plantas grandes en las esquinas
     put(box(fw, 0.18, 0.12, 0xd9d2c3), fcx, 0.09, floor.maxZ - 0.15, root)
     put(box(0.12, 0.18, fd, 0xd9d2c3), floor.maxX - 0.15, 0.09, fcz, root)
@@ -339,7 +454,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       // Mampara trasera y lateral: dividen sin encerrar
       const backLen = z.w * 0.82
       const wallZ = z.cz + z.d / 2 - 0.1
-      const WALL = 1.9
+      const WALL = 1.6
       put(new THREE.Mesh(new THREE.BoxGeometry(backLen, WALL, 0.07), new THREE.MeshStandardMaterial({ color: 0xf6f8fa, transparent: true, opacity: 0.8, roughness: 0.4 })), z.cx, WALL / 2, wallZ, root)
       put(box(backLen, 0.07, 0.11, 0xc9a77a), z.cx, WALL + 0.03, wallZ, root)
       // Nombre del área, escrito en la pared
@@ -498,10 +613,11 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       // ── Área de descanso: sofás, sillones y mesa de centro. Aquí van los agentes cuando no están trabajando ──
       const zonesMaxZ = plan.ceo.z - 1.8 - CEO_D / 2
       const lx = breakX0 + 3.7
-      const lz = zonesMaxZ + 3.4
+      const lz = zonesMaxZ + 4.1
       const rug = box(9.4, 0.03, 5.8, 0xd9c6a6)
       rug.castShadow = false
       put(rug, lx, 0.018, lz, root)
+      contactShadow(10.6, 6.6, lx, lz, root, 0.18)
       put(box(8.4, 0.012, 4.8, 0xe9dcc3), lx, 0.036, lz, root).castShadow = false
       const sofa = (x: number, z: number, rotY: number, color: number, seats: number) => {
         const w = seats * 0.85 + 0.35
@@ -692,6 +808,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         }
       }
       if (best) selectRef.current(best.id, best.d)
+      else closeRef.current() // tocar el piso vacío quita la selección (nombre, anillo y tarjeta)
     }
     const onUp = (e: PointerEvent) => { pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
     const onWheel = (e: WheelEvent) => { e.preventDefault(); zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
@@ -780,6 +897,23 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (!path) return false
       seat.by = o.id
       o.mv = { kind: 'rest', stage: 'stand', path, i: 0, t: 0, wait: 0, face: seat.face, seat: idx }
+      return true
+    }
+    // Al abrir la pantalla nadie vuelve a caminar desde cero: quien está descansando aparece ya sentado en su lugar.
+    const settleNow = (o: Actor): boolean => {
+      if (!lounge || o.mv || o.ghost) return false
+      const idx = lounge.seats.findIndex((sd) => !sd.by)
+      if (idx < 0) return false
+      const seat = lounge.seats[idx]
+      seat.by = o.id
+      const g = o.person.group
+      g.parent?.remove(g)
+      root.add(g)
+      g.position.set(seat.x, 0, seat.z)
+      g.rotation.y = seat.face
+      o.heading = seat.face
+      o.person.stance = 0
+      o.mv = { kind: 'rest', stage: 'rest', path: [], i: 0, t: 0, wait: 0, face: seat.face, seat: idx }
       return true
     }
     const wakeUp = (o: Actor) => {
@@ -914,6 +1048,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       }
     }
     let last = performance.now()
+    let placed = false
 
     let raf = 0
     const frame = (t: number) => {
@@ -922,6 +1057,10 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const dt = Math.min(0.1, Math.max(0.001, (t - last) / 1000))
       last = t
       const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
+      if (!placed) {
+        placed = true
+        actors.forEach((a) => { if (st(a.id) === 'sleep') settleNow(a) })
+      }
 
       const f = focusOf(fcs)
       cur.tx += (f.tx - cur.tx) * 0.1

@@ -67,7 +67,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   }
   useEffect(() => {
     const onFs = () => { if (!document.fullscreenElement) setFull(false) }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFull(false); setSelected(null) } }
     document.addEventListener('fullscreenchange', onFs)
     window.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('fullscreenchange', onFs); window.removeEventListener('keydown', onKey) }
