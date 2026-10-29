@@ -378,6 +378,8 @@ CALIDAD EDITORIAL (obligatoria): el post debe enseñar algo concreto que la pers
 - Incluye un EJEMPLO concreto con números cuando los datos lo permitan (ej: "Una familia con 2 hijos y un ingreso de $45,000 podría recibir…"), marcado como ejemplo de referencia.
 - Di quién califica, quién NO, qué debe hacer y hasta cuándo, con datos oficiales.
 - Ángulo para nuestra audiencia: dueños de negocio y trabajadores independientes latinos (self-employed, ITIN, LLC). Explica qué cambia para ellos.
+- Si la fuente es un resumen general de una ley o de varias medidas, NO las enumeres todas de forma superficial: elige UNA medida concreta (la que más afecta a nuestra audiencia) y explícala a fondo; menciona que hay más y que pueden escribirnos. Mejor una cosa bien explicada que cinco a medias.
+- Piensa en un post que valga la pena GUARDAR: una lista, un paso a paso o un dato que la persona querrá volver a consultar. Cierra invitando a guardarlo o a escribirnos.
 - Sin relleno ni frases vacías ("es clave revisar"). Cada línea debe aportar un dato, una explicación o una acción.
 - Todo texto que irá escrito en la imagen va en español; solo los nombres oficiales de formularios y créditos pueden ir en inglés, y siempre con su explicación en español.${input.research ? '\n- Antes de escribir, BUSCA en la web en fuentes oficiales (irs.gov y similares) los detalles concretos: montos del año, requisitos, fechas y un ejemplo. Si un dato no está en una fuente oficial, no lo afirmes. Cada dato va en "facts" con su fuente.' : ''}
 
@@ -412,7 +414,7 @@ Responde ÚNICAMENTE con este JSON:
     "subheadline": "una línea de apoyo, máximo 14 palabras",
     "keyFact": "el dato más importante en grande, que se entienda SOLO, sin siglas sueltas: un monto, una fecha o un formulario, máximo 8 palabras (ej: 'Hasta $7,830 de crédito por hijos'). Solo datos que estén en 'facts'",
     "bullets": ["de 3 a 5 puntos con información útil y concreta, máximo 10 palabras cada uno; cada sigla explicada; en español; al menos uno con un ejemplo o una cifra"],
-    "cta": "acción final corta, máximo 5 palabras (ej: 'Agenda tu cita hoy')"
+    "cta": "acción final corta, máximo 5 palabras (ej: 'Guarda este post' o 'Agenda tu cita hoy')"
   },
   "facts": ["cada dato verificable que usaste en el copy o la imagen: montos, fechas, formularios, porcentajes, plazos, para que el dueño los confirme en IRS.gov"]
 }`
