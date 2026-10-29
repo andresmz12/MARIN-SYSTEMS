@@ -355,6 +355,15 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     await load()
   }
 
+  /** Devuelve el contenido (todas sus redes) a "Por aprobar" para poder cambiar texto, imagen o carrusel y volver a aprobarlo. */
+  async function reopenPost(post: GeneratedPost) {
+    const warn = post.status === 'published'
+      ? `Este post ya salió publicado${post.platform === 'linkedin' ? ' en LinkedIn' : ''}. Si lo editas y lo vuelves a aprobar, se publicará OTRA VEZ (quedaría duplicado en la red): borra antes el anterior en la red.\n\n`
+      : ''
+    if (!window.confirm(`${warn}¿Volver "${post.topic}" a "Por aprobar" para editarlo? Cambiarás texto e imagen allí y lo apruebas de nuevo.`)) return
+    await patch(post.id, { status: 'pending_review', publishedAt: null }, 'Listo: está en "Por aprobar" para editarlo')
+  }
+
   async function deletePost(post: GeneratedPost) {
     const was = post.status === 'published' ? '\n\nSi ya estaba publicado en una red, tendrás que borrarlo allá a mano: aquí solo se elimina de la app y del calendario.' : ''
     if (!window.confirm(`¿Eliminar "${post.topic}" en todas las redes?${was}`)) return
@@ -1244,6 +1253,11 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 >
                   Copiar
                 </button>
+                {post.status !== 'publishing' && (
+                  <button onClick={() => reopenPost(post)} className="text-xs text-amber-200 border border-amber-500/40 rounded-md px-2 py-1 hover:bg-amber-500/10" title="Volver a Por aprobar para cambiar texto, imagen o carrusel">
+                    ✏️ Editar
+                  </button>
+                )}
                 <button
                   onClick={() => patch(post.id, { status: 'published' }, 'Marcado como publicado')}
                   className="text-xs text-emerald-300 border border-emerald-500/40 rounded-md px-2 py-1 hover:bg-emerald-500/10"
@@ -1306,6 +1320,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 {post.externalUrl && (
                   <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
                 )}
+                <button onClick={() => reopenPost(post)} className="text-amber-200/90 hover:text-amber-100" title="Volver a Por aprobar para cambiar texto, imagen o carrusel">✏️ Editar</button>
                 <button onClick={() => deletePost(post)} className="text-red-300/80 hover:text-red-200" title="Eliminar este post">🗑️ Eliminar</button>
               </div>
               <MetricsForm key={`${post.id}-${post.metric?.source ?? ''}`} post={post} onSaved={load} />
