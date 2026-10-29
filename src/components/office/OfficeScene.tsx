@@ -234,6 +234,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   const bubbleRef = useRef<HTMLDivElement>(null)
   const live = useRef({ statusOf, minutes, selectedId, focus, ceo })
   live.current = { statusOf, minutes, selectedId, focus, ceo }
+  const selectRef = useRef(onSelect)
+  selectRef.current = onSelect
 
   // La escena se reconstruye solo si cambia la estructura (zonas y agentes), no por el estado.
   const structure = departments.map((d) => `${d.id}:${d.name}:${d.accent}:${d.agents.map((a) => `${a.id}${a.name}${a.status === 'ghost' ? 'g' : ''}${a.color}`).join(',')}`).join('|')
@@ -574,7 +576,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       pitch = Math.max(0.35, Math.min(1.1, pitch + (e.clientY - drag.y) * 0.004))
       drag = { x: e.clientX, y: e.clientY }
     }
-    const onUp = (e: PointerEvent) => { pts.delete(e.pointerId); pinch = 0; drag = null }
+    let downAt: [number, number] | null = null
+    canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY] })
+    const ray = new THREE.Raycaster()
+    const pick = (e: PointerEvent) => {
+      if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return
+      const r = canvas.getBoundingClientRect()
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera)
+      const hit = (g: THREE.Object3D) => ray.intersectObject(g, true).length > 0
+      if (hit(cg)) { selectRef.current('ceo', null); return }
+      let best: { id: string; d: string; dist: number } | null = null
+      for (const o of actors) {
+        for (const g of [o.person.group, o.wrap]) {
+          const h = ray.intersectObject(g, true)[0]
+          if (h && (!best || h.distance < best.dist)) best = { id: o.id, d: o.deptId, dist: h.distance }
+        }
+      }
+      if (best) selectRef.current(best.id, best.d)
+    }
+    const onUp = (e: PointerEvent) => { pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
     const onWheel = (e: WheelEvent) => { e.preventDefault(); zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
