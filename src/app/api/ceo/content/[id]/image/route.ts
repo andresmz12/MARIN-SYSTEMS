@@ -62,6 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!targets.some((t) => t.id === post.id)) targets.push({ id: post.id })
     let updated = null
     for (const t of targets) {
+      await prisma.postSlideImage.deleteMany({ where: { postId: t.id } })
       const image = await prisma.postImage.upsert({
         where: { postId: t.id },
         update: { data: jpeg, mime: 'image/jpeg' },
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
       const row = await prisma.generatedPost.update({
         where: { id: t.id },
-        data: { imageUrl: publicUrl(image.token), imageWidth: info.width, imageHeight: info.height },
+        data: { imageUrl: publicUrl(image.token), slideImageUrls: [], imageWidth: info.width, imageHeight: info.height },
         include: { company: true },
       })
       if (t.id === post.id) updated = row
@@ -100,9 +101,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       : []
     if (!ids.includes(post.id)) ids.push(post.id)
     await prisma.postImage.deleteMany({ where: { postId: { in: ids } } })
+    await prisma.postSlideImage.deleteMany({ where: { postId: { in: ids } } })
     await prisma.generatedPost.updateMany({
       where: { id: { in: ids } },
-      data: { imageUrl: null, imageWidth: null, imageHeight: null },
+      data: { imageUrl: null, imageWidth: null, imageHeight: null, slideImageUrls: [] },
     })
     const updated = await prisma.generatedPost.findUnique({ where: { id: post.id }, include: { company: true } })
     return NextResponse.json(updated)

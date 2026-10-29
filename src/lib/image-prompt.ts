@@ -163,3 +163,57 @@ export const GROUP_IMAGE_PLATFORM = 'instagram'
 export function imagePlatformOf(post: { platform: string; groupId?: string | null }): string {
   return post.groupId ? GROUP_IMAGE_PLATFORM : post.platform
 }
+
+// ──────────────────────── Carrusel (varias láminas) ────────────────────────
+
+export interface Slide {
+  title: string
+  body?: string
+}
+
+export const MAX_SLIDES = 10
+
+export function parseSlides(raw: unknown): Slide[] {
+  if (!Array.isArray(raw)) return []
+  const out: Slide[] = []
+  for (const r of raw) {
+    if (typeof r !== 'object' || r === null) continue
+    const o = r as Record<string, unknown>
+    const title = clean(o.title)
+    if (!title) continue
+    const body = clean(o.body)
+    out.push({ title, ...(body ? { body } : {}) })
+  }
+  return out.slice(0, MAX_SLIDES)
+}
+
+/**
+ * Un solo bloque para pegar en Gemini (o cualquier generador de presentaciones): una página por lámina,
+ * formato vertical 4:5, estilo de la marca y el texto EXACTO de cada una.
+ */
+export function buildCarouselPrompt(input: { brandName: string; slides: Slide[]; style?: VisualStyle; face?: boolean }): string {
+  const { slides } = input
+  const style = input.style ?? {}
+  const total = slides.length
+  const lines: string[] = [
+    `Create a presentation of exactly ${total} slides that will be exported as images for an Instagram carousel for the brand ${q(input.brandName)}.`,
+    `FORMAT: EVERY slide is a vertical 4:5 page (1080x1350 px, portrait). Not widescreen. All slides must have the same size and the same design system. Keep all text inside the central area with generous margins (at least 6% on every side).`,
+    '',
+    `VISUAL STYLE: ${style.style || 'clean, modern and professional'}.`,
+    `COLOR PALETTE: ${style.palette?.length ? style.palette.join(', ') : 'a cohesive palette of 2-3 colors'}; strong contrast between text and background.`,
+    'DESIGN SYSTEM: the same background treatment, fonts, colors, margins and icon style on every slide so they look like one set. Bold modern sans-serif, very large readable text on a phone, ONE idea per slide, a small slide counter (e.g. 2/' + total + ') in a corner and a subtle swipe arrow on all but the last slide.',
+    input.face
+      ? 'COVER: use the woman in the attached reference photo (keep her face and features identical) next to the headline. The other slides have NO people.'
+      : 'No people or faces on any slide; use simple line icons and shapes.',
+    '',
+    'TEXT OF EACH SLIDE — copy it EXACTLY, character by character, in Spanish. Keep every accent (á é í ó ú ñ ü) and the ¿ ¡ marks. Do not translate, rephrase, add or remove any word, and write no other text:',
+  ]
+  slides.forEach((s, i) => {
+    const role = i === 0 ? 'COVER' : i === total - 1 ? 'LAST SLIDE (call to action)' : 'CONTENT'
+    lines.push(`Slide ${i + 1} of ${total} · ${role}`, `  Title (large, bold): ${q(s.title)}`)
+    if (s.body) lines.push(`  Text: ${q(s.body)}`)
+  })
+  if (style.handle) lines.push('', `Small footer on every slide: ${q(style.handle)}`)
+  lines.push('', `AVOID: watermarks, fake logos, gibberish or misspelled text, extra words${style.avoid ? `, ${style.avoid}` : ''}.`, 'Output the finished slides so each one can be exported as a PNG.')
+  return lines.join('\n')
+}

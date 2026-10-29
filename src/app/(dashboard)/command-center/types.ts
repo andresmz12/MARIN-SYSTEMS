@@ -181,6 +181,8 @@ export interface GeneratedPost {
   imageHeight?: number | null
   brandProfile?: { visualStyle?: unknown } | null
   imageUrl?: string | null
+  slides?: unknown
+  slideImageUrls?: string[]
   groupId?: string | null
   factCheck?: { verdict: 'ok' | 'revisar' | 'error'; summary: string; items: { claim: string; status: string; note: string; source?: string }[] } | null
   factCheckedAt?: string | null

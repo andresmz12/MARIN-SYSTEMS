@@ -8,7 +8,7 @@ import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
 import { FactCheckPanel } from './FactCheckPanel'
 import { MetricsForm } from './MetricsForm'
 import { AgentReportsPanel } from './AgentReportsPanel'
-import { IMAGE_SPECS, buildImagePrompt, imagePlatformOf, parseImageText, parseVisualStyle, type ImageText } from '@/lib/image-prompt'
+import { IMAGE_SPECS, buildCarouselPrompt, buildImagePrompt, imagePlatformOf, parseImageText, parseSlides, parseVisualStyle, type ImageText, type Slide } from '@/lib/image-prompt'
 
 interface Props {
   /** La empresa que se está viendo: todo en esta pantalla es de ella. */
@@ -44,6 +44,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [refInput, setRefInput] = useState('')
   const [refNote, setRefNote] = useState('')
   const [imgText, setImgText] = useState<Record<string, ImageText>>({})
+  const [slideDraft, setSlideDraft] = useState<Record<string, Slide[]>>({})
   const [vs, setVs] = useState({ style: '', handle: '', avoid: '', palette: [] as string[] })
   const [vsColor, setVsColor] = useState('#22d3ee')
   const [publishOn, setPublishOn] = useState(false)
@@ -194,6 +195,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     })
   }
 
+  const carouselPromptFor = (p: GeneratedPost): string =>
+    buildCarouselPrompt({ brandName: brandOf(p), slides: slidesOf(p), style: parseVisualStyle(p.brandProfile?.visualStyle), face: !!textOf(p).face })
+
   async function saveImageText(p: GeneratedPost, override?: ImageText) {
     const t = override ?? textOf(p)
     if (!t.headline.trim()) return
@@ -245,6 +249,68 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     } finally {
       setBusyId(null)
     }
+  }
+
+  const slidesOf = (p: GeneratedPost): Slide[] => slideDraft[p.id] ?? parseSlides(p.slides)
+
+  async function planCarousel(id: string) {
+    setBusyId(id)
+    try {
+      const res = await fetch(`/api/ceo/content/${id}/slides/plan`, { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(err.error ?? 'Error')
+      }
+      setSlideDraft((m) => { const n = { ...m }; delete n[id]; return n })
+      showToast('Carrusel armado: revisa el texto de cada lámina', 'success')
+      await load()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo armar el carrusel', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function saveSlides(id: string, slides: Slide[]) {
+    const clean = slides.map((x) => ({ title: x.title.trim(), ...(x.body?.trim() ? { body: x.body.trim() } : {}) })).filter((x) => x.title)
+    const res = await fetch(`/api/ceo/content/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slides: clean }),
+    })
+    if (!res.ok) { showToast('No se pudo guardar el texto de las láminas', 'error'); return false }
+    return true
+  }
+
+  async function uploadSlides(id: string, files: File[]) {
+    setBusyId(id)
+    try {
+      const form = new FormData()
+      files.forEach((f) => form.append('files', f))
+      const res = await fetch(`/api/ceo/content/${id}/slides`, { method: 'POST', body: form })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(err.error ?? 'Error')
+      }
+      showToast(`Carrusel subido: ${files.length} láminas`, 'success')
+      await load()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudieron subir las láminas', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function removeCarousel(id: string, keepText: boolean) {
+    if ((posts.find((p) => p.id === id)?.slideImageUrls?.length ?? 0) > 1) {
+      const res = await fetch(`/api/ceo/content/${id}/slides`, { method: 'DELETE' })
+      if (!res.ok) { showToast('No se pudo quitar el carrusel', 'error'); return }
+    }
+    if (!keepText) {
+      await saveSlides(id, [])
+      setSlideDraft((m) => { const n = { ...m }; delete n[id]; return n })
+    }
+    await load()
   }
 
   async function removeImage(id: string) {
@@ -835,6 +901,82 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                           }}
                         />
                       </label>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="rounded-lg border border-dashed border-amber-500/30 p-2.5 space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-amber-300/80">🎠 Carrusel (opcional)</p>
+                {slidesOf(post).length === 0 ? (
+                  <>
+                    <p className="text-[11px] text-zinc-500">Convierte este post en varias láminas deslizables. Instagram las guarda y comparte más que una sola imagen.</p>
+                    <button
+                      disabled={busy}
+                      onClick={() => planCarousel(post.id)}
+                      className="text-xs text-amber-200 border border-amber-500/40 rounded-md px-2 py-1 hover:bg-amber-500/10 disabled:opacity-40"
+                    >
+                      {busy ? 'Armando…' : '🎠 Crear carrusel de este post'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-zinc-500">{slidesOf(post).length} láminas. Edita el texto (queda exacto en las imágenes). Después cópialo a Gemini, exporta las láminas y súbelas todas juntas.</p>
+                    <div className="space-y-1.5">
+                      {slidesOf(post).map((sl, i) => (
+                        <div key={i} className="rounded-md border border-zinc-800 bg-zinc-900/60 p-1.5 space-y-1">
+                          <p className="text-[10px] text-zinc-500">Lámina {i + 1}{i === 0 ? ' · portada' : i === slidesOf(post).length - 1 ? ' · cierre' : ''}</p>
+                          <input
+                            value={sl.title}
+                            onChange={(e) => setSlideDraft((m) => ({ ...m, [post.id]: slidesOf(post).map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) }))}
+                            onBlur={() => saveSlides(post.id, slidesOf(post))}
+                            className="w-full bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs font-semibold text-zinc-100"
+                          />
+                          <textarea
+                            value={sl.body ?? ''}
+                            onChange={(e) => setSlideDraft((m) => ({ ...m, [post.id]: slidesOf(post).map((x, j) => (j === i ? { ...x, body: e.target.value } : x)) }))}
+                            onBlur={() => saveSlides(post.id, slidesOf(post))}
+                            rows={2}
+                            placeholder="Texto de apoyo (opcional)"
+                            className="w-full bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200 resize-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <details className="text-xs text-zinc-400">
+                      <summary className="cursor-pointer text-zinc-300">Ver el prompt para Gemini</summary>
+                      <pre className="mt-1.5 whitespace-pre-wrap rounded-md bg-zinc-950/60 border border-zinc-800 p-2 text-[11px] text-zinc-400">{carouselPromptFor(post)}</pre>
+                    </details>
+                    {(post.slideImageUrls?.length ?? 0) > 1 && (
+                      <div className="flex gap-1.5 overflow-x-auto pb-1">
+                        {post.slideImageUrls!.map((u, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={u} src={localImagePath(u)} alt={`Lámina ${i + 1}`} className="h-24 w-[77px] shrink-0 rounded-md object-cover border border-zinc-700" />
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => copyText(carouselPromptFor(post), 'Prompt del carrusel copiado: pégalo en Gemini')}
+                        className="text-xs text-zinc-200 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500"
+                      >
+                        Copiar slides para Gemini
+                      </button>
+                      <label className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 cursor-pointer">
+                        {busy ? 'Subiendo…' : (post.slideImageUrls?.length ?? 0) > 1 ? 'Cambiar láminas' : 'Subir todas las láminas'}
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={busy}
+                          onChange={(e) => {
+                            const fs = Array.from(e.target.files ?? [])
+                            if (fs.length) uploadSlides(post.id, fs)
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                      <button onClick={() => removeCarousel(post.id, false)} className="text-xs text-red-300 hover:text-red-200">Quitar carrusel</button>
                     </div>
                   </>
                 )}

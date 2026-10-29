@@ -55,6 +55,8 @@ El sistema no genera imágenes: arma el **prompt completo** y tú lo pegas en Ch
   "text": "Texto final listo para publicar (copy + hashtags; en X ya recortado a 280)",
   "copy": "…", "hashtags": ["#taxes"], "cta": "…",
   "imageUrl": "https://…/api/public/post-image/<token>",
+  "imageUrls": ["https://…/post-image/<token>", "https://…/slide-image/<token>"],
+  "isCarousel": true,
   "scheduledDate": "2026-11-02T18:00:00.000Z",
   "callbackUrl": "https://…/api/publish/callback"
 }
@@ -106,3 +108,14 @@ Los nombres exactos de los módulos pueden variar; busca el equivalente.
   gratuito antes de depender de él.
 
 Si prefieres un agregador de redes con API propia, recibe el mismo JSON: solo cambia `PUBLISH_WEBHOOK_URL`.
+
+## Carruseles (varias láminas)
+
+Un post puede ser un carrusel (Instagram y Facebook). En la tarjeta del post: **🎠 Crear carrusel de este post** arma el texto de cada lámina (portada, contenido, cierre); se edita, se copia con **Copiar slides para Gemini**, se exportan las láminas (vertical 4:5, 1080×1350) y se suben todas juntas con **Subir todas las láminas** (hasta 10, en el orden del nombre de archivo: 1, 2, 3…). Si una imagen no es vertical 4:5 se rechaza con un aviso.
+
+El webhook recibe `imageUrls` (todas las láminas en orden; la primera es la portada = `imageUrl`) e `isCarousel`. Si no es carrusel, `imageUrls` trae solo `imageUrl`.
+
+En Make:
+- **Instagram:** módulo *Create a carousel post*, con las URLs de `imageUrls` (un filtro `isCarousel = true` antes de la rama normal).
+- **Facebook:** subir cada foto sin publicar (`published=false`) y crear un solo post con `attached_media`; o usar la portada si prefieres un solo post con imagen.
+- **LinkedIn y X:** siguen usando `imageUrl` (la portada).

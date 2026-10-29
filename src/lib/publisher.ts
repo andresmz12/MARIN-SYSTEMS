@@ -75,6 +75,9 @@ export async function publishPost(postId: string, opts: { userId?: string } = {}
         hashtags: post.hashtags,
         cta: post.cta,
         imageUrl: post.imageUrl,
+        // Carrusel: todas las láminas en orden (la primera es la portada = imageUrl). Si no hay, solo la imagen del post.
+        imageUrls: post.slideImageUrls.length > 1 ? post.slideImageUrls : [post.imageUrl],
+        isCarousel: post.slideImageUrls.length > 1,
         scheduledDate: post.scheduledDate,
         // Si el escenario puede avisar el resultado real, que llame aquí al terminar.
         callbackUrl: `${appUrl()}/api/publish/callback`,

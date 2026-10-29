@@ -17,6 +17,7 @@ const Schema = z.object({
     cta: z.string().trim().max(80).optional(),
     face: z.boolean().optional(),
   }).optional(),
+  slides: z.array(z.object({ title: z.string().trim().min(1).max(120), body: z.string().trim().max(400).optional() })).max(10).optional(),
   copy: z.string().min(1).optional(),
   scheduledDate: z.string().nullable().optional(),
   publishedAt: z.string().nullable().optional(),
@@ -38,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     if (!existing) return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 })
 
-    const { status, copy, scheduledDate, publishedAt, reviewNote, imageUrl, imagePrompt, imageText } = parsed.data
+    const { status, copy, scheduledDate, publishedAt, reviewNote, imageUrl, imagePrompt, imageText, slides } = parsed.data
     // Lo que se decide sobre el contenido (aprobar, rechazar, editar, reprogramar) vale para todas
     // las redes del grupo; marcar publicado y la imagen son de cada post.
     const shared = {
@@ -47,6 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...(reviewNote !== undefined ? { reviewNote } : {}),
       ...(imagePrompt !== undefined ? { imagePrompt } : {}),
       ...(imageText !== undefined ? { imageText } : {}),
+      ...(slides !== undefined ? { slides } : {}),
       ...(scheduledDate !== undefined ? { scheduledDate: scheduledDate ? new Date(scheduledDate) : null } : {}),
     }
     const own = {

@@ -451,6 +451,9 @@ model GeneratedPost {
   // Datos concretos del post (montos, fechas, formularios) para que el dueño los verifique.
   facts          String[]     @default([])
   imageUrl       String?
+  // Carrusel: texto de cada lámina [{ title, body? }] y enlaces públicos de las imágenes en orden (la primera = imageUrl).
+  slides         Json?
+  slideImageUrls String[]     @default([])
   imageWidth     Int?
   imageHeight    Int?
   // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).
@@ -480,6 +483,7 @@ model GeneratedPost {
   company        CEOCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandProfile   BrandProfile @relation(fields: [brandProfileId], references: [id], onDelete: Cascade)
   image          PostImage?
+  slideImages    PostSlideImage[]
   metric         PostMetric?
 
   @@index([userId])
@@ -499,6 +503,20 @@ model PostImage {
   data      Bytes
   mime      String        @default("image/jpeg")
   createdAt DateTime      @default(now())
+}
+
+// Láminas 2..n de un carrusel (la portada vive en PostImage, como en un post de una sola imagen).
+model PostSlideImage {
+  id        String        @id @default(cuid())
+  postId    String
+  post      GeneratedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  position  Int
+  token     String        @unique @default(cuid())
+  data      Bytes
+  mime      String        @default("image/jpeg")
+  createdAt DateTime      @default(now())
+
+  @@index([postId])
 }
 
 model CompanyRevenue {
