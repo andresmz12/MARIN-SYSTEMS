@@ -1051,7 +1051,12 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 rows={8}
                 className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 resize-y"
               />
-              {post.hashtags.length > 0 && <p className="text-xs text-indigo-300">{post.hashtags.join(' ')}</p>}
+              {post.hashtags.length > 0 && (
+                <p className="text-xs text-indigo-300">
+                  {post.hashtags.join(' ')}
+                  {post.hashtags.length > 3 && <span className="block text-[11px] text-zinc-500">Instagram usa hasta 8; Facebook y LinkedIn solo los 3 primeros; X, 2.</span>}
+                </p>
+              )}
               {members.some((m) => m.platform === 'twitter') && (() => {
                 const len = composePostText('twitter', copy, post.hashtags).length
                 const raw = copy.length + (post.hashtags.length ? post.hashtags.slice(0, 2).join(' ').length + 2 : 0)

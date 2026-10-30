@@ -353,7 +353,7 @@ function coerceContent(parsed: unknown, input: ContentGenerationInput): Generate
   const obj = parsed as Record<string, unknown>
 
   const hashtags = Array.isArray(obj.hashtags)
-    ? obj.hashtags.filter((s): s is string => typeof s === 'string').map((s) => s.startsWith('#') ? s : `#${s}`).slice(0, 15)
+    ? obj.hashtags.filter((s): s is string => typeof s === 'string').map((s) => (s.startsWith('#') ? s : `#${s}`).replace(/\s+/g, '')).slice(0, 10)
     : fb.hashtags
 
   return {
@@ -432,7 +432,7 @@ Responde ÚNICAMENTE con este JSON:
 {
   "topic": "tema específico del contenido",
   "copy": "copy completo listo para publicar, con saltos de línea naturales y emojis apropiados",
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
+  "hashtags": ["8 hashtags en español, ORDENADOS por importancia, sin repetir: los 3 PRIMEROS deben funcionar solos (Facebook y LinkedIn solo usan esos 3): 1) específico del tema (ej: #Section179, #CreditoPorHijos), 2) de nuestro público (ej: #NegociosLatinos, #EmprendedoresLatinos), 3) la marca (ej: #ISMConsulting). Los otros 5 para Instagram: mezcla nichos y temas más amplios (ej: #ImpuestosEEUU, #TaxesParaLatinos, #LLC, #SmallBusiness, #FinanzasParaNegocios). Nada genérico como #love o #viral, ni solo un año como #Impuestos2026"],
   "cta": "llamada a la acción específica y directa",
   "contentNotes": "notas de producción: qué grabar/fotografiar, duración sugerida, ángulo recomendado",
   "imagePrompt": "SOLO la escena visual de la imagen, en inglés, sin texto escrito, sin colores y sin proporciones (eso lo agrega el sistema). Si imageText.face es true: describe la pose y el entorno de nuestra vocera (NO su apariencia: la imagen de referencia la define), por ejemplo 'sitting at a desk reviewing documents, smiling at the camera'. Si es false: describe una composición de infografía con íconos y formas, SIN personas ni caras",

@@ -18,6 +18,7 @@ const PROMISES: [RegExp, string][] = [
   [/\b(ahorrar[aá]s|reducir[aá]s|pagar[aá]s menos|recuperar[aá]s)\b/i, 'afirma un ahorro como seguro (usa "puede ayudarte a…")'],
   [/\b(reduce|reducen|elimina|eliminan)\s+(tus|los)\s+impuestos\b/i, '"reduce tus impuestos" suena a promesa (usa "puede ayudarte a pagar menos")'],
   [/\b(gratis|sin costo)\b/i, 'dice "gratis" o "sin costo"'],
+  [/\b(maximiz\w+|el truco|el secreto)\b/i, 'suena a truco o a promesa ("maximizar", "el truco"): usa un lenguaje más neutral'],
 ]
 const FORBIDDEN_VOCAB = /\b(asesor[ií]a fiscal|hacienda|fisco|declaraci[oó]n de la renta)\b/i
 const CONDITION = /\b(solo|s[oó]lo|si |siempre que|depende|requisito|condici[oó]n|tope|l[ií]mite|antes del|no califica|ganancias? de tu negocio|hasta)\b/i

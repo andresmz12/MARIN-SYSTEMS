@@ -37,10 +37,19 @@ export function fitCopy(platform: string, copy: string, hashtags: string[]): str
   return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
 }
 
+/**
+ * Cuántos hashtags lleva cada red. La lista viene ordenada: los 3 primeros son los mejores (tema, público y marca),
+ * así Facebook y LinkedIn (pocos hashtags, más profesional) usan solo esos y Instagram suma los demás.
+ */
+const HASHTAG_LIMIT: Record<string, number> = { instagram: 8, tiktok: 5, facebook: 3, linkedin: 3, twitter: 2 }
+export function hashtagsFor(platform: string, hashtags: string[]): string[] {
+  return hashtags.slice(0, HASHTAG_LIMIT[platform] ?? hashtags.length)
+}
+
 /** Texto final que se publica en una red: copy + hashtags (X: máximo 2 y siempre ≤ 280). */
 export function composePostText(platform: string, copy: string, hashtags: string[]): string {
   const body = fitCopy(platform, copy, hashtags)
-  const tags = (platform === 'twitter' ? hashtags.slice(0, 2) : hashtags).join(' ')
+  const tags = hashtagsFor(platform, hashtags).join(' ')
   return tags ? `${body}\n\n${tags}` : body
 }
 
