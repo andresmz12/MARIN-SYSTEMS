@@ -8,6 +8,7 @@ import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
 import { FactCheckPanel } from './FactCheckPanel'
 import { MetricsForm } from './MetricsForm'
 import { PostPreview } from './PostPreview'
+import { lintPost } from '@/lib/compliance'
 import { PublishBoard } from './PublishBoard'
 import { AgentReportsPanel } from './AgentReportsPanel'
 import { IMAGE_SPECS, buildCarouselPrompt, buildImagePrompt, imagePlatformOf, parseImageText, parseSlides, parseVisualStyle, type ImageText, type Slide } from '@/lib/image-prompt'
@@ -1014,6 +1015,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           const specPlatform = imagePlatformOf(post)
           const busy = busyId === post.id
           const copy = edits[post.id] ?? post.copy
+          const tx = textOf(post)
+          const issues = lintPost({ copy, imageText: tx.headline.trim() ? tx : null })
+          const hasError = issues.some((i) => i.level === 'error')
           return (
             <div key={post.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
@@ -1262,6 +1266,17 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   </>
                 )}
               </div>
+              {issues.length > 0 ? (
+                <div className={`rounded-lg border p-2.5 ${hasError ? 'border-red-500/40 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                  <p className={`text-[11px] uppercase tracking-wide mb-1 ${hasError ? 'text-red-300' : 'text-amber-300'}`}>🛡️ Revisión de cumplimiento · {issues.length} {issues.length === 1 ? 'punto' : 'puntos'}</p>
+                  <ul className="list-disc pl-4 space-y-0.5 text-xs text-zinc-300">
+                    {issues.map((i, k) => <li key={k}><span className="text-zinc-500">{i.where === 'imagen' ? 'Imagen' : 'Texto'}:</span> {i.message}</li>)}
+                  </ul>
+                  <p className="text-[11px] text-zinc-500 mt-1">Corrígelo en el texto o en la imagen antes de aprobar. Se revisa solo, sin gastar IA.</p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-emerald-300/80">🛡️ Cumplimiento: sin observaciones automáticas.</p>
+              )}
               {previewOpen[post.id] && (
                 <PostPreview copy={copy} post={post} platforms={members.map((m) => m.platform)} brand={brandOf(post)} />
               )}
@@ -1276,6 +1291,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   disabled={busy}
                   onClick={() => {
                     if (post.factCheck?.verdict === 'error' && !window.confirm('El verificador encontró un dato INCORRECTO en este post. Revisa el recuadro de verificación. ¿Aprobarlo de todos modos?')) return
+                    if (hasError && !window.confirm('La revisión de cumplimiento encontró problemas (promesas o cifras que pueden comprometerte). ¿Aprobarlo de todos modos?')) return
                     patch(post.id, { status: 'approved', ...(edits[post.id] !== undefined ? { copy: edits[post.id] } : {}) }, 'Post aprobado')
                   }}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 disabled:opacity-40"
@@ -1357,14 +1373,14 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           </div>
         )
         const both = fresh.length > 0 && legacy.length > 0
-        const readyIds = pending.filter((p) => !!p.imageUrl && p.factCheck?.verdict !== 'error' && !p.copy.includes('[Contenido de ')).map((p) => p.id)
+        const readyIds = pending.filter((p) => !!p.imageUrl && p.factCheck?.verdict !== 'error' && !p.copy.includes('[Contenido de ') && !lintPost({ copy: edits[p.id] ?? p.copy, imageText: textOf(p).headline.trim() ? textOf(p) : null }).some((i) => i.level === 'error')).map((p) => p.id)
         const selIds = selected.filter((id) => pending.some((p) => p.id === id))
         return (
           <div className="space-y-8">
             {pending.length > 1 && (
               <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur px-3 py-2">
                 <span className="text-xs text-zinc-400 flex-1 min-w-[180px]">
-                  {selIds.length > 0 ? `${selIds.length} seleccionados` : `${readyIds.length} de ${pending.length} están listos (con imagen y sin errores de datos)`}
+                  {selIds.length > 0 ? `${selIds.length} seleccionados` : `${readyIds.length} de ${pending.length} están listos (con imagen, sin errores de datos ni de cumplimiento)`}
                 </span>
                 {selIds.length > 0 ? (
                   <>
