@@ -67,7 +67,8 @@ export async function callClaude({
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return ''
 
-  const client = new Anthropic({ apiKey })
+  // Tope de 3 min por llamada: si la IA se cuelga, la corrida falla en vez de quedar "en curso" para siempre.
+  const client = new Anthropic({ apiKey, timeout: 180_000, maxRetries: 1 })
   const params: Anthropic.MessageCreateParamsNonStreaming = {
     model,
     max_tokens: maxTokens,
