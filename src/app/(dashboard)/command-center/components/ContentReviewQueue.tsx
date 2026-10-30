@@ -544,6 +544,24 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     }
   }
 
+  // La IA reescribe solo lo que marcó la revisión de cumplimiento (sin cambiar datos) y guarda la versión anterior.
+  async function fixCompliance(id: string) {
+    setBusyId(id)
+    try {
+      const res = await fetch(`/api/ceo/content/${id}/compliance-fix`, { method: 'POST' })
+      const d = (await res.json().catch(() => ({}))) as { error?: string; remaining?: { message: string }[] }
+      if (!res.ok) { showToast(d.error ?? 'No se pudo corregir', 'error'); return }
+      setEdits((e) => { const { [id]: _, ...rest } = e; return rest })
+      setImgText((m) => { const { [id]: _, ...rest } = m; return rest })
+      showToast(d.remaining?.length ? `Corregido, pero quedan ${d.remaining.length} puntos: revísalos.` : 'Corregido. Lee el texto y la imagen antes de aprobar.', d.remaining?.length ? 'info' : 'success')
+      await load()
+    } catch {
+      showToast('No se pudo corregir', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function restoreVersion(id: string) {
     setBusyId(id)
     try {
@@ -1277,7 +1295,17 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   <ul className="list-disc pl-4 space-y-0.5 text-xs text-zinc-300">
                     {issues.map((i, k) => <li key={k}><span className="text-zinc-500">{i.where === 'imagen' ? 'Imagen' : 'Texto'}:</span> {i.message}</li>)}
                   </ul>
-                  <p className="text-[11px] text-zinc-500 mt-1">Corrígelo en el texto o en la imagen antes de aprobar. Se revisa solo, sin gastar IA.</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <button
+                      disabled={busy || !!edits[post.id]}
+                      onClick={() => fixCompliance(post.id)}
+                      className="text-xs text-emerald-200 border border-emerald-500/40 rounded-md px-2 py-1 hover:bg-emerald-500/10 disabled:opacity-40"
+                      title={edits[post.id] ? 'Guarda o descarta tus cambios al texto antes' : 'La IA reescribe solo lo marcado, sin cambiar los datos'}
+                    >
+                      {busy ? 'Corrigiendo…' : '🛠 Corregir con IA'}
+                    </button>
+                    <span className="text-[11px] text-zinc-500">o edítalo tú en el texto o en los campos de la imagen. La revisión se actualiza sola.</span>
+                  </div>
                 </div>
               ) : (
                 <p className="text-[11px] text-emerald-300/80">🛡️ Cumplimiento: sin observaciones automáticas.</p>
