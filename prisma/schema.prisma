@@ -911,3 +911,18 @@ model AiStatus {
   failMessage String?
   updatedAt   DateTime  @updatedAt
 }
+
+// Imágenes de referencia de la marca (logo y cara de la vocera) que se mandan al generador de imágenes.
+model BrandAsset {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  // 'logo' | 'face'
+  kind      String
+  data      Bytes
+  mime      String
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, kind])
+  @@index([userId])
+}

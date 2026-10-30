@@ -49,6 +49,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [cropMode, setCropMode] = useState(false)
   const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string[]>([])
+  const [imgAi, setImgAi] = useState<{ openaiReady: boolean; model: string; logo: string | null; face: string | null } | null>(null)
+  const [assetVer, setAssetVer] = useState(0)
   const [slideDraft, setSlideDraft] = useState<Record<string, Slide[]>>({})
   const [vs, setVs] = useState({ style: '', handle: '', avoid: '', palette: [] as string[] })
   const [vsColor, setVsColor] = useState('#22d3ee')
@@ -93,6 +95,28 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       .catch(() => setAuto(null))
       .finally(() => setAutoLoaded(true))
   }, [companyId])
+
+  useEffect(() => {
+    if (!companyId) return
+    fetch(`/api/ceo/brand-assets?companyId=${companyId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setImgAi(d))
+      .catch(() => setImgAi(null))
+  }, [companyId, assetVer])
+
+  async function uploadAsset(kind: 'logo' | 'face', file: File) {
+    const form = new FormData()
+    form.append('companyId', companyId)
+    form.append('kind', kind)
+    form.append('file', file)
+    const res = await fetch('/api/ceo/brand-assets', { method: 'POST', body: form })
+    if (res.ok) { showToast(kind === 'logo' ? 'Logo guardado' : 'Foto guardada', 'success'); setAssetVer((v) => v + 1) }
+    else showToast(((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'No se pudo guardar', 'error')
+  }
+  async function removeAsset(kind: 'logo' | 'face') {
+    await fetch(`/api/ceo/brand-assets?companyId=${companyId}&kind=${kind}`, { method: 'DELETE' })
+    setAssetVer((v) => v + 1)
+  }
 
   const [generating, setGenerating] = useState(false)
   const [newsBusy, setNewsBusy] = useState(false)
@@ -265,6 +289,43 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     })
     if (res.ok) { showToast('Estilo visual guardado: ya está en todos los prompts', 'success'); await load() }
     else showToast('No se pudo guardar el estilo visual', 'error')
+  }
+
+  // Genera la imagen con OpenAI (solo posts de una imagen). Devuelve true si quedó lista.
+  async function generateImageAI(post: GeneratedPost, quiet = false): Promise<boolean> {
+    setBusyId(post.id)
+    if (!quiet) showToast('Generando la imagen con IA… tarda de 30 a 90 segundos', 'success')
+    try {
+      const res = await fetch(`/api/ceo/content/${post.id}/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptFor(post), mode: cropMode ? 'crop' : 'complete' }),
+      })
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string }
+        showToast(err.error ?? 'No se pudo generar la imagen', 'error')
+        return false
+      }
+      if (!quiet) showToast('Imagen lista. Ábrela y revisa que el texto salga bien escrito.', 'success')
+      await load()
+      return true
+    } catch {
+      showToast('No se pudo generar la imagen', 'error')
+      return false
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function generateAllAI(list: GeneratedPost[]) {
+    if (!window.confirm(`Voy a generar ${list.length} ${list.length === 1 ? 'imagen' : 'imágenes'} con la IA de OpenAI (cada una cuesta unos centavos de dólar y tarda ~1 minuto). ¿Seguimos?`)) return
+    let ok = 0
+    for (let i = 0; i < list.length; i++) {
+      showToast(`Generando imagen ${i + 1} de ${list.length}…`, 'success')
+      if (await generateImageAI(list[i], true)) ok++
+      else break
+    }
+    showToast(ok === list.length ? `${ok} ${ok === 1 ? 'imagen lista' : 'imágenes listas'}. Revísalas antes de aprobar.` : `Se generaron ${ok} de ${list.length}`, ok === list.length ? 'success' : 'error')
   }
 
   async function uploadImage(id: string, file: File) {
@@ -873,6 +934,41 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           </div>
         </div>
       )}
+      {imgAi && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-100">✨ Imágenes con IA (OpenAI)</p>
+            <p className="text-xs text-zinc-500">
+              {imgAi.openaiReady
+                ? `Activado (modelo ${imgAi.model}). Cada post de una imagen tendrá el botón "Generar imagen con IA". Los carruseles se siguen haciendo en Gemini.`
+                : 'Para activarlo agrega la variable OPENAI_API_KEY en Railway (la clave sale de platform.openai.com → API keys; la cuenta de API se recarga aparte de ChatGPT).'}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([['logo', 'Logo de la marca', 'Se manda como referencia en TODAS las imágenes.'], ['face', 'Foto de la vocera (la cara de ISM)', 'Solo en los posts marcados "Con la cara de la marca".']] as const).map(([kind, title, hint]) => (
+              <div key={kind} className="rounded-lg border border-dashed border-zinc-700 p-2.5 space-y-2">
+                <p className="text-xs font-medium text-zinc-200">{title}</p>
+                <div className="flex items-center gap-3">
+                  {imgAi[kind] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={`/api/ceo/brand-assets?companyId=${companyId}&kind=${kind}&v=${imgAi[kind]}`} alt={title} className="h-16 w-16 rounded-md border border-zinc-700 bg-white object-contain" />
+                  ) : (
+                    <span className="flex h-16 w-16 items-center justify-center rounded-md border border-zinc-700 text-[10px] text-zinc-500">Sin imagen</span>
+                  )}
+                  <div className="space-y-1">
+                    <label className="inline-block cursor-pointer text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10">
+                      {imgAi[kind] ? 'Cambiar' : 'Subir'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadAsset(kind, f); e.target.value = '' }} />
+                    </label>
+                    {imgAi[kind] && <button onClick={() => removeAsset(kind)} className="ml-2 text-xs text-red-300 hover:text-red-200">Quitar</button>}
+                  </div>
+                </div>
+                <p className="text-[11px] text-zinc-500">{hint}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
         </div>
       </details>
 
@@ -881,9 +977,18 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           <div className="flex-1 min-w-[200px]">
             <p className="text-sm font-semibold text-amber-200">🖼️ Faltan {missingImages.length} imagen{missingImages.length > 1 ? 'es' : ''}</p>
             <p className="text-xs text-zinc-400">
-              Copia todos los prompts y pega CADA bloque como un mensaje nuevo en ChatGPT. Descarga cada imagen y súbela en su post: se recorta al tamaño exacto de la red y se convierte a JPEG sola.
+              Genera cada imagen con IA, o copia todos los prompts y pega CADA bloque como un mensaje nuevo en ChatGPT. Descarga cada imagen y súbela en su post: se recorta al tamaño exacto de la red y se convierte a JPEG sola.
             </p>
           </div>
+          {imgAi?.openaiReady && missingImages.some((p) => slidesOf(p).length === 0) && (
+            <button
+              disabled={busyId !== null}
+              onClick={() => generateAllAI(missingImages.filter((p) => slidesOf(p).length === 0))}
+              className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-40"
+            >
+              ✨ Generar todas con IA
+            </button>
+          )}
           <button
             onClick={() => copyText(
               missingImages
@@ -974,6 +1079,11 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                     <div className="space-y-1">
                       {post.imageWidth && post.imageHeight && <p className="text-xs text-zinc-400">{post.imageWidth}×{post.imageHeight}</p>}
                       <button onClick={() => removeImage(post.id)} className="text-xs text-red-300 hover:text-red-200">Quitar</button>
+                      {imgAi?.openaiReady && slidesOf(post).length === 0 && (
+                        <button disabled={busy} onClick={() => generateImageAI(post)} className="block text-xs text-indigo-200 hover:text-indigo-100 disabled:opacity-40">
+                          {busy ? 'Generando…' : '✨ Generar otra con IA'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1025,7 +1135,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                           void saveImageText(post, next)
                         }}
                       />
-                      Con la cara de la marca <span className="text-zinc-500">(adjunta su foto en ChatGPT junto al prompt)</span>
+                      Con la cara de la marca <span className="text-zinc-500">{imgAi?.openaiReady && imgAi.face ? '(la foto se adjunta sola al generar con IA)' : '(adjunta su foto en ChatGPT junto al prompt)'}</span>
                     </label>
                     <details className="text-xs text-zinc-400">
                       <summary className="cursor-pointer text-zinc-300">Ver el prompt completo</summary>
@@ -1041,6 +1151,16 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                       <label className="flex items-center gap-1 text-[11px] text-zinc-400" title="Por defecto la imagen entra completa y los lados se rellenan con ella difuminada, sin cortar el logo ni el texto">
                         <input type="checkbox" checked={cropMode} onChange={(e) => setCropMode(e.target.checked)} /> recortar en vez de completar
                       </label>
+                      {imgAi?.openaiReady && slidesOf(post).length === 0 && (
+                        <button
+                          disabled={busy}
+                          onClick={() => generateImageAI(post)}
+                          className="text-xs text-emerald-200 border border-emerald-500/40 rounded-md px-2 py-1 hover:bg-emerald-500/10 disabled:opacity-40"
+                          title="Crea la imagen con la IA de OpenAI usando este prompt, el logo y la foto de la marca"
+                        >
+                          {busy ? 'Generando… (hasta 90 s)' : '✨ Generar imagen con IA'}
+                        </button>
+                      )}
                       <label className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 cursor-pointer">
                         {busy ? 'Subiendo…' : 'Subir imagen'}
                         <input
