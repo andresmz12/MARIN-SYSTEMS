@@ -46,8 +46,9 @@ export function buildGroupDrafts(input: {
   platforms: string[]
   generated: GeneratedContent
   scheduledDate: Date
-  source: 'auto' | 'news'
+  source: 'auto' | 'news' | 'recycled'
   sourceUrl?: string
+  kind?: string
 }): Prisma.GeneratedPostCreateManyInput[] {
   const groupId = randomUUID()
   const g = input.generated
@@ -69,6 +70,7 @@ export function buildGroupDrafts(input: {
     status: 'pending_review',
     source: input.source,
     sourceUrl: input.sourceUrl,
+    kind: input.kind ?? null,
     scheduledDate: input.scheduledDate,
     weekNumber: getISOWeek(input.scheduledDate),
     dayOfWeek: Math.min(5, Math.max(1, input.scheduledDate.getUTCDay())),

@@ -9,6 +9,7 @@ import { FactCheckPanel } from './FactCheckPanel'
 import { MetricsForm } from './MetricsForm'
 import { PostPreview } from './PostPreview'
 import { lintPost } from '@/lib/compliance'
+import { KIND_LABEL, type PostKind } from '@/lib/post-kinds'
 import { PublishBoard } from './PublishBoard'
 import { AgentReportsPanel } from './AgentReportsPanel'
 import { IMAGE_SPECS, buildCarouselPrompt, buildImagePrompt, imagePlatformOf, parseImageText, parseSlides, parseVisualStyle, type ImageText, type Slide } from '@/lib/image-prompt'
@@ -1058,7 +1059,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                {post.source === 'news' ? '📰 Noticia' : 'Tema'}: {post.topic}
+                {post.kind && KIND_LABEL[post.kind as PostKind] ? `${KIND_LABEL[post.kind as PostKind]} · ` : post.source === 'recycled' ? '♻️ Reutilizado · ' : ''}{post.source === 'news' ? '📰 Noticia' : 'Tema'}: {post.topic}
                 {post.sourceUrl && (
                   <> · <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Fuente ↗</a></>
                 )}

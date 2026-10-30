@@ -456,6 +456,8 @@ model GeneratedPost {
   slideImageUrls String[]     @default([])
   // Versión anterior del texto (antes de regenerar) para poder volver atrás.
   previousVersion Json?
+  // Tipo de contenido para equilibrar la mezcla: educativo | pregunta | servicio | noticia.
+  kind           String?
   imageWidth     Int?
   imageHeight    Int?
   // 'manual' (creado desde la UI) o 'auto' (cron de piloto automático).

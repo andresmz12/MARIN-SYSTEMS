@@ -14,6 +14,9 @@ interface Team {
   activity: Activity[]
   lessons: Lesson[]
   rejections: { id: string; topic: string; reviewNote: string | null }[]
+  mix: { kind: string; label: string; count: number }[]
+  mixUntyped: number
+  topPosts: { id: string; topic: string; platform: string; publishedAt: string | null; externalUrl: string | null; score: number; reach: number | null; saves: number | null; shares: number | null; comments: number | null; likes: number | null }[]
   deadlines: { at: string; items: { date: string; title: string; who: string; source: string }[] } | null
 }
 interface Script { hook: string; scenes: { onScreen: string; voice: string; visual: string }[]; caption: string; avatarNotes: string; flags: string[] }
@@ -162,6 +165,47 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
             )}
           </div>
         ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Box title="🎯 Mezcla de contenido" hint="Qué tipos de post salieron en los últimos 30 días. La tanda del sábado elige los que menos han salido.">
+          {(() => {
+            const total = team.mix.reduce((a, b) => a + b.count, 0)
+            return total === 0 ? <p className="text-sm text-zinc-500">Todavía no hay posts con tipo. Aparecerán con la próxima tanda.</p> : (
+              <ul className="space-y-1.5">
+                {team.mix.map((m) => (
+                  <li key={m.kind} className="flex items-center gap-2 text-sm text-zinc-200">
+                    <span className="w-44 truncate">{m.label}</span>
+                    <span className="flex-1 h-1.5 overflow-hidden rounded-full bg-zinc-800"><span className="block h-full bg-indigo-500" style={{ width: `${Math.round((m.count / total) * 100)}%` }} /></span>
+                    <b className="w-6 text-right">{m.count}</b>
+                  </li>
+                ))}
+              </ul>
+            )
+          })()}
+          {team.mixUntyped > 0 && <p className="text-[11px] text-zinc-500">{team.mixUntyped} posts anteriores no tienen tipo.</p>}
+        </Box>
+        <Box title="🏆 Los que mejor funcionaron" hint="Por guardados, compartidos y comentarios. Reutilízalos 14 días después de publicarlos, con otro enfoque y los datos revisados.">
+          {team.topPosts.length === 0 ? <p className="text-sm text-zinc-500">Aparecerán cuando lleguen las métricas (el paso de Make que sigue).</p> : (
+            <ul className="space-y-2">
+              {team.topPosts.map((p) => {
+                const old = p.publishedAt ? (Date.now() - new Date(p.publishedAt).getTime()) / 86400000 >= 14 : false
+                return (
+                  <li key={p.id} className="text-sm text-zinc-200">
+                    <span className="block truncate">{p.topic}</span>
+                    <span className="text-xs text-zinc-500">{p.reach ?? '—'} alcance · {p.saves ?? 0} guardados · {p.shares ?? 0} compartidos · {p.comments ?? 0} comentarios</span>
+                    <button
+                      disabled={!old || busy === `rec-${p.id}`}
+                      title={old ? 'Crea un borrador nuevo con otro enfoque' : 'Espera 14 días desde que se publicó'}
+                      onClick={async () => { if (await call(`/api/ceo/content/${p.id}/recycle`, { method: 'POST' }, `rec-${p.id}`)) { showToast('Borrador nuevo creado: míralo en la pestaña de la empresa', 'success'); await load() } }}
+                      className="ml-2 text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-0.5 hover:bg-indigo-500/10 disabled:opacity-40"
+                    >{busy === `rec-${p.id}` ? 'Creando…' : '♻️ Reutilizar'}</button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </Box>
       </div>
 
       <Box title="📋 Qué hicieron" hint="Lo último que hizo cada agente, de más nuevo a más viejo.">

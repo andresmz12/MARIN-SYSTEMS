@@ -179,6 +179,7 @@ async function handler(req: Request) {
               scheduledDate: nextPublishSlot(new Date()),
               source: 'news',
               sourceUrl: item.link,
+              kind: 'noticia',
             })
           await prisma.generatedPost.createMany({ data: drafts })
           const gid = drafts[0]?.groupId

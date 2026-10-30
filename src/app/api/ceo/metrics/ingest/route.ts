@@ -1,60 +1,45 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { composePostText } from '@/lib/platforms'
+import { matchPost, metricFields, type MetricItem } from '@/lib/metrics-match'
+import { logActivity } from '@/lib/agent-ledger'
 
-const num = z.coerce.number().int().min(0).max(1_000_000_000).optional()
-const Item = z.object({
-  platform: z.string().min(1).max(20),
-  // Cómo reconocer el post: el id de nuestra base (si Make lo guardó), el id/URL de la red, o el texto publicado.
-  postId: z.string().optional(),
-  externalId: z.string().max(200).optional(),
-  url: z.string().max(500).optional(),
-  message: z.string().max(5000).optional(),
-  reach: num, impressions: num, likes: num, comments: num, shares: num, saves: num, clicks: num,
-})
-const Body = z.object({ items: z.array(Item).min(1).max(100) })
+export const maxDuration = 60
 
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 60)
-
-// Make (o cualquier herramienta) envía los números de los posts ya publicados.
-// Autenticación: Authorization: Bearer <CRON_SECRET>, como los demás trabajos programados.
+// Make manda aquí las métricas leídas de Facebook/Instagram/LinkedIn. Se empareja cada publicación con nuestro post
+// por enlace, texto o fecha. Se autentica como el callback: X-Webhook-Secret (PUBLISH_WEBHOOK_SECRET) o Bearer CRON_SECRET.
 export async function POST(req: Request) {
-  if (!process.env.CRON_SECRET || req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const parsed = Body.safeParse(await req.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
+  const secret = process.env.PUBLISH_WEBHOOK_SECRET
+  const cron = process.env.CRON_SECRET
+  const okSecret = !!secret && req.headers.get('X-Webhook-Secret') === secret
+  const okCron = !!cron && req.headers.get('Authorization') === `Bearer ${cron}`
+  if (!okSecret && !okCron) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  try {
-    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-    const published = await prisma.generatedPost.findMany({
-      where: { status: 'published', publishedAt: { gte: since } },
-      select: { id: true, platform: true, copy: true, hashtags: true, externalUrl: true },
+  const body = (await req.json().catch(() => null)) as { platform?: unknown; items?: unknown } | null
+  const platform = typeof body?.platform === 'string' ? body.platform.toLowerCase() : ''
+  if (!['facebook', 'instagram', 'linkedin'].includes(platform)) return NextResponse.json({ error: 'platform debe ser facebook, instagram o linkedin' }, { status: 400 })
+  const items = (Array.isArray(body?.items) ? body!.items : []).filter((i): i is MetricItem => typeof i === 'object' && i !== null).slice(0, 100)
+  if (items.length === 0) return NextResponse.json({ error: 'items vacío' }, { status: 400 })
+
+  const posts = await prisma.generatedPost.findMany({
+    where: { platform, status: 'published', publishedAt: { gte: new Date(Date.now() - 75 * 86400000) } },
+    select: { id: true, copy: true, externalUrl: true, publishedAt: true, companyId: true },
+  })
+  const used = new Set<string>()
+  let matched = 0
+  const unmatched: string[] = []
+  for (const item of items) {
+    const post = matchPost(item, posts.filter((p) => !used.has(p.id)))
+    if (!post) { unmatched.push((item.permalink ?? item.text ?? item.publishedAt ?? '?').slice(0, 80)); continue }
+    used.add(post.id)
+    const f = metricFields(item)
+    await prisma.postMetric.upsert({
+      where: { postId: post.id },
+      create: { postId: post.id, ...f, source: 'make' },
+      update: { ...f, source: 'make' },
     })
-
-    let matched = 0
-    const unmatched: string[] = []
-    for (const it of parsed.data.items) {
-      const { platform, postId, externalId, url, message, ...m } = it
-      const candidates = published.filter((p) => p.platform === platform)
-      const post =
-        (postId ? candidates.find((p) => p.id === postId) : undefined) ??
-        (externalId || url
-          ? candidates.find((p) => p.externalUrl && ((externalId && p.externalUrl.includes(externalId)) || (url && p.externalUrl === url)))
-          : undefined) ??
-        (message ? candidates.find((p) => norm(composePostText(p.platform, p.copy, p.hashtags)) === norm(message) || norm(p.copy) === norm(message)) : undefined)
-      if (!post) { unmatched.push(externalId ?? url ?? (message ?? '').slice(0, 40)); continue }
-      await prisma.postMetric.upsert({
-        where: { postId: post.id },
-        update: { ...m, source: 'make' },
-        create: { postId: post.id, ...m, source: 'make' },
-      })
-      matched++
-    }
-    return NextResponse.json({ matched, unmatched })
-  } catch (err) {
-    console.error('[metrics/ingest]', err)
-    return NextResponse.json({ error: 'Error al guardar las métricas' }, { status: 500 })
+    if (item.permalink && !post.externalUrl && /^https?:\/\//.test(item.permalink)) await prisma.generatedPost.update({ where: { id: post.id }, data: { externalUrl: item.permalink } })
+    matched++
   }
+  await logActivity('samantha', 'metrics', `Recibió métricas de ${platform}: ${matched} posts emparejados${unmatched.length ? `, ${unmatched.length} sin pareja` : ''}`)
+  return NextResponse.json({ ok: true, matched, unmatched })
 }

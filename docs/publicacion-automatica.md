@@ -120,3 +120,30 @@ En Make:
 - **Facebook:** subir cada foto sin publicar (`published=false`) y crear un solo post con `attached_media`; o usar la portada si prefieres un solo post con imagen.
 - **LinkedIn y X:** siguen usando `imageUrl` (la portada).
 - **LinkedIn (módulo Create a User Image Post):** en *Content* mapea **`linkedinText`**, no `text`: es el mismo texto con los caracteres reservados de LinkedIn escapados (paréntesis, #, @, etc.); sin eso el post se corta en el primer paréntesis. Conexión: *LinkedIn (OpenID Connect)* iniciando sesión con el perfil que publicará.
+
+## Métricas con Make (Samantha)
+
+Un escenario aparte de Make ("ISM - Métricas") lee cada día las últimas publicaciones de cada red con sus cifras y las manda a la app:
+
+```
+POST https://marin-systems-production.up.railway.app/api/ceo/metrics/ingest
+X-Webhook-Secret: <PUBLISH_WEBHOOK_SECRET>
+Content-Type: application/json
+
+{
+  "platform": "facebook",            // facebook | instagram | linkedin
+  "items": [
+    { "permalink": "https://…", "text": "texto de la publicación", "publishedAt": "2026-10-30T18:00:00Z",
+      "reach": 120, "impressions": 150, "likes": 9, "comments": 2, "shares": 1, "saves": 0, "clicks": 3 }
+  ]
+}
+```
+
+- No hace falta el ID de la publicación: la app empareja cada ítem con su post por **enlace**, por el **inicio del texto** o por la **fecha**.
+- Los campos de cifras son opcionales (lo que la red no entregue se manda vacío).
+- Responde `{ ok, matched, unmatched }`: cuántos se emparejaron y cuáles no.
+- Las cifras alimentan el informe semanal de Samantha, la lista "Los que mejor funcionaron" y la reutilización de posts.
+
+## Mezcla de contenido
+
+Cada post de la tanda semanal lleva un **tipo** (`educativo`, `pregunta`, `servicio`; las noticias son `noticia`). La tanda elige los tipos que menos han salido en los últimos 12 posts. La pestaña **Equipo** muestra la mezcla de los últimos 30 días y los posts que mejor funcionaron, con el botón **Reutilizar** (14 días después de publicarlos, con otro enfoque y los datos revisados).

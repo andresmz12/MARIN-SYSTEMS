@@ -9,6 +9,7 @@ import { knowledgeFor } from '@/lib/knowledge'
 import { avoidList, isRepeat, topicHistory } from '@/lib/topic-memory'
 import { GROUP_IMAGE_PLATFORM } from '@/lib/image-prompt'
 import { sendContentReadyEmail } from '@/lib/sendgrid-client'
+import { kindGuide, pickKinds } from '@/lib/post-kinds'
 import { AUTO_PLATFORMS, isAutoPlatform } from '@/lib/platforms'
 
 export const maxDuration = 300
@@ -104,6 +105,12 @@ async function handler(req: Request) {
         const usedAngleIds: string[] = []
 
         const slots = nextSlots(now)
+        // Mezcla de contenido: se eligen los tipos que menos han salido en los últimos posts.
+        const recentKinds = (await prisma.generatedPost.findMany({
+          where: { companyId: profile.companyId, status: { not: 'rejected' }, kind: { not: null } },
+          orderBy: { createdAt: 'desc' }, take: 40, distinct: ['groupId'], select: { kind: true },
+        })).map((r) => r.kind).slice(0, 12)
+        const kinds = pickKinds(recentKinds, slots.length)
         for (let i = 0; i < slots.length; i++) {
           const scheduledDate = slots[i]
           const angle = angles[i]
@@ -114,7 +121,7 @@ async function handler(req: Request) {
             companyName: name,
             platform: GROUP_IMAGE_PLATFORM,
             contentType: 'post',
-            topic: `${history.topics.length ? `NO repitas ni parafrasees estos temas que ya publicamos o propusimos: ${avoidList(history.topics)}.` : ''}${extra}`.trim(),
+            topic: `${kindGuide(kinds[i])} ${history.topics.length ? `NO repitas ni parafrasees estos temas que ya publicamos o propusimos: ${avoidList(history.topics)}.` : ''}${extra}`.trim(),
             research: true,
             knowledge,
             tone: profile.tone,
@@ -151,6 +158,7 @@ async function handler(req: Request) {
             generated,
             scheduledDate,
             source: 'auto',
+            kind: kinds[i],
           }))
           history.topics.unshift(generated.topic)
           if (angle) usedAngleIds.push(angle.id)
