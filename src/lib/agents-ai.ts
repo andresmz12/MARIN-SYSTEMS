@@ -1,7 +1,7 @@
 // Agentes programados de la agencia. Cada uno corre en su horario (cron), hace una tarea
 // acotada y se apaga: nada trabaja todo el día. Lo rutinario usa el modelo económico y la
 // verificación de datos el mejor, porque un dato de impuestos mal puesto sale caro.
-import { AI_MODEL, AI_MODEL_SMART, callClaude, extractJson } from '@/lib/ai'
+import { AI_MODEL, AI_MODEL_RESEARCH, AI_MODEL_SMART, callClaude, extractJson } from '@/lib/ai'
 
 const asStr = (v: unknown, max = 400): string => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 const strList = (v: unknown, max: number, len = 300): string[] =>
@@ -218,7 +218,7 @@ Para cada noticia: el titular EXACTO tal como aparece en la página, la URL EXAC
 Responde ÚNICAMENTE con este JSON array (máximo 4):
 [{"title":"…","url":"https://…","date":"AAAA-MM-DD","source":"…"}]`
   try {
-    const text = await callClaude({ model: AI_MODEL_SMART, messages: [{ role: 'user', content: prompt }], maxTokens: 1500, webSearch: true, maxSearches: 5 })
+    const text = await callClaude({ model: AI_MODEL_RESEARCH, messages: [{ role: 'user', content: prompt }], maxTokens: 1500, webSearch: true, maxSearches: 3 })
     const start = text.indexOf('[')
     const end = text.lastIndexOf(']')
     if (start === -1 || end <= start) return []

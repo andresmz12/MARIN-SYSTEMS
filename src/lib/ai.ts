@@ -3,7 +3,9 @@ import { AI_BLOCK_TYPES } from './ceo'
 import { classifyAiError, failureOf, recordAiFailure, recordAiOk, type AiFailure } from './ai-health'
 
 export const AI_MODEL = 'claude-haiku-4-5-20251001'
-export const AI_MODEL_SMART = 'claude-sonnet-4-6'
+export const AI_MODEL_SMART = process.env.AI_MODEL_SMART || 'claude-sonnet-4-6'
+/** Búsquedas de investigación (noticias, temas): leen muchas páginas, así que se hacen con el modelo barato. Cambiable en Railway. */
+export const AI_MODEL_RESEARCH = process.env.AI_MODEL_RESEARCH || AI_MODEL
 
 // ──────────────────────── Shared helpers ────────────────────────
 
