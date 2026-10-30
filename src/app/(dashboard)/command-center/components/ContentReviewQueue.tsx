@@ -695,7 +695,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold text-zinc-100">📰 Noticias automáticas</p>
           <p className="text-xs text-zinc-400">
-            Cada día revisa las noticias oficiales (IRS). Si hay una de los últimos 7 días que sirva, te prepara el post y te avisa por correo. Tú lo revisas y apruebas.
+            Un día sí y otro no revisa las noticias oficiales (IRS) y la web. Si hay una de los últimos 7 días que sirva, te prepara el post y te avisa por correo. Tú lo revisas y apruebas.
           </p>
         </div>
         <button

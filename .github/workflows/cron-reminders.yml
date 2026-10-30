@@ -10,7 +10,7 @@ on:
     - cron: "0 14 * * 6"   # auto-content — sábados 9:00 AM COL; genera los posts de L/X/V para subirlos el fin de semana
     - cron: "0 12 * * *"   # topic-research — todos los días 7:00 AM COL; el investigador deja ideas del día
     - cron: "0 13 * * 6"   # metrics-report — sábados 8:00 AM COL, antes de generar la semana
-    - cron: "0 15 * * *"   # news-watch — todos los días 10:00 AM COL; convierte noticias nuevas en borradores
+    - cron: "0 15 */2 * *"   # news-watch — un día sí y otro no 10:00 AM COL; convierte noticias nuevas en borradores
     - cron: "10 18-23 * * 1-5"   # publish-due — L-V 1:10-6:10 PM COL, cada hora; publica lo aprobado cuya hora ya llegó
   workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
     inputs:
@@ -133,7 +133,7 @@ jobs:
   news-watch:
     name: News Watch (daily 10:00 AM COL)
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'news-watch')) || github.event.schedule == '0 15 * * *'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'news-watch')) || github.event.schedule == '0 15 */2 * *'
     steps:
       - name: POST /ceo/cron/news-watch
         run: |
