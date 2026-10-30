@@ -926,3 +926,57 @@ model BrandAsset {
   @@unique([companyId, kind])
   @@index([userId])
 }
+
+// ─── EQUIPO DE AGENTES: actividad, gasto, lecciones y ajustes ─────────────────
+
+// Qué hizo cada agente (una línea por hecho relevante).
+model AgentActivity {
+  id        String   @id @default(cuid())
+  agent     String
+  companyId String?
+  kind      String
+  summary   String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([agent, createdAt])
+  @@index([createdAt])
+}
+
+// Gasto aproximado de IA por agente, modelo y día (se suma en cada llamada).
+model AgentUsage {
+  id           String  @id @default(cuid())
+  agent        String
+  model        String
+  day          String
+  calls        Int     @default(0)
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  searches     Int     @default(0)
+  costUsd      Float   @default(0)
+
+  @@unique([agent, model, day])
+  @@index([day])
+}
+
+// Lo que el equipo aprendió del dueño (reglas editables que se agregan a los prompts de redacción).
+model AgentLesson {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  text      String
+  // 'manual' (lo escribió el dueño) o 'auto' (nació de un post rechazado con nota)
+  source    String   @default("manual")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([companyId, active])
+}
+
+// Ajustes por agente: encendido y nivel de modelo ('default' | 'smart' | 'cheap').
+model AgentSetting {
+  agent     String   @id
+  enabled   Boolean  @default(true)
+  modelTier String   @default("default")
+  updatedAt DateTime @updatedAt
+}

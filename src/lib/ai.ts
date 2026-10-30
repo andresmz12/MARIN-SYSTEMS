@@ -1,6 +1,7 @@
 import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { AI_BLOCK_TYPES } from './ceo'
 import { classifyAiError, failureOf, recordAiFailure, recordAiOk, type AiFailure } from './ai-health'
+import { currentTier, recordUsage } from './agent-ledger'
 
 export const AI_MODEL = 'claude-haiku-4-5-20251001'
 export const AI_MODEL_SMART = process.env.AI_MODEL_SMART || 'claude-sonnet-4-6'
@@ -70,6 +71,10 @@ export async function callClaude({
   if (!apiKey) return ''
 
   // Tope de 3 min por llamada: si la IA se cuelga, la corrida falla en vez de quedar "en curso" para siempre.
+  // Ajuste del agente: 'smart' o 'cheap' fuerzan el modelo; 'default' respeta el de cada tarea.
+  const tier = await currentTier()
+  if (tier === 'cheap') model = AI_MODEL
+  else if (tier === 'smart') model = AI_MODEL_SMART
   const client = new Anthropic({ apiKey, timeout: 180_000, maxRetries: 1 })
   const params: Anthropic.MessageCreateParamsNonStreaming = {
     model,
@@ -95,13 +100,22 @@ export async function callClaude({
     try {
       let convo = messages
       let msg = await client.messages.create({ ...params, messages: convo })
+      const used = { input: 0, output: 0, searches: 0 }
+      const tally = (m: Anthropic.Message) => {
+        used.input += m.usage?.input_tokens ?? 0
+        used.output += m.usage?.output_tokens ?? 0
+        used.searches += (m.usage as { server_tool_use?: { web_search_requests?: number } } | undefined)?.server_tool_use?.web_search_requests ?? 0
+      }
+      tally(msg)
       // Server-side tool loop: continue while the model pauses to run web searches.
       let guard = 0
       while (msg.stop_reason === 'pause_turn' && guard < 4) {
         guard++
         convo = [...convo, { role: 'assistant', content: msg.content }]
         msg = await client.messages.create({ ...params, messages: convo })
+        tally(msg)
       }
+      void recordUsage(model, used)
       void recordAiOk()
       return extractText(msg)
     } catch (err) {

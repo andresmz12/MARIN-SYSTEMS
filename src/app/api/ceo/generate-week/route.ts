@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { asAgent } from '@/lib/agent-job'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -13,7 +14,7 @@ const Schema = z.object({
 
 export const maxDuration = 120
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = session.user.id
@@ -107,3 +108,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al generar la semana' }, { status: 500 })
   }
 }
+
+export const POST = asAgent('fernanda', 'Redactó contenido de la semana a pedido tuyo', handlePOST)

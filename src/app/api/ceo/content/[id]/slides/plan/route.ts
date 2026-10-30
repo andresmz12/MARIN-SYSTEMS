@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { asAgent } from '@/lib/agent-job'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -8,7 +9,7 @@ import { parseImageText, parseSlides } from '@/lib/image-prompt'
 export const maxDuration = 60
 
 // Convierte un post en el texto de un carrusel: portada, láminas de contenido y cierre.
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
@@ -55,3 +56,5 @@ Responde ÚNICAMENTE con este JSON:
     return NextResponse.json({ error: 'No se pudo armar el carrusel' }, { status: 500 })
   }
 }
+
+export const POST = asAgent('fernanda', 'Planeó las láminas de un carrusel', handlePOST)

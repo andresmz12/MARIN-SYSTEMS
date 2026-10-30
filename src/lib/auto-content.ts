@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { GeneratedContent } from '@/lib/ai'
 import { factCheckPost } from '@/lib/agents-ai'
+import { agentEnabled, logActivity, runAs } from '@/lib/agent-ledger'
 import { knowledgeFor } from '@/lib/knowledge'
 import { parseImageText } from '@/lib/image-prompt'
 
@@ -20,15 +21,18 @@ export function referenceLines(raw: unknown): string[] {
   })
 }
 
-/** Últimas notas de rechazo de la marca, para que la generación aprenda de ellas. */
+/** Lecciones activas del dueño (manuales) y últimas notas de rechazo: la generación aprende de ellas. */
 export async function recentFeedback(companyId: string): Promise<string[]> {
-  const rows = await prisma.generatedPost.findMany({
-    where: { companyId, status: 'rejected', reviewNote: { not: null } },
-    orderBy: { updatedAt: 'desc' },
-    take: 6,
-    select: { reviewNote: true },
-  })
-  return rows.map((r) => r.reviewNote as string).filter(Boolean)
+  const [lessons, rows] = await Promise.all([
+    prisma.agentLesson.findMany({ where: { companyId, active: true }, orderBy: { createdAt: 'desc' }, take: 12, select: { text: true } }),
+    prisma.generatedPost.findMany({
+      where: { companyId, status: 'rejected', reviewNote: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+      take: 6,
+      select: { reviewNote: true },
+    }),
+  ])
+  return [...lessons.map((l) => l.text), ...rows.map((r) => r.reviewNote as string).filter(Boolean)]
 }
 
 /**
@@ -96,16 +100,23 @@ export async function factCheckGroup(groupId: string): Promise<void> {
     include: { company: { select: { name: true } } },
   })
   if (!post) return
+  if (!(await agentEnabled('felipe'))) return
   const library = await knowledgeFor(post.userId, post.companyId, `${post.topic} ${post.copy}`)
-  const result = await factCheckPost({
+  const result = await runAs('felipe', () => factCheckPost({
     companyName: post.company.name,
     copy: post.copy,
     facts: post.facts,
     imageHeadline: parseImageText(post.imageText)?.headline,
     sourceUrl: post.sourceUrl,
     library,
-  })
-  if (!result) return
+  }))
+  if (!result) {
+    await logActivity('felipe', 'fact-check', `No pudo verificar «${post.topic.slice(0, 60)}»`)
+    return
+  }
+  const bad = result.items.filter((i) => i.status === 'incorrecto').length
+  const doubt = result.items.filter((i) => i.status === 'dudoso' || i.status === 'sin_fuente').length
+  await logActivity('felipe', 'fact-check', `Verificó «${post.topic.slice(0, 60)}»: ${result.items.length} datos, ${bad} incorrectos, ${doubt} dudosos`, { companyId: post.companyId })
   await prisma.generatedPost.updateMany({
     where: { groupId },
     data: { factCheck: result as never, factCheckedAt: new Date() },

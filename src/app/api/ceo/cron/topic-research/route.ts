@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { backgroundCron } from '@/lib/cron-run'
+import { agentJob, describeTopics } from '@/lib/agent-job'
 import { prisma } from '@/lib/prisma'
 import { isRepeat, topicHistory } from '@/lib/topic-memory'
 import { researchTopics } from '@/lib/agents-ai'
@@ -74,4 +75,4 @@ async function handler(req: Request) {
   }
 }
 
-export const POST = backgroundCron('topic-research', handler)
+export const POST = backgroundCron('topic-research', agentJob('juan', handler, describeTopics))

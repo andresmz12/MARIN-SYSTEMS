@@ -1289,6 +1289,20 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   </>
                 )}
               </div>
+              {(() => {
+                const comp = Math.max(0, 100 - issues.filter((i) => i.level === 'error').length * 30 - issues.filter((i) => i.level === 'warn').length * 10)
+                const v = post.factCheck?.verdict
+                const datos = v === 'ok' ? 100 : v === 'revisar' ? 60 : v === 'error' ? 20 : null
+                const overall = datos === null ? comp : Math.round((comp + datos) / 2)
+                const tone = overall >= 85 ? 'text-emerald-300 border-emerald-500/40' : overall >= 60 ? 'text-amber-300 border-amber-500/40' : 'text-red-300 border-red-500/40'
+                return (
+                  <div className={`inline-flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border px-2.5 py-1 text-xs ${tone}`} title="Nota de Felipe: promedio de la revisión de cumplimiento y la verificación de datos">
+                    <span>✅ Felipe: <b>{overall}/100</b></span>
+                    <span className="text-zinc-400">cumplimiento {comp}</span>
+                    <span className="text-zinc-400">datos {datos === null ? 'sin verificar' : datos}</span>
+                  </div>
+                )
+              })()}
               {issues.length > 0 ? (
                 <div className={`rounded-lg border p-2.5 ${hasError ? 'border-red-500/40 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
                   <p className={`text-[11px] uppercase tracking-wide mb-1 ${hasError ? 'text-red-300' : 'text-amber-300'}`}>🛡️ Revisión de cumplimiento · {issues.length} {issues.length === 1 ? 'punto' : 'puntos'}</p>

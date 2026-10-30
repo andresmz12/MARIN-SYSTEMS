@@ -8,12 +8,14 @@ import { ContentReviewQueue } from './components/ContentReviewQueue'
 import { KnowledgeLibrary } from './components/KnowledgeLibrary'
 import { ContentCalendar } from './components/ContentCalendar'
 import { HomePanel } from './components/HomePanel'
+import { TeamPanel } from './components/TeamPanel'
 import { AiStatusBanner } from './components/AiStatusBanner'
 
 const MANAGE = '__manage__'
 const LIBRARY = '__library__'
 const CALENDAR = '__calendar__'
 const HOME = '__home__'
+const TEAM = '__team__'
 
 export default function CommandCenterPage() {
   const { showToast } = useToast()
@@ -34,8 +36,9 @@ export default function CommandCenterPage() {
   useEffect(() => { loadCompanies() }, [loadCompanies])
 
   const active = companies.filter((c) => c.isActive)
-  const current = tab === MANAGE || tab === LIBRARY || tab === CALENDAR || tab === HOME ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
+  const current = tab === MANAGE || tab === LIBRARY || tab === CALENDAR || tab === HOME || tab === TEAM ? null : (active.find((c) => c.id === tab) ?? active[0] ?? null)
   const showHome = tab === HOME && active.length > 0
+  const showTeam = tab === TEAM && active.length > 0
   const showLibrary = tab === LIBRARY
   const showCalendar = tab === CALENDAR
   const showManage = tab === MANAGE || (!loading && active.length === 0)
@@ -63,7 +66,7 @@ export default function CommandCenterPage() {
           🏠 Inicio
         </button>
         {active.map((c) => {
-          const on = !showManage && !showLibrary && !showCalendar && !showHome && current?.id === c.id
+          const on = !showManage && !showLibrary && !showCalendar && !showHome && !showTeam && current?.id === c.id
           return (
             <button
               key={c.id}
@@ -76,6 +79,14 @@ export default function CommandCenterPage() {
             </button>
           )
         })}
+        <button
+          onClick={() => setTab(TEAM)}
+          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            showTeam ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          🧠 Equipo
+        </button>
         <button
           onClick={() => setTab(CALENDAR)}
           className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
@@ -102,7 +113,9 @@ export default function CommandCenterPage() {
         </button>
       </div>
 
-      {showHome ? (
+      {showTeam ? (
+        <TeamPanel companies={active} />
+      ) : showHome ? (
         <HomePanel onGoCompany={(id) => setTab(active.find((c) => c.id === id)?.id ?? active[0].id)} />
       ) : showCalendar && active.length > 0 ? (
         <ContentCalendar companies={active} />

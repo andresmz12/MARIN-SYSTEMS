@@ -289,8 +289,11 @@ export async function sendAgentRecoveredEmail({
 
 export async function sendMorningStatusEmail({
   apps,
+  team,
 }: {
   apps: { agentName: string; appName: string; status: string; latency: number | null; reason?: string | null }[]
+  /** Resumen del equipo de agentes: lo que hicieron en las últimas 24 h y el gasto de IA. */
+  team?: { lines: string[]; costYesterday: number; costMonth: number }
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const to = process.env.ALERT_EMAIL_TO ?? ''
   if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
@@ -307,15 +310,22 @@ export async function sendMorningStatusEmail({
   const intro = bad.length === 0
     ? 'Revisé tus apps al empezar el día y todas funcionan bien. De noche (11 PM a 7 AM) no se vigila, porque en ese horario las apps casi no se usan.'
     : 'Revisé tus apps al empezar el día y estas necesitan atención. De noche (11 PM a 7 AM) no se vigila, así que el problema pudo empezar antes.'
+  const teamHtml = team && (team.lines.length > 0 || team.costMonth > 0)
+    ? `<h3 style="margin:0 0 6px;font-size:14px;">🧠 Tu equipo en las últimas 24 horas</h3>
+  ${team.lines.length ? `<ul style="margin:0 0 8px;padding-left:18px;color:#e4e4e7;font-size:13px;">${team.lines.map((l) => `<li style="margin:2px 0;">${l.replace(/</g, '&lt;')}</li>`).join('')}</ul>` : '<p style="margin:0 0 8px;color:#a1a1aa;font-size:13px;">Sin actividad registrada.</p>'}
+  <p style="margin:0 0 18px;color:#a1a1aa;font-size:12px;">Gasto aproximado de IA: ayer $${team.costYesterday.toFixed(2)} · este mes $${team.costMonth.toFixed(2)} (estimado por tokens).</p>`
+    : ''
   const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
   <h2 style="margin:0 0 8px;">${bad.length === 0 ? '☀️ Buenos días, Andrés' : '⚠️ Buenos días, Andrés'}</h2>
   <p style="margin:0 0 16px;color:#a1a1aa;">${intro}</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;margin-bottom:18px;">${rows}</table>
+  ${teamHtml}
   <a href="${appUrl}/agentes" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Corporación Marin →</a>
 </div>`
   const text = `${bad.length === 0 ? 'Buenos días: tus apps funcionan bien.' : 'Buenos días: hay apps con problemas.'}
 ${apps.map((a) => `- ${a.agentName} (${a.appName}): ${label(a.status)}`).join('\n')}
 
+${team && team.lines.length ? `\nEquipo (24 h):\n${team.lines.map((l) => `- ${l}`).join('\n')}\nGasto IA aprox.: ayer $${team.costYesterday.toFixed(2)}, mes $${team.costMonth.toFixed(2)}\n` : ''}
 Ver: ${appUrl}/agentes`
   return sendEmail(to, subject, html, text)
 }

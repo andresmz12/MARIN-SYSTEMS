@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { asAgent } from '@/lib/agent-job'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -10,7 +11,7 @@ import { parseImageText } from '@/lib/image-prompt'
 export const maxDuration = 120
 
 // Verifica los datos de un post (y de todas sus redes) a petición del dueño.
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
@@ -43,3 +44,5 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Error al verificar los datos' }, { status: 500 })
   }
 }
+
+export const POST = asAgent('felipe', 'Verificó los datos de un post', handlePOST)

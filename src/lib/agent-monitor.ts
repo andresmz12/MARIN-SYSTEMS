@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { sendAgentAlertEmail, sendAgentRecoveredEmail } from '@/lib/sendgrid-client'
+import { logActivity } from '@/lib/agent-ledger'
 
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000 // 4 horas entre alertas repetidas
 // Fallas consecutivas antes de avisar: evita falsas alarmas por un timeout suelto.
@@ -185,6 +186,7 @@ async function applyState(app: AppRow, result: HealthCheckResult): Promise<numbe
         downtimeMs: since ? now.getTime() - since.getTime() : null,
       })
       if (!sent.success) console.error('[agent-monitor] recovery email failed for', app.agentName, '-', sent.error)
+      else await logActivity('monitor', 'recovered', `${app.agentName}: ${app.name} volvió a funcionar`)
     }
     await prisma.monitoredApp.update({
       where: { id: app.id },
@@ -209,7 +211,10 @@ async function applyState(app: AppRow, result: HealthCheckResult): Promise<numbe
       reason: result.message,
       since: statusSince,
     })
-    if (sent.success) lastAlertAt = now
+    if (sent.success) {
+      lastAlertAt = now
+      await logActivity('monitor', 'alert', `${app.agentName}: ${app.name} está ${status === 'down' ? 'caída' : 'lenta o con fallas'}${result.message ? ` (${result.message})` : ''}`)
+    }
     // Si falla el envío NO se marca la alerta: el próximo chequeo lo reintenta.
     else console.error('[agent-monitor] alert email failed for', app.agentName, '-', sent.error)
   }

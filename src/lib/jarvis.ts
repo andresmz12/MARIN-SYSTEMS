@@ -1,4 +1,5 @@
 import Anthropic, { APIError } from '@anthropic-ai/sdk'
+import { recordUsage, runAs } from '@/lib/agent-ledger'
 import { prisma } from './prisma'
 import { getDayStart, getDayEnd, getTodayString } from './utils'
 
@@ -597,6 +598,7 @@ export async function chatWithJarvis(
       })
       stream.on('text', (delta) => onDelta(delta))
       const response = await stream.finalMessage()
+      await runAs('jarvis', () => recordUsage(JARVIS_MODEL, { input: response.usage?.input_tokens ?? 0, output: response.usage?.output_tokens ?? 0, searches: 0 }))
 
       if (response.stop_reason === 'tool_use') {
         messages = [...messages, { role: 'assistant', content: response.content }]

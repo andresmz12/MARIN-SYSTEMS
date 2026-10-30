@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { asAgent } from '@/lib/agent-job'
 import { Prisma } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -11,7 +12,7 @@ export const maxDuration = 60
 
 // Regenera copy, hashtags, CTA e imagePrompt de un post, opcionalmente guiado por
 // una nota del dueño ("más corto", "menos formal", ...). El post vuelve a revisión.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -122,3 +123,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Error al regenerar el contenido' }, { status: 500 })
   }
 }
+
+export const POST = asAgent('fernanda', 'Reescribió un post a pedido tuyo', handlePOST)

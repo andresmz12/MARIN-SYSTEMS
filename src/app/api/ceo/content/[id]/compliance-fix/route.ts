@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { asAgent } from '@/lib/agent-job'
 import { Prisma } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -12,7 +13,7 @@ export const maxDuration = 60
 
 // Reescribe SOLO lo que marcó la revisión de cumplimiento (promesas, ejemplos sin suposición, cifras de millones, etc.),
 // sin cambiar los datos. Guarda la versión anterior para poder volver atrás.
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -78,3 +79,5 @@ Responde ÚNICAMENTE con este JSON:
   const updated = await prisma.generatedPost.update({ where: { id: post.id }, data, include: { company: true } })
   return NextResponse.json({ post: updated, remaining: lintPost({ copy: newCopy, imageText: newImageText }) })
 }
+
+export const POST = asAgent('felipe', 'Corrigió un post con la revisión de cumplimiento', handlePOST)
