@@ -8,7 +8,7 @@ on:
     - cron: "0 */6 * * *"   # generate — cada 6 horas
     - cron: "0 13 * * 1"   # weekly-angles — lunes 8:00 AM Colombia (UTC-5)
     - cron: "0 14 * * 6"   # auto-content — sábados 9:00 AM COL; genera los posts de L/X/V para subirlos el fin de semana
-    - cron: "0 12 * * 5"   # topic-research — viernes 7:00 AM COL; el investigador deja las ideas de la semana (semanal para cuidar el presupuesto de IA)
+    - cron: "0 12 * * 2,5"   # topic-research — martes y viernes 7:00 AM COL; el investigador deja ideas nuevas (2 por semana para cuidar el presupuesto de IA)
     - cron: "0 13 * * 6"   # metrics-report — sábados 8:00 AM COL, antes de generar la semana
     - cron: "0 15 * * 1,4"   # news-watch — lunes y jueves 10:00 AM COL; convierte noticias nuevas en borradores (2 por semana para cuidar el presupuesto de IA)
     - cron: "10 18-23 * * 1-5"   # publish-due — L-V 1:10-6:10 PM COL, cada hora; publica lo aprobado cuya hora ya llegó
@@ -147,7 +147,7 @@ jobs:
   topic-research:
     name: Topic Research (daily 7:00 AM COL)
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'topic-research')) || github.event.schedule == '0 12 * * 5'
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'topic-research')) || github.event.schedule == '0 12 * * 2,5'
     steps:
       - name: POST /ceo/cron/topic-research
         run: |

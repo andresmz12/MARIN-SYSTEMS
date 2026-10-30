@@ -4,7 +4,7 @@ Cada agente corre en un **horario fijo** (GitHub Actions → endpoint con `CRON_
 
 | Agente | Cuándo | Qué hace | Modelo |
 |---|---|---|---|
-| Investigador de temas (`topic-research`) | viernes 7:00 AM COL | Busca en la web temas oportunos (noticias, fechas límite) y los deja como ideas (ángulos) | Haiku + búsqueda web |
+| Investigador de temas (`topic-research`) | martes y viernes 7:00 AM COL | Busca en la web temas oportunos (noticias, fechas límite) y los deja como ideas (ángulos) | Haiku + búsqueda web |
 | Noticias (`news-watch`) | lunes y jueves, 10:00 AM COL | Lee `NEWS_FEED_URLS` y convierte noticias nuevas en borradores | Haiku (búsqueda) / Sonnet (redacción) |
 | Contenido (`auto-content`) | sábado 9:00 AM COL | Genera los posts de L/X/V (uno por tema, para todas las redes) | Sonnet |
 | Verificador de datos | tras generar cada post, o botón "Verificar datos" | Contrasta montos/fechas/formularios con la biblioteca, la fuente y IRS.gov | Sonnet + búsqueda web |

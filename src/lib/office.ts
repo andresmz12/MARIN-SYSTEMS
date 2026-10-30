@@ -153,13 +153,13 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     const fc = lastChecked?.factCheck as { summary?: string; verdict?: string } | null
     const topicList = (topics?.content as { topics?: { angle: string }[] } | null)?.topics?.map((t) => t.angle).join(' · ')
 
-    const slotsResearch: ScheduleSlot[] = [{ day: 5, from: 7 * 60, to: 8 * 60 }, { day: 1, from: 10 * 60, to: 11 * 60 }, { day: 4, from: 10 * 60, to: 11 * 60 }]
+    const slotsResearch: ScheduleSlot[] = [{ day: 2, from: 7 * 60, to: 8 * 60 }, { day: 5, from: 7 * 60, to: 8 * 60 }, { day: 1, from: 10 * 60, to: 11 * 60 }, { day: 4, from: 10 * 60, to: 11 * 60 }]
     const slotsWriter: ScheduleSlot[] = [{ day: 6, from: 9 * 60, to: 10 * 60 }, { day: 1, from: 10 * 60, to: 11 * 60 }, { day: 4, from: 10 * 60, to: 11 * 60 }]
     const slotsChecker: ScheduleSlot[] = [{ day: 6, from: 10 * 60, to: 11 * 60 }, { day: 1, from: 11 * 60, to: 12 * 60 }, { day: 4, from: 11 * 60, to: 12 * 60 }]
     const slotsAnalyst: ScheduleSlot[] = [{ day: 6, from: 8 * 60, to: 9 * 60 }]
 
     const agents: OfficeAgent[] = [
-      { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Viernes · 7:00 AM', model: 'Haiku + búsqueda web',
+      { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Martes y viernes · 7:00 AM', model: 'Haiku + búsqueda web',
         lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando temas y noticias de la semana…' },
       { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias lunes y jueves, 10:00 AM', model: 'Sonnet',
         lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
