@@ -880,30 +880,6 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       put(clock, X0 + 11.4, 3.2, MZ - 0.3, root)
       loungeTickers.push(() => drawClock())
 
-      // Letrero de neón ISM en la pared (palpita suave)
-      const neonCv = document.createElement('canvas')
-      neonCv.width = 512
-      neonCv.height = 192
-      const ng = neonCv.getContext('2d')
-      if (ng) {
-        ng.textAlign = 'center'
-        ng.textBaseline = 'middle'
-        ng.font = '800 120px system-ui, sans-serif'
-        ng.shadowColor = '#ffb42e'
-        ng.shadowBlur = 36
-        ng.fillStyle = '#ffd36a'
-        ng.fillText('ISM', 256, 84)
-        ng.shadowBlur = 0
-        ng.font = '600 34px system-ui, sans-serif'
-        ng.fillStyle = '#ffe7a8'
-        ng.fillText('Consulting Services', 256, 160)
-      }
-      const neonMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(neonCv), transparent: true, depthWrite: false })
-      const neon = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.97), neonMat)
-      neon.rotation.y = Math.PI
-      put(neon, X0 + 7.0, 3.3, MZ - 0.3, root)
-      loungeTickers.push((time) => { neonMat.opacity = 0.82 + 0.18 * Math.sin(time * 2.2) })
-
       // — Sombras, plantas y el letrero del área —
       plantAt(X0 + 0.2, MZ - 1.0, 1.5)
       plantAt(X0 + 16.6, MZ - 1.2, 1.4)
