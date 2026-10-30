@@ -827,7 +827,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         bg.fillStyle = '#b8863b'
         bg.fillRect(40, 100, 300, 8)
         bg.font = '600 38px system-ui, sans-serif'
-        const rows: [string, string][] = [['7:00 AM', 'Temas del día'], ['10:00 AM (día por medio)', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–7 AM', 'Todos descansan']]
+        const rows: [string, string][] = [['Vie 7:00', 'Temas de la semana'], ['Lun y jue 10:00', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–7 AM', 'Todos descansan']]
         rows.forEach(([x, y], i) => {
           bg.fillStyle = '#3b6cff'
           bg.fillText(x, 40, 185 + i * 62)

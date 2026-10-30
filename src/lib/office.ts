@@ -153,15 +153,15 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     const fc = lastChecked?.factCheck as { summary?: string; verdict?: string } | null
     const topicList = (topics?.content as { topics?: { angle: string }[] } | null)?.topics?.map((t) => t.angle).join(' · ')
 
-    const slotsResearch: ScheduleSlot[] = [{ day: null, from: 7 * 60, to: 8 * 60 }]
-    const slotsWriter: ScheduleSlot[] = [{ day: 6, from: 9 * 60, to: 10 * 60 }, { day: null, from: 10 * 60, to: 11 * 60 }]
-    const slotsChecker: ScheduleSlot[] = [{ day: 6, from: 10 * 60, to: 11 * 60 }, { day: null, from: 11 * 60, to: 12 * 60 }]
+    const slotsResearch: ScheduleSlot[] = [{ day: 5, from: 7 * 60, to: 8 * 60 }, { day: 1, from: 10 * 60, to: 11 * 60 }, { day: 4, from: 10 * 60, to: 11 * 60 }]
+    const slotsWriter: ScheduleSlot[] = [{ day: 6, from: 9 * 60, to: 10 * 60 }, { day: 1, from: 10 * 60, to: 11 * 60 }, { day: 4, from: 10 * 60, to: 11 * 60 }]
+    const slotsChecker: ScheduleSlot[] = [{ day: 6, from: 10 * 60, to: 11 * 60 }, { day: 1, from: 11 * 60, to: 12 * 60 }, { day: 4, from: 11 * 60, to: 12 * 60 }]
     const slotsAnalyst: ScheduleSlot[] = [{ day: 6, from: 8 * 60, to: 9 * 60 }]
 
     const agents: OfficeAgent[] = [
-      { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Todos los días · 7:00 AM', model: 'Haiku + búsqueda web',
-        lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando fechas límite y noticias del día…' },
-      { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias cada 2 días, 10:00 AM', model: 'Sonnet',
+      { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Viernes · 7:00 AM', model: 'Haiku + búsqueda web',
+        lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando temas y noticias de la semana…' },
+      { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias lunes y jueves, 10:00 AM', model: 'Sonnet',
         lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
       { id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
         lastReport: fc?.summary ? short(fc.summary) : 'Todavía no ha verificado posts.', lastAt: lastChecked?.factCheckedAt?.toISOString() ?? null, nextRun: nextRunText(slotsChecker, now), slots: slotsChecker, href: '/command-center', doing: 'Comparando montos y fechas con IRS.gov…' },

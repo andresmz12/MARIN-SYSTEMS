@@ -1,7 +1,7 @@
 import Anthropic, { APIError } from '@anthropic-ai/sdk'
 import { AI_BLOCK_TYPES } from './ceo'
 import { classifyAiError, failureOf, recordAiFailure, recordAiOk, type AiFailure } from './ai-health'
-import { currentTier, recordUsage } from './agent-ledger'
+import { assertBudget, currentTier, recordUsage } from './agent-ledger'
 
 export const AI_MODEL = 'claude-haiku-4-5-20251001'
 export const AI_MODEL_SMART = process.env.AI_MODEL_SMART || 'claude-sonnet-4-6'
@@ -71,6 +71,7 @@ export async function callClaude({
   if (!apiKey) return ''
 
   // Tope de 3 min por llamada: si la IA se cuelga, la corrida falla en vez de quedar "en curso" para siempre.
+  await assertBudget() // tope mensual de gasto de IA (se cambia en Command Center → Equipo)
   // Ajuste del agente: 'smart' o 'cheap' fuerzan el modelo; 'default' respeta el de cada tarea.
   const tier = await currentTier()
   if (tier === 'cheap') model = AI_MODEL
@@ -384,9 +385,29 @@ function coerceContent(parsed: unknown, input: ContentGenerationInput): Generate
   }
 }
 
+/**
+ * Paso 1 de la investigación (barato): un modelo económico busca en fuentes oficiales y devuelve notas con su fuente.
+ * Paso 2 (redactar) lo hace el modelo bueno SIN buscar, solo con estas notas: es lo que baja el costo por post.
+ */
+async function gatherResearch(input: ContentGenerationInput): Promise<string> {
+  const prompt = `Hoy es ${new Date().toISOString().slice(0, 10)}. Eres el investigador de una empresa de impuestos y contabilidad para latinos en EE.UU.
+Busca en la web, en fuentes OFICIALES (irs.gov y similares), los detalles concretos para escribir un post sobre: ${input.topic || input.contentType}.
+Devuelve NOTAS en texto simple, una por línea, con este formato: "- dato concreto (monto, fecha, requisito, condición, quién califica, quién NO califica, formulario) | año | URL oficial exacta".
+Solo datos vigentes y confirmados en una fuente oficial; indica siempre el año. Incluye las condiciones y los topes que limitan el beneficio. Si no encuentras información actual y oficial, responde solo: SIN DATOS.`
+  try {
+    const out = await callClaude({ model: AI_MODEL_RESEARCH, messages: [{ role: 'user', content: prompt }], maxTokens: 1500, webSearch: true, maxSearches: 3 })
+    const notes = out.trim()
+    return notes && !/^SIN DATOS/i.test(notes) && notes.length > 40 ? notes.slice(0, 5000) : ''
+  } catch {
+    return ''
+  }
+}
+
 /** Generate a complete marketing post ready to publish. Falls back gracefully. */
 export async function generateMarketingContent(input: ContentGenerationInput): Promise<GeneratedContent> {
   if (!process.env.ANTHROPIC_API_KEY) return { ...fallbackContent(input), failure: failureOf('no_key') }
+  // Investigación barata primero; si no devuelve nada útil, se redacta con búsqueda propia (como antes).
+  const notes = input.research ? await gatherResearch(input) : ''
 
   const voiceLine = input.voiceSamples?.length
     ? `\nEscribe imitando el tono de estos ejemplos escritos por el dueño de la marca:\n${input.voiceSamples.map((s, i) => `${i + 1}. "${s}"`).join('\n')}`
@@ -423,7 +444,7 @@ CALIDAD EDITORIAL (obligatoria): el post debe enseñar algo concreto que la pers
 - Piensa en un post que valga la pena GUARDAR: una lista, un paso a paso o un dato que la persona querrá volver a consultar. Cierra invitando a guardarlo o a escribirnos.
 - Vocabulario de latinos en EE.UU.: "impuestos", "preparación de impuestos", "declarar tus impuestos", "contador". NO uses "asesoría fiscal", "Hacienda", "fisco" ni "declaración de la renta" (son usos de otros países).
 - Sin relleno ni frases vacías ("es clave revisar"). Cada línea debe aportar un dato, una explicación o una acción.
-- Todo texto que irá escrito en la imagen va en español; solo los nombres oficiales de formularios y créditos pueden ir en inglés, y siempre con su explicación en español.${input.research ? '\n- Antes de escribir, BUSCA en la web en fuentes oficiales (irs.gov y similares) los detalles concretos: montos del año, requisitos, fechas y un ejemplo. Si un dato no está en una fuente oficial, no lo afirmes. Cada dato va en "facts" con su fuente. Usa SOLO información vigente: indica el año de cada monto o fecha y nunca presentes como novedad algo de años anteriores. Si no encuentras información actual y oficial sobre el tema, dilo en \"contentNotes\" en vez de inventar.' : ''}
+- Todo texto que irá escrito en la imagen va en español; solo los nombres oficiales de formularios y créditos pueden ir en inglés, y siempre con su explicación en español.${notes ? `\n- INVESTIGACIÓN YA HECHA (úsala como ÚNICA fuente de datos; cada dato va en "facts" con su fuente y año; si algo no está en estas notas, no lo afirmes; si faltan datos, dilo en "contentNotes"):\n${notes}` : input.research ? '\n- Antes de escribir, BUSCA en la web en fuentes oficiales (irs.gov y similares) los detalles concretos: montos del año, requisitos, fechas y un ejemplo. Si un dato no está en una fuente oficial, no lo afirmes. Cada dato va en "facts" con su fuente. Usa SOLO información vigente: indica el año de cada monto o fecha y nunca presentes como novedad algo de años anteriores. Si no encuentras información actual y oficial sobre el tema, dilo en \"contentNotes\" en vez de inventar.' : ''}
 
 Crea contenido de marketing listo para publicar:
 Empresa: ${input.companyName}
@@ -464,7 +485,7 @@ Responde ÚNICAMENTE con este JSON:
   let text = ''
   let failure: AiFailure | undefined
   try {
-    text = await callAI(AI_MODEL_SMART, prompt, input.research ? 4000 : 1500, !!input.research)
+    text = await callAI(AI_MODEL_SMART, prompt, input.research ? 3000 : 1500, !!input.research && !notes)
   } catch (err) {
     console.error('[generate-content] la llamada a la IA falló:', err instanceof Error ? err.message : err)
     failure = classifyAiError(err)

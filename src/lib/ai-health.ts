@@ -1,7 +1,7 @@
 import { APIError } from '@anthropic-ai/sdk'
 import { prisma } from './prisma'
 
-export type AiFailKind = 'credits' | 'rate_limit' | 'overloaded' | 'timeout' | 'auth' | 'no_key' | 'other'
+export type AiFailKind = 'budget' | 'credits' | 'rate_limit' | 'overloaded' | 'timeout' | 'auth' | 'no_key' | 'other'
 
 export interface AiFailure {
   kind: AiFailKind
@@ -9,6 +9,7 @@ export interface AiFailure {
 }
 
 const MESSAGES: Record<AiFailKind, string> = {
+  budget: 'Se llegó al tope de gasto de IA de este mes. Súbelo en Command Center → Equipo → Presupuesto si quieres seguir.',
   credits: 'Anthropic se quedó sin crédito. Recarga saldo en console.anthropic.com → Plans & Billing.',
   rate_limit: 'Se alcanzó el límite de uso de la IA. Espera unos minutos e intenta de nuevo.',
   overloaded: 'La IA está saturada en este momento. Intenta de nuevo en un minuto.',
@@ -19,6 +20,7 @@ const MESSAGES: Record<AiFailKind, string> = {
 }
 
 export function classifyAiError(err: unknown): AiFailure {
+  if (err instanceof Error && err.name === 'AiBudgetError') return { kind: 'budget', message: MESSAGES.budget }
   const text = err instanceof Error ? err.message : String(err)
   const status = err instanceof APIError ? (err.status ?? 0) : 0
   let kind: AiFailKind = 'other'

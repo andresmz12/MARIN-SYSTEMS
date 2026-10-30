@@ -44,6 +44,7 @@ CREATE TABLE "AgentSetting" (
     "agent" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "modelTier" TEXT NOT NULL DEFAULT 'default',
+    "budgetUsd" DOUBLE PRECISION,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "AgentSetting_pkey" PRIMARY KEY ("agent")

@@ -79,3 +79,36 @@ export async function agentEnabled(agent: AgentKey): Promise<boolean> {
 export async function currentTier(): Promise<string> {
   return (await settings()).get(currentAgent())?.modelTier ?? 'default'
 }
+
+// ── Presupuesto mensual de IA ──
+export class AiBudgetError extends Error {
+  readonly name = 'AiBudgetError'
+  constructor(readonly spent: number, readonly limit: number) {
+    super(`Se llegó al tope de IA de este mes ($${spent.toFixed(2)} de $${limit.toFixed(2)}).`)
+  }
+}
+const DEFAULT_BUDGET = Number(process.env.AI_MONTHLY_BUDGET_USD) > 0 ? Number(process.env.AI_MONTHLY_BUDGET_USD) : 5
+
+export async function monthSpend(): Promise<number> {
+  const rows = await prisma.agentUsage.aggregate({ _sum: { costUsd: true }, where: { day: { gte: dayKey().slice(0, 8) + '01' } } })
+  return rows._sum.costUsd ?? 0
+}
+export async function monthlyBudget(): Promise<number> {
+  try {
+    const row = await prisma.agentSetting.findUnique({ where: { agent: 'budget' } })
+    return row?.budgetUsd && row.budgetUsd > 0 ? row.budgetUsd : DEFAULT_BUDGET
+  } catch { return DEFAULT_BUDGET }
+}
+let budgetCache: { at: number; spent: number; limit: number } | null = null
+export function clearBudgetCache() { budgetCache = null }
+export async function budgetStatus(): Promise<{ spent: number; limit: number }> {
+  if (budgetCache && Date.now() - budgetCache.at < 30_000) return budgetCache
+  const [spent, limit] = await Promise.all([monthSpend().catch(() => 0), monthlyBudget()])
+  budgetCache = { at: Date.now(), spent, limit }
+  return budgetCache
+}
+/** Lanza AiBudgetError si el gasto del mes ya llegó al tope. */
+export async function assertBudget(): Promise<void> {
+  const { spent, limit } = await budgetStatus()
+  if (spent >= limit) throw new AiBudgetError(spent, limit)
+}

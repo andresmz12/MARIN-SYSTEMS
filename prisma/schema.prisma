@@ -978,5 +978,7 @@ model AgentSetting {
   agent     String   @id
   enabled   Boolean  @default(true)
   modelTier String   @default("default")
+  // Solo en la fila 'budget': tope mensual de gasto de IA en USD.
+  budgetUsd Float?
   updatedAt DateTime @updatedAt
 }
