@@ -10,6 +10,7 @@ interface Lesson { id: string; text: string; active: boolean }
 interface Team {
   agents: AgentRow[]
   totalMonth: number
+  budget: { spent: number; limit: number }
   activity: Activity[]
   lessons: Lesson[]
   rejections: { id: string; topic: string; reviewNote: string | null }[]
@@ -55,6 +56,7 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [postId, setPostId] = useState('')
   const [script, setScript] = useState<Script | null>(null)
   const [deadlines, setDeadlines] = useState<Team['deadlines']>(null)
+  const [limitInput, setLimitInput] = useState('')
 
   const load = useCallback(async () => {
     if (!companyId) return
@@ -100,6 +102,41 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
         </select>
         <p className="text-sm text-zinc-300">Gasto aproximado de IA este mes: <b className="text-white">{usd(team.totalMonth)}</b> <span className="text-xs text-zinc-500">(estimado por tokens; la cifra real está en tu consola de Anthropic)</span></p>
       </div>
+
+      {(() => {
+        const { spent, limit } = team.budget
+        const pct = Math.min(100, Math.round((spent / limit) * 100))
+        const tone = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-500'
+        const rows = team.agents.filter((a) => a.costMonth > 0).sort((a, b) => b.costMonth - a.costMonth)
+        return (
+          <Box title="💰 Gasto de IA este mes" hint="Cálculo aproximado por tokens. Al llegar al tope, la IA se detiene sola hasta que lo subas.">
+            <div className="space-y-1">
+              <div className="flex items-baseline justify-between text-sm text-zinc-200">
+                <span><b className="text-white">${spent.toFixed(2)}</b> de ${limit.toFixed(2)}</span>
+                <span className="text-xs text-zinc-500">{pct}% del tope</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800"><div className={`h-full ${tone}`} style={{ width: `${pct}%` }} /></div>
+            </div>
+            {rows.length === 0 ? <p className="text-sm text-zinc-500">Todavía no hay gasto registrado este mes. Se empieza a contar desde que se subió esta versión.</p> : (
+              <ul className="space-y-1">
+                {rows.map((a) => (
+                  <li key={a.key} className="flex items-center gap-2 text-sm text-zinc-200">
+                    <span className="w-28 truncate">{a.emoji} {a.name}</span>
+                    <span className="flex-1 h-1.5 overflow-hidden rounded-full bg-zinc-800"><span className="block h-full bg-indigo-500" style={{ width: `${Math.round((a.costMonth / Math.max(spent, 0.0001)) * 100)}%` }} /></span>
+                    <b className="w-16 text-right">{usd(a.costMonth)}</b>
+                    <span className="w-10 text-right text-xs text-zinc-500">{Math.round((a.costMonth / Math.max(spent, 0.0001)) * 100)}%</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-zinc-400">Tope mensual (USD):</span>
+              <input value={limitInput} onChange={(e) => setLimitInput(e.target.value.replace(/[^\d.]/g, ''))} placeholder={String(limit)} className="w-20 bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200" />
+              <button disabled={!limitInput || busy === 'budget'} onClick={async () => { if (await call('/api/ceo/team/settings', { method: 'PATCH', body: JSON.stringify({ budgetUsd: Number(limitInput) }) }, 'budget')) { setLimitInput(''); showToast('Tope actualizado', 'success'); await load() } }} className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40">Cambiar tope</button>
+            </div>
+          </Box>
+        )
+      })()}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {team.agents.filter((a) => a.key !== 'system').map((a) => (

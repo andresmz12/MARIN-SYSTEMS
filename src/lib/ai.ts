@@ -71,7 +71,8 @@ export async function callClaude({
   if (!apiKey) return ''
 
   // Tope de 3 min por llamada: si la IA se cuelga, la corrida falla en vez de quedar "en curso" para siempre.
-  await assertBudget() // tope mensual de gasto de IA (se cambia en Command Center → Equipo)
+  // Tope mensual de gasto de IA (se cambia en Command Center → Equipo).
+  try { await assertBudget() } catch (err) { await recordAiFailure(classifyAiError(err)); throw err }
   // Ajuste del agente: 'smart' o 'cheap' fuerzan el modelo; 'default' respeta el de cada tarea.
   const tier = await currentTier()
   if (tier === 'cheap') model = AI_MODEL

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-interface AiStatus { failing: boolean; kind: string | null; message: string | null; since: string | null }
+interface AiStatus { failing: boolean; kind: string | null; message: string | null; since: string | null; budget?: { spent: number; limit: number } | null }
 
 // Aviso fijo cuando la IA no está funcionando (sin crédito, límite, clave inválida). Se quita solo cuando vuelve a responder.
 export function AiStatusBanner() {
@@ -16,6 +16,13 @@ export function AiStatusBanner() {
     return () => { alive = false; clearInterval(t) }
   }, [])
 
+  if (st && !st.failing && st.budget && st.budget.spent >= st.budget.limit * 0.8) {
+    return (
+      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        💰 Llevas <b>${st.budget.spent.toFixed(2)}</b> de <b>${st.budget.limit.toFixed(2)}</b> del tope de IA de este mes. Al llegar al tope, la IA se detiene (puedes subirlo en Equipo).
+      </div>
+    )
+  }
   if (!st?.failing) return null
   const credits = st.kind === 'credits'
   return (

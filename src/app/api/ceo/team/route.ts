@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { AGENT_INFO, TOGGLEABLE, type AgentKey } from '@/lib/agent-ledger'
+import { AGENT_INFO, TOGGLEABLE, budgetStatus, clearBudgetCache, type AgentKey } from '@/lib/agent-ledger'
 import { ownCompany, teamUser } from '@/lib/team-auth'
 
 export const dynamic = 'force-dynamic'
@@ -16,6 +16,8 @@ export async function GET(req: NextRequest) {
   const company = await ownCompany(u.userId, companyId)
   if (!company) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
+  clearBudgetCache()
+  const budget = await budgetStatus()
   const now = new Date()
   const monthStart = dayKey(now).slice(0, 8) + '01'
   const weekAgo = dayKey(new Date(now.getTime() - 6 * 86400000))
@@ -49,6 +51,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     agents,
     totalMonth: agents.reduce((a, b) => a + b.costMonth, 0),
+    budget,
     activity: activity.slice(0, 40),
     lessons,
     rejections,
