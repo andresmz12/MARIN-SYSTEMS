@@ -128,6 +128,7 @@ export function buildImagePrompt(input: {
     '',
     `LAYOUT (top to bottom): headline → subheadline → key fact badge → info cards → call to action → footer. Rich in information but organized: a clear visual hierarchy, aligned cards with equal spacing, bold modern sans-serif typography, easy to read on a phone, generous margins (at least 8% on the left and right and as stated above on the top and bottom, so the image still works when a network shows it as a square or a 3:4 thumbnail); ${spec.note}.`,
     `AVOID: watermarks, fake logos, gibberish or misspelled text, extra words, any promise, guarantee or number that is not in the text above${style.avoid ? `, ${style.avoid}` : ''}.`,
+    'SPELLING CHECK: before finishing, re-read every word of the image and make sure each one is spelled exactly as in the text above (accents included); fix any glitch, doubled or strange letters.',
     'Output a single finished image.',
   )
   return lines.join('\n')
