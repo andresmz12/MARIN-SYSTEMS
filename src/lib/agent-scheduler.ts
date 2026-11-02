@@ -24,12 +24,16 @@ export function startAgentScheduler() {
 
   let running = false
   let publishing = false
+  let lastPublishCheck = 0
+  // Cada cuánto revisar si hay posts vencidos (solo es una consulta a la base de datos, sin IA ni costo). Por defecto, cada 30 min.
+  const publishEveryMs = (Number(process.env.PUBLISH_CHECK_MIN) > 0 ? Number(process.env.PUBLISH_CHECK_MIN) : 30) * 60_000
   // Publicación puntual: el cron de GitHub a veces se retrasa horas o se salta una corrida, así que la app misma revisa
-  // cada pocos minutos si hay posts aprobados cuya hora ya llegó. Funciona también en las horas de descanso.
+  // cada 30 minutos si hay posts aprobados cuya hora ya llegó. Funciona también en las horas de descanso.
   // Es seguro con el cron de GitHub: cada post se reclama de forma atómica y no se publica dos veces.
   const publishTick = async () => {
-    if (publishing) return
+    if (publishing || Date.now() - lastPublishCheck < publishEveryMs - 30_000) return
     publishing = true
+    lastPublishCheck = Date.now()
     try {
       if (!(await hasDuePosts())) return
       await runLogged('publish-due', async () => {
