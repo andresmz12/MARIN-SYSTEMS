@@ -49,3 +49,11 @@ Además de las fuentes fijas (`NEWS_FEED_URLS`), el investigador de noticias bus
 
 ## Descanso nocturno
 De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía avisos de monitoreo (`src/lib/quiet-hours.ts`): ni el vigilante interno ni el disparador externo `/api/agents/cron/check`. A las 7:00 AM retoma y, en el primer chequeo del día, envía UN correo corto "Buenos días" con cómo amanecieron las apps (funcionen bien o no; una sola vez al día, constancia en CronRun `monitor-morning`). En la oficina, todos aparecen dormidos en ese horario. Para vigilar también de noche, pon `AGENT_MONITOR_QUIET=off` en Railway. El botón "Refrescar ahora" sigue funcionando a cualquier hora.
+
+## Correos de salud de las apps
+
+- **Alerta:** si una app falla 2 revisiones seguidas (cada 5 min), llega un correo; otro cuando se recupera. No se repite en 4 horas.
+- **Confirmación cada hora:** de 7 AM a 11 PM (hora de Colombia) llega un correo con el estado de todas las apps, estén bien o no. El de las 7 AM es el de "buenos días", con el resumen del equipo.
+- Variables en Railway: `HEALTH_EMAIL_EVERY_MIN` (por defecto `60`; `0` lo apaga) y `ALERT_EMAIL_TO` (a dónde llega).
+- De 11 PM a 7 AM no se revisa ni se envía nada.
+

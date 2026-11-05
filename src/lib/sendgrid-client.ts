@@ -330,6 +330,43 @@ Ver: ${appUrl}/agentes`
   return sendEmail(to, subject, html, text)
 }
 
+/** Correo de confirmación periódico (por defecto cada hora): cómo están las apps ahora mismo, estén bien o no. */
+export async function sendHourlyStatusEmail({
+  apps,
+  everyMin,
+}: {
+  apps: { agentName: string; appName: string; status: string; latency: number | null; reason?: string | null }[]
+  everyMin: number
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const to = process.env.ALERT_EMAIL_TO ?? ''
+  if (!to) return { success: false, error: 'ALERT_EMAIL_TO no configurado' }
+
+  const bad = apps.filter((a) => a.status !== 'healthy')
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app'
+  const hour = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: 'numeric', minute: '2-digit' })
+  const subject = bad.length === 0
+    ? `[Corporación Marin] ✅ Todo bien · ${apps.length} de ${apps.length} apps funcionando · ${hour}`
+    : `[Corporación Marin] ⚠️ ${bad.length} de ${apps.length} apps con problemas · ${hour}`
+  const label = (st: string) => (st === 'healthy' ? '🟢 Funciona bien' : st === 'degraded' ? '🟡 Degradada' : st === 'down' ? '🔴 Caída' : '⚪ Sin datos')
+  const rows = apps
+    .map((a) => `<tr><td style="padding:6px 0;color:#e4e4e7;font-size:13px;">${a.agentName} · ${a.appName}</td><td style="padding:6px 0;color:#e4e4e7;font-size:13px;text-align:right;">${label(a.status)}${a.latency != null ? ` · ${a.latency}ms` : ''}${a.reason && a.status !== 'healthy' ? `<br/><span style="color:#a1a1aa;font-size:11px;">${a.reason}</span>` : ''}</td></tr>`)
+    .join('')
+  const intro = bad.length === 0
+    ? `Revisé tus apps a las ${hour} (hora de Colombia) y todas están funcionando. Este aviso llega cada ${everyMin === 60 ? 'hora' : `${everyMin} minutos`}, de 7 AM a 11 PM.`
+    : `Revisé tus apps a las ${hour} (hora de Colombia) y estas necesitan atención.`
+  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;background:#0f0f0f;padding:32px;color:#e4e4e7;">
+  <h2 style="margin:0 0 8px;">${bad.length === 0 ? '✅ Todo en orden' : '⚠️ Atención'}</h2>
+  <p style="margin:0 0 16px;color:#a1a1aa;">${intro}</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;margin-bottom:18px;">${rows}</table>
+  <a href="${appUrl}/agentes" style="display:inline-block;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Corporación Marin →</a>
+</div>`
+  const text = `${bad.length === 0 ? `Todo bien (${hour}): tus apps funcionan.` : `Atención (${hour}): hay apps con problemas.`}
+${apps.map((a) => `- ${a.agentName} (${a.appName}): ${label(a.status)}${a.latency != null ? ` ${a.latency}ms` : ''}`).join('\n')}
+
+Ver: ${appUrl}/agentes`
+  return sendEmail(to, subject, html, text)
+}
+
 export async function sendCronFailureEmail({
   job,
   error,

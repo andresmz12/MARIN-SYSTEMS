@@ -1,7 +1,7 @@
 import { runAgentChecks } from '@/lib/agent-monitor'
 import { runLogged } from '@/lib/cron-run'
 import { isQuietHours } from '@/lib/quiet-hours'
-import { maybeSendMorningReport } from '@/lib/morning-report'
+import { maybeSendHourlyReport, maybeSendMorningReport } from '@/lib/morning-report'
 import { hasDuePosts, runPublishDue } from '@/lib/publish-due'
 
 // Monitoreo de fondo: chequea los agentes sin necesidad de tener /agentes abierto.
@@ -60,7 +60,10 @@ export function startAgentScheduler() {
         void runLogged('agent-check', async () => { throw err }).catch(() => {})
         return null
       })
-      if (results) await maybeSendMorningReport(results).catch((err) => console.error('[morning-report]', err))
+      if (results) {
+        await maybeSendMorningReport(results).catch((err) => console.error('[morning-report]', err))
+        await maybeSendHourlyReport(results).catch((err) => console.error('[hourly-report]', err))
+      }
     } finally {
       running = false
     }

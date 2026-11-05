@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { sendMorningStatusEmail } from '@/lib/sendgrid-client'
+import { sendHourlyStatusEmail, sendMorningStatusEmail } from '@/lib/sendgrid-client'
 import { isQuietHours } from '@/lib/quiet-hours'
 import type { HealthCheckResult } from '@/lib/agent-monitor'
 
@@ -38,6 +38,35 @@ export async function maybeSendMorningReport(results: HealthCheckResult[]): Prom
   } catch { /* el resumen del equipo es un extra: si falla, el correo sale igual */ }
   const sent = await sendMorningStatusEmail({
     team,
+    apps: results.map((r) => ({ agentName: r.agentName, appName: r.name, status: r.status, latency: r.latency, reason: r.message })),
+  })
+  await prisma.cronRun.update({
+    where: { id: run.id },
+    data: { finishedAt: new Date(), ok: sent.success, summary: { apps: results.length, healthy: results.filter((r) => r.status === 'healthy').length } as never, error: sent.success ? null : (sent.error ?? 'No se pudo enviar') },
+  })
+}
+
+const HOURLY_JOB = 'monitor-hourly'
+
+/**
+ * Correo de confirmación cada hora (de 7 AM a 11 PM): "todo bien" o qué app tiene problemas.
+ * Cada cuántos minutos se cambia con HEALTH_EMAIL_EVERY_MIN (por defecto 60); HEALTH_EMAIL_EVERY_MIN=0 lo apaga.
+ * La constancia queda en CronRun para que un reinicio no lo repita. El correo de buenos días (7 AM) cuenta como el de esa hora.
+ */
+export async function maybeSendHourlyReport(results: HealthCheckResult[]): Promise<void> {
+  const raw = process.env.HEALTH_EMAIL_EVERY_MIN
+  const everyMin = raw === undefined || raw === '' ? 60 : Number(raw)
+  if (!Number.isFinite(everyMin) || everyMin <= 0) return
+  if (results.length === 0 || isQuietHours()) return
+
+  // Tolerancia de 4 min: el chequeo corre cada 5, así que el correo sale en el chequeo más cercano a la hora cumplida.
+  const since = new Date(Date.now() - (everyMin - 4) * 60_000)
+  const recent = await prisma.cronRun.findFirst({ where: { job: { in: [HOURLY_JOB, JOB] }, startedAt: { gte: since } }, select: { id: true } })
+  if (recent) return
+
+  const run = await prisma.cronRun.create({ data: { job: HOURLY_JOB } })
+  const sent = await sendHourlyStatusEmail({
+    everyMin,
     apps: results.map((r) => ({ agentName: r.agentName, appName: r.name, status: r.status, latency: r.latency, reason: r.message })),
   })
   await prisma.cronRun.update({
