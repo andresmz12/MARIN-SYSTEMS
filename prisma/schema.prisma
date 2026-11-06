@@ -421,6 +421,8 @@ model BrandProfile {
   references     Json?
   // Estilo visual para los prompts de imagen: { palette: string[], style, handle, avoid }
   visualStyle    Json?
+  // Descripción fija del personaje de los videos con IA (la misma persona en todos los clips).
+  videoCharacter String?
   autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "twitter", "tiktok"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt

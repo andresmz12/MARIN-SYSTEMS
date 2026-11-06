@@ -19,7 +19,7 @@ interface Team {
   topPosts: { id: string; topic: string; platform: string; publishedAt: string | null; externalUrl: string | null; score: number; reach: number | null; saves: number | null; shares: number | null; comments: number | null; likes: number | null }[]
   deadlines: { at: string; items: { date: string; title: string; who: string; source: string }[] } | null
 }
-interface Script { hook: string; scenes: { onScreen: string; voice: string; visual: string }[]; caption: string; avatarNotes: string; flags: string[] }
+interface Script { hook: string; clips: { n: number; seconds: number; dialogue: string; onScreen: string; prompt: string }[]; caption: string; hashtags: string[]; editorNotes: string; character: string; usingDefaultCharacter: boolean; flags: string[] }
 interface Replies { intent: string; replies: { tone: string; text: string; flags: string[] }[]; note: string }
 
 const usd = (n: number) => (n < 0.01 && n > 0 ? '<$0.01' : `$${n.toFixed(2)}`)
@@ -60,6 +60,8 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [script, setScript] = useState<Script | null>(null)
   const [deadlines, setDeadlines] = useState<Team['deadlines']>(null)
   const [limitInput, setLimitInput] = useState('')
+  const [character, setCharacter] = useState('')
+  const [charSaved, setCharSaved] = useState('')
 
   const load = useCallback(async () => {
     if (!companyId) return
@@ -73,6 +75,10 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
     } catch { setError(true) }
   }, [companyId])
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (!companyId) return
+    fetch(`/api/ceo/team/character?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { text?: string } | null) => { setCharacter(d?.text ?? ''); setCharSaved(d?.text ?? '') }).catch(() => {})
+  }, [companyId])
   useEffect(() => {
     fetch('/api/ceo/content-queue').then((r) => (r.ok ? r.json() : null)).then((d: { posts?: GeneratedPost[] } | null) => {
       const seen = new Set<string>()
@@ -291,32 +297,38 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
         </Box>
       </div>
 
-      <Box title="🎬 Tomás: guion de reel" hint="Elige un post y te escribe el guion de un video de ~30 segundos para el avatar. Todavía no genera el video.">
+      <Box title="🎬 Tomás: prompts de video para Veo" hint="Elige un post y te prepara los prompts, clip por clip, para crear el reel en Veo. Tú generas los clips; él no crea el video.">
+        <div className="space-y-1.5">
+          <p className="text-xs text-zinc-300">Personaje de los videos <span className="text-zinc-500">(la misma descripción va en todos los clips, en inglés; sube también la misma foto de referencia en Veo)</span></p>
+          <textarea value={character} onChange={(e) => setCharacter(e.target.value)} rows={3} maxLength={1200} placeholder="Ej: a friendly Latina woman in her mid-30s, shoulder-length dark brown wavy hair, warm brown eyes, navy blazer over a white top, gold stud earrings" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100" />
+          <button disabled={character === charSaved || busy === 'char'} onClick={async () => { if (await call('/api/ceo/team/character', { method: 'PUT', body: JSON.stringify({ companyId, text: character }) }, 'char')) { setCharSaved(character); showToast('Personaje guardado', 'success') } }} className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40">Guardar personaje</button>
+        </div>
         {posts.length === 0 ? <p className="text-sm text-zinc-500">No hay posts para convertir todavía.</p> : (
           <>
             <select value={postId} onChange={(e) => { setPostId(e.target.value); setScript(null) }} className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100">
               {posts.map((p) => <option key={p.id} value={p.id}>{p.topic.slice(0, 90)}</option>)}
             </select>
             <button disabled={!postId || busy === 'tomas'} onClick={async () => { const d = (await call('/api/ceo/team/tomas', { method: 'POST', body: JSON.stringify({ postId }) }, 'tomas')) as Script | null; if (d) { setScript(d); await load() } }} className="px-3 py-1.5 rounded-lg text-sm text-indigo-200 border border-indigo-500/40 hover:bg-indigo-500/10 disabled:opacity-40">
-              {busy === 'tomas' ? 'Escribiendo…' : 'Escribir guion'}
+              {busy === 'tomas' ? 'Escribiendo… (hasta 1 min)' : 'Preparar prompts'}
             </button>
           </>
         )}
         {script && (
-          <div className="space-y-2 text-sm text-zinc-200">
+          <div className="space-y-3 text-sm text-zinc-200">
+            {script.usingDefaultCharacter && <p className="text-xs text-amber-300">Usé un personaje de ejemplo. Escribe el tuyo arriba para que sea siempre la misma persona.</p>}
             <p><b>Gancho:</b> {script.hook}</p>
-            <ol className="space-y-1.5 list-decimal pl-5">
-              {script.scenes.map((s, i) => (
-                <li key={i}>
-                  <span className="text-zinc-100">{s.voice}</span>
-                  <span className="block text-xs text-zinc-500">En pantalla: {s.onScreen} · Se ve: {s.visual}</span>
-                </li>
-              ))}
-            </ol>
-            {script.avatarNotes && <p className="text-xs text-zinc-400">Avatar: {script.avatarNotes}</p>}
-            {script.caption && <p className="text-xs text-zinc-400">Texto para publicar: {script.caption}</p>}
-            {script.flags.length > 0 && <p className="text-xs text-red-300">⚠️ {script.flags.join('; ')}. Corrígelo antes de grabar.</p>}
-            <button onClick={() => navigator.clipboard.writeText([script.hook, ...script.scenes.map((s) => `• ${s.voice}  [${s.onScreen}]`), script.caption].join('\n')).then(() => showToast('Guion copiado', 'success'))} className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500">Copiar guion</button>
+            {script.clips.map((c) => (
+              <div key={c.n} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-1.5">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Clip {c.n} · ~{c.seconds} s</p>
+                <p className="text-xs text-zinc-400">Dice: <span className="text-zinc-200">“{c.dialogue}”</span> · Texto en pantalla (en el editor): {c.onScreen || '—'}</p>
+                <pre className="whitespace-pre-wrap rounded-md bg-zinc-900 border border-zinc-800 p-2 text-[11px] text-zinc-300">{c.prompt}</pre>
+                <button onClick={() => navigator.clipboard.writeText(c.prompt).then(() => showToast(`Prompt del clip ${c.n} copiado`, 'success'))} className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-0.5 hover:border-zinc-500">Copiar prompt</button>
+              </div>
+            ))}
+            {script.editorNotes && <p className="text-xs text-zinc-400"><b>Al editar:</b> {script.editorNotes}</p>}
+            {script.caption && <p className="text-xs text-zinc-400"><b>Texto para publicar:</b> {script.caption} {script.hashtags.join(' ')}</p>}
+            {script.flags.length > 0 && <p className="text-xs text-red-300">⚠️ {script.flags.join('; ')}. Corrígelo antes de crear los clips.</p>}
+            <button onClick={() => navigator.clipboard.writeText(script.clips.map((c) => `CLIP ${c.n} (${c.seconds}s)\n${c.prompt}`).join('\n\n')).then(() => showToast('Todos los prompts copiados', 'success'))} className="text-xs text-zinc-300 border border-zinc-700 rounded-md px-2 py-1 hover:border-zinc-500">Copiar todos los prompts</button>
           </div>
         )}
       </Box>
