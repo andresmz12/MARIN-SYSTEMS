@@ -22,8 +22,31 @@ export function publishablePlatforms(): string[] {
 /** X/Twitter: el texto publicado (copy + hashtags) no puede pasar de 280 caracteres. */
 export const TWEET_MAX = 280
 
-/** Recorta el copy para que copy + hashtags quepa en X (280). En otras redes lo deja igual. */
+/** Instagram rechaza descripciones de más de 2200 caracteres ("The caption was too long"). Se deja un margen. */
+export const INSTAGRAM_MAX = 2200
+const INSTAGRAM_SAFE = 2100
+
+/**
+ * Instagram: si copy + hashtags pasan del límite, se quitan párrafos del medio (de atrás hacia adelante) y se conserva
+ * siempre el primero (el gancho) y el último (el cierre con el aviso). Si aun así no cabe, se corta en la última frase.
+ */
+function fitInstagram(copy: string, hashtags: string[]): string {
+  const tags = hashtagsFor('instagram', hashtags).join(' ')
+  const room = INSTAGRAM_SAFE - (tags ? tags.length + 2 : 0)
+  if (copy.length <= room) return copy
+  const paras = copy.split(/\n{2,}/)
+  while (paras.length > 2 && paras.join('\n\n').length > room) paras.splice(paras.length - 2, 1)
+  let out = paras.join('\n\n')
+  if (out.length <= room) return out
+  const cut = out.slice(0, room - 1)
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '), cut.lastIndexOf('\n'))
+  out = end > room * 0.5 ? cut.slice(0, end + 1) : `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 0) || cut.length)}…`
+  return out.trimEnd()
+}
+
+/** Recorta el copy para que quepa en la red: X (280) e Instagram (2200). En las demás lo deja igual. */
 export function fitCopy(platform: string, copy: string, hashtags: string[]): string {
+  if (platform === 'instagram') return fitInstagram(copy, hashtags)
   if (platform !== 'twitter') return copy
   const tags = hashtags.slice(0, 2).join(' ')
   const suffixLen = tags ? tags.length + 2 : 0

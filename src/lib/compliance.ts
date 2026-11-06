@@ -25,8 +25,10 @@ const CONDITION = /\b(solo|s[oó]lo|si |siempre que|depende|requisito|condici[o�
 const ASSUMPTION = /\b(tasa|suponiendo|asumiendo|supone|con un ingreso|si tu|si pagas|aproximad)/i
 
 /** Revisión automática (sin IA) de promesas, ejemplos sin suposición, topes de empresas grandes y avisos faltantes. */
-export function lintPost(input: { copy: string; imageText?: ImageText | null }): ComplianceIssue[] {
+export function lintPost(input: { copy: string; imageText?: ImageText | null; hashtags?: string[] }): ComplianceIssue[] {
   const out: ComplianceIssue[] = []
+  const total = input.copy.length + (input.hashtags?.length ? input.hashtags.slice(0, 8).join(' ').length + 2 : 0)
+  if (total > 2150) out.push({ level: 'warn', where: 'texto', message: `el texto tiene ${total} caracteres y Instagram solo acepta 2200: en Instagram se recortarán párrafos del medio (en las otras redes sale completo). Acórtalo o regenéralo` })
   const t = input.imageText
   const imgText = t ? [t.headline, t.subheadline, t.keyFact, ...(t.bullets ?? []), t.cta].filter(Boolean).join(' · ') : ''
 

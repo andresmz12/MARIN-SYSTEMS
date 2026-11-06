@@ -457,7 +457,7 @@ Público objetivo: ${input.targetAudience}
 Pilares de contenido: ${input.contentPillars.join(', ')}
 
 Instrucciones específicas por plataforma:
-- Instagram/TikTok: usa emojis, copy corto y punchy (máximo 2200 chars), hashtags relevantes
+- Instagram/TikTok: usa emojis, copy corto y punchy, hashtags relevantes. LÍMITE DURO: el copy completo (sin los hashtags) debe tener MÁXIMO 1700 caracteres, porque Instagram rechaza más de 2200 con los hashtags y el mismo texto se usa en todas las redes
 - Facebook: tono cercano y conversacional, 1-3 párrafos cortos, pregunta que invite a comentar, máximo 3 hashtags
 - LinkedIn: contenido INFORMATIVO y educativo sobre impuestos (taxes), LLC, ITIN y finanzas para negocios latinos en USA. Abre con un dato concreto (monto, fecha, formulario) en una línea; explica en 3-5 párrafos cortos de 1-2 frases; cierra con una pregunta o invitación suave a comentar. Tono profesional y de autoridad, sin promesas ni garantías, casi sin emojis, máximo 3 hashtags. Si das cifras o fechas, indica que son de referencia y que conviene confirmarlas en IRS.gov o con un profesional.
 - Twitter/X: UN solo post de máximo 250 caracteres EN TOTAL contando los hashtags (límite duro de 280). Gancho fuerte en la primera frase, un dato o idea clara, tono directo; máximo 2 hashtags y casi sin emojis.

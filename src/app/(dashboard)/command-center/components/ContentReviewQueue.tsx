@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import type { CEOCompany, GeneratedPost } from '../types'
 import { PLATFORM_CONFIG, POST_STATUS_CONFIG } from '../utils'
-import { AUTO_PLATFORMS, TWEET_MAX, composePostText } from '@/lib/platforms'
+import { AUTO_PLATFORMS, INSTAGRAM_MAX, TWEET_MAX, composePostText } from '@/lib/platforms'
 import { FactCheckPanel } from './FactCheckPanel'
 import { MetricsForm } from './MetricsForm'
 import { PostPreview } from './PostPreview'
@@ -1035,7 +1035,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           const busy = busyId === post.id
           const copy = edits[post.id] ?? post.copy
           const tx = textOf(post)
-          const issues = lintPost({ copy, imageText: tx.headline.trim() ? tx : null })
+          const issues = lintPost({ copy, imageText: tx.headline.trim() ? tx : null, hashtags: post.hashtags })
           const hasError = issues.some((i) => i.level === 'error')
           return (
             <div key={post.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
@@ -1076,6 +1076,14 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   {post.hashtags.length > 3 && <span className="block text-[11px] text-zinc-500">Instagram usa hasta 8; Facebook y LinkedIn solo los 3 primeros; X, 2.</span>}
                 </p>
               )}
+              {members.some((m) => m.platform === 'instagram') && (() => {
+                const len = copy.length + (post.hashtags.length ? post.hashtags.slice(0, 8).join(' ').length + 2 : 0)
+                return (
+                  <p className={`text-xs ${len > INSTAGRAM_MAX ? 'text-red-300' : len > 2000 ? 'text-amber-300' : 'text-zinc-400'}`}>
+                    Instagram: {len}/{INSTAGRAM_MAX} caracteres{len > INSTAGRAM_MAX ? ' — Instagram rechaza descripciones más largas: se recortarán párrafos del medio al publicar' : ''}
+                  </p>
+                )
+              })()}
               {members.some((m) => m.platform === 'twitter') && (() => {
                 const len = composePostText('twitter', copy, post.hashtags).length
                 const raw = copy.length + (post.hashtags.length ? post.hashtags.slice(0, 2).join(' ').length + 2 : 0)
