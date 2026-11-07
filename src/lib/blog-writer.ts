@@ -4,6 +4,8 @@ import { logActivity, runAs } from '@/lib/agent-ledger'
 import { BlogApiError, blogConfigured, createBlogDraft, listBlogPosts, type BlogPostCreated, type BlogPostInput } from '@/lib/blog-api'
 import { lintPost } from '@/lib/compliance'
 import { prisma } from '@/lib/prisma'
+import { isRepeat } from '@/lib/topic-memory'
+import { LEGAL_NOTE_EN, LEGAL_NOTE_ES } from '@/lib/blog-topics-data'
 
 // Luis, el redactor del blog: propone un tema nuevo, investiga, escribe el artículo en español y en inglés y los manda
 // al blog de Reports Systems SIEMPRE como borrador. El dueño los revisa y los publica desde su panel.
@@ -74,6 +76,19 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
 
       // 2) Tema (barato, con búsqueda web) o el que pidió el dueño.
       let topic = opts.topic?.trim() ?? ''
+      let queued: { id: string; kind: string; category: string } | null = null
+      let hint = ''
+      if (!topic) {
+        // Primero, el banco de temas del dueño (por prioridad); se saltan los que ya existen en el blog.
+        const candidates = await prisma.blogTopic.findMany({ where: { companyId: company.id, status: 'pending', kind: { not: 'needs_input' } }, orderBy: { priority: 'asc' }, take: 12 })
+        for (const c of candidates) {
+          if (isRepeat(c.title, existing)) { await prisma.blogTopic.update({ where: { id: c.id }, data: { status: 'used', usedAt: new Date() } }); continue }
+          queued = { id: c.id, kind: c.kind, category: c.category }
+          topic = c.title
+          break
+        }
+      }
+      if (queued?.kind === 'legal') hint = 'TEMA LEGAL: las reglas cambian según el estado y el tipo de licencia. Explica solo lo general, recomienda confirmar con un abogado o con la autoridad del estado, y NO des cifras, plazos ni leyes que no estén en las notas de investigación.'
       if (!topic) {
         const t = await callClaude({
           model: AI_MODEL_RESEARCH, maxTokens: 800, webSearch: true, maxSearches: 2,
@@ -93,7 +108,7 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
       // 4) Artículo en español.
       const esRaw = await callClaude({
         model: AI_MODEL_SMART, maxTokens: 4500,
-        messages: [{ role: 'user', content: `[tarea: escribir artículo en español] ${brief}\nTema: ${topic}\nArtículos ya publicados (no repetir): ${existing.join(' | ') || 'ninguno'}\nNOTAS DE INVESTIGACIÓN:\n${usable || '(no hay notas: no uses cifras ni datos externos)'}\n\n${HOW}\n\nResponde ÚNICAMENTE con JSON: {"title":"…","description":"…","slug":"minusculas-con-guiones","tags":["…"],"content":"markdown completo"}` }],
+        messages: [{ role: 'user', content: `[tarea: escribir artículo en español] ${brief}\nTema: ${topic}${hint ? `\n${hint}` : ''}\nArtículos ya publicados (no repetir): ${existing.join(' | ') || 'ninguno'}\nNOTAS DE INVESTIGACIÓN:\n${usable || '(no hay notas: no uses cifras ni datos externos)'}\n\n${HOW}\n\nResponde ÚNICAMENTE con JSON: {"title":"…","description":"…","slug":"minusculas-con-guiones","tags":["…"],"content":"markdown completo"}` }],
       })
       const esDraft = coerceDraft(extractJson(esRaw))
       if (!esDraft) return { ok: false, topic, error: 'El artículo en español salió incompleto. Intenta de nuevo.' }
@@ -108,11 +123,14 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
 
       // 6) Fuentes al final (solo enlaces reales de las notas).
       const urls = Array.from(new Set((usable.match(/https?:\/\/[^\s|)\]]+/g) ?? []).map((u) => u.replace(/[.,;]+$/, '')))).slice(0, 6)
-      const ctaEs = cta ? `\n\n---\n\n${cta}` : ''
+      const isLegal = queued?.kind === 'legal' || /permiso|licencia|ley|legal|cumplimiento|compliance/i.test(topic)
+      const legalEs = isLegal && !/abogado|autoridad/i.test(esDraft.content) ? `\n\n> ${LEGAL_NOTE_ES}` : ''
+      const legalEn = isLegal && enDraft && !/attorney|lawyer|authority/i.test(enDraft.content) ? `\n\n> ${LEGAL_NOTE_EN}` : ''
+      const ctaEs = cta ? `${legalEs}\n\n---\n\n${cta}` : legalEs
       const enRawObj = extractJson(enRaw) as { cta?: unknown } | null
       const linksOf = (t: string) => t.match(/https?:\/\/\S+|\+?\d[\d\s().-]{7,}\d/g) ?? []
       const ctaEnText = typeof enRawObj?.cta === 'string' && linksOf(cta).every((l) => (enRawObj.cta as string).includes(l.replace(/[.,;]+$/, ''))) ? (enRawObj.cta as string).trim() : cta
-      const ctaEn = cta ? `\n\n---\n\n${ctaEnText}` : ''
+      const ctaEn = cta ? `${legalEn}\n\n---\n\n${ctaEnText}` : legalEn
       const addSources = (d: Draft, label: string): Draft => (urls.length ? { ...d, content: `${d.content}\n\n## ${label}\n\n${urls.map((u) => `- ${u}`).join('\n')}` } : d)
       const withCta = (d: Draft, c: string): Draft => ({ ...d, content: `${d.content}${c}` })
 
@@ -135,6 +153,7 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
       if (enDraft) created.push(await send(withCta(addSources(enDraft, 'Sources'), ctaEn), 'en'))
       else warnings.push('La versión en inglés salió incompleta: solo se envió la de español.')
       if (!usable) warnings.push('No hubo notas con fuente: el artículo no lleva cifras ni sección de fuentes. Revísalo con cuidado.')
+      if (queued) await prisma.blogTopic.update({ where: { id: queued.id }, data: { status: 'used', usedAt: new Date(), articleSlug: created[0]?.slug } })
       await logActivity('luis', 'blog', `Envió el borrador «${esDraft.title.slice(0, 70)}» (${created.map((c) => c.locale.toUpperCase()).join(' y ')}) al blog`, { companyId: company.id })
       return { ok: true, topic, created, warnings }
     } catch (err) {

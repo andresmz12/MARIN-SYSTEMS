@@ -937,6 +937,25 @@ model BrandAsset {
 
 // ─── EQUIPO DE AGENTES: actividad, gasto, lecciones y ajustes ─────────────────
 
+// Banco de temas del blog (Luis): cola con prioridad; Luis toma el siguiente pendiente y lo marca como usado.
+model BlogTopic {
+  id          String    @id @default(cuid())
+  companyId   String
+  category    String
+  title       String
+  // 'general' | 'legal' | 'needs_input'
+  kind        String    @default("general")
+  priority    Int       @default(500)
+  // 'pending' | 'used' | 'skipped'
+  status      String    @default("pending")
+  articleSlug String?
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([companyId, title])
+  @@index([companyId, status, priority])
+}
+
 // Qué hizo cada agente (una línea por hecho relevante).
 model AgentActivity {
   id        String   @id @default(cuid())

@@ -66,6 +66,9 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [blogRun, setBlogRun] = useState<BlogRun | null>(null)
   const [bp, setBp] = useState<{ exists: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string } | null>(null)
   const [bpOpen, setBpOpen] = useState(false)
+  const [bt, setBt] = useState<{ ready: boolean; total: number; pending: number; used: number; skipped: number; next: { id: string; title: string; category: string; kind: string }[]; needsInput: { id: string; title: string }[]; recent?: { title: string }[] } | null>(null)
+  const loadTopics = useCallback(() => { fetch('/api/ceo/team/blog-topics').then((r) => (r.ok ? r.json() : null)).then((d) => setBt(d)).catch(() => {}) }, [])
+  useEffect(() => { loadTopics() }, [loadTopics])
   const [character, setCharacter] = useState('')
   const [charSaved, setCharSaved] = useState('')
 
@@ -331,7 +334,33 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
             )}
           </div>
         )}
-        <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis propone uno nuevo que no se repita" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2">
+          <p className="text-xs text-zinc-300">📚 Banco de temas {bt?.ready && bt.total > 0 ? <span className="text-zinc-500">· {bt.pending} por escribir · {bt.used} escritos{bt.skipped ? ` · ${bt.skipped} saltados` : ''}</span> : null}</p>
+          {bt && bt.total === 0 && (
+            <button
+              disabled={busy === 'topics' || !bt.ready}
+              onClick={async () => { const d = (await call('/api/ceo/team/blog-topics', { method: 'POST' }, 'topics')) as { added?: number } | null; if (d) { showToast(`${d.added} temas cargados`, 'success'); loadTopics() } }}
+              className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
+            >Cargar mis temas (78)</button>
+          )}
+          {bt && !bt.ready && <p className="text-xs text-amber-300">Primero guarda el perfil del blog (abajo) para crear la empresa.</p>}
+          {bt && bt.next.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Los próximos en salir</p>
+              <ol className="list-decimal pl-5 space-y-0.5 text-xs text-zinc-300">
+                {bt.next.map((t) => (
+                  <li key={t.id}>{t.title}{t.kind === 'legal' ? <span className="text-amber-300"> · tema legal: llevará la nota de confirmar con un abogado</span> : null}
+                    <button onClick={async () => { if (await call('/api/ceo/team/blog-topics', { method: 'PATCH', body: JSON.stringify({ id: t.id, status: 'skipped' }) }, 'skip')) loadTopics() }} className="ml-2 text-zinc-500 hover:text-zinc-300 underline">saltar</button>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {bt && bt.needsInput.length > 0 && (
+            <p className="text-[11px] text-zinc-500">Necesitan tus datos reales (casos, testimonios o novedades), Luis no los escribe solo: {bt.needsInput.map((t) => `«${t.title}»`).join(', ')}. Para escribirlos, pon el tema y los hechos en el cuadro de abajo.</p>
+          )}
+        </div>
+        <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis toma el siguiente de tu banco de temas" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
         <button
           disabled={!blog?.configured || busy === 'luis'}
           onClick={async () => { const d = (await call('/api/ceo/team/luis', { method: 'POST', body: JSON.stringify({ topic: blogTopic }) }, 'luis')) as BlogRun | null; if (d) { setBlogRun(d); await load() } }}

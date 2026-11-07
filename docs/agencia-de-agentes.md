@@ -64,3 +64,10 @@ De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía aviso
 - Variables en Railway: `BLOG_API_KEY` (clave `rsb_…` de "solo borradores"; obligatoria), `BLOG_API_URL` (por defecto `https://reportssystems.com`) y `BLOG_COMPANY_NAME` (empresa del Command Center cuyo perfil de marca guía el tono; por defecto `Reports Systems`).
 - También se puede lanzar a mano desde Command Center → Equipo → "Luis", con un tema opcional. Si el cron de GitHub se salta el martes, la app lo hace sola el martes o miércoles.
 
+### Banco de temas de Luis
+
+- Son 78 temas en 11 categorías (cierre de caja, cheques, envíos, depósitos, comisiones, empleados, varias tiendas, cumplimiento, del Excel al sistema, clientes, contenido de marca). Se cargan con el botón **Cargar mis temas** en Equipo → Luis (no duplica).
+- Luis toma el siguiente **pendiente por prioridad**: primero los 8 que el dueño marcó (cuadrar la caja, cheque devuelto, comisiones de envíos, caja corta o sobrante, quién hizo qué, permisos, Excel, varias tiendas) y luego el resto por categoría. Salta los que ya existen en el blog y marca cada uno como escrito. Se puede saltar uno desde la lista.
+- **Temas legales** (permisos, licencias, cumplimiento, cheque devuelto, cobro, impuestos, seguros, notario, etc.): se explica lo general, sin cifras ni leyes no verificadas, y se agrega siempre la nota de confirmar con un abogado o con la autoridad del estado.
+- **Casos, testimonios y novedades** ("Un día en una tienda ordenada…", "Qué cambió en una tienda al llevar el control…", "Novedades de Reports Systems"): Luis NO los escribe solo, porque dependen de hechos reales y del permiso del cliente. Solo salen si el dueño escribe el tema y los hechos en el cuadro de "Tema".
+
