@@ -62,6 +62,8 @@ const LEGAL = /cheque devuelto|recuperar el dinero|cobrar de comisión|cobro de 
 // Necesitan datos reales (casos, testimonios o novedades del producto): solo se escriben si el dueño aporta los hechos.
 const NEEDS_INPUT = /^(Un día en una tienda ordenada|Qué cambió en una tienda|Novedades de Reports Systems)/i
 
+export const isLegalTopic = (title: string) => LEGAL.test(title)
+
 export const BLOG_TOPICS: BlogTopicSeed[] = CATEGORIES.flatMap(([category, titles], ci) =>
   titles.map((title, i) => {
     const first = FIRST.indexOf(title)

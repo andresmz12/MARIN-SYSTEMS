@@ -64,8 +64,14 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [blog, setBlog] = useState<{ configured: boolean; url: string; company: string } | null>(null)
   const [blogTopic, setBlogTopic] = useState('')
   const [blogRun, setBlogRun] = useState<BlogRun | null>(null)
-  const [bp, setBp] = useState<{ exists: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string } | null>(null)
+  const [bp, setBp] = useState<{ exists: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string; ctaEn: string; aiWrite: boolean } | null>(null)
   const [bpOpen, setBpOpen] = useState(false)
+  const [queue, setQueue] = useState<{ key: string; position: number; title: string; es: boolean; en: boolean; status: string; isLegal: boolean; words: number; urls: string[]; preview: string }[]>([])
+  const [importText, setImportText] = useState('')
+  const [importRes, setImportRes] = useState<{ saved: number; errors: string[]; warnings: string[] } | null>(null)
+  const [openKey, setOpenKey] = useState<string | null>(null)
+  const loadQueue = useCallback(() => { fetch('/api/ceo/team/blog-articles').then((r) => (r.ok ? r.json() : null)).then((d: { items?: typeof queue } | null) => setQueue(d?.items ?? [])).catch(() => {}) }, [])
+  useEffect(() => { loadQueue() }, [loadQueue])
   const [dest, setDest] = useState<{ id: string; name: string; blogApiUrl: string; envVar: string; hasKey: boolean; mirrorFrom: string; weekly: boolean; sent: number }[]>([])
   const [destEdit, setDestEdit] = useState<Record<string, { url?: string; from?: string }>>({})
   const loadDest = useCallback(() => { fetch('/api/ceo/team/blog-destinations').then((r) => (r.ok ? r.json() : null)).then((d: { companies?: typeof dest } | null) => setDest(d?.companies ?? [])).catch(() => {}) }, [])
@@ -89,7 +95,7 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   }, [companyId])
   useEffect(() => { load() }, [load])
   useEffect(() => {
-    fetch('/api/ceo/team/blog-profile').then((r) => (r.ok ? r.json() : null)).then((d: { exists: boolean; website: string; tone: string; audience: string; topics: string[]; rules: string; cta: string } | null) => { if (d) setBp({ ...d, topics: d.topics.join('\n') }) }).catch(() => {})
+    fetch('/api/ceo/team/blog-profile').then((r) => (r.ok ? r.json() : null)).then((d: { exists: boolean; website: string; tone: string; audience: string; topics: string[]; rules: string; cta: string; ctaEn?: string; aiWrite?: boolean } | null) => { if (d) setBp({ ...d, ctaEn: d.ctaEn ?? '', aiWrite: !!d.aiWrite, topics: d.topics.join('\n') }) }).catch(() => {})
   }, [])
   useEffect(() => { fetch('/api/ceo/team/luis').then((r) => (r.ok ? r.json() : null)).then((d: { companies?: { name: string; configured: boolean }[] } | null) => setBlog(d ? { configured: !!d.companies?.some((c) => c.configured), url: '', company: d.companies?.[0]?.name ?? 'Reports Systems' } : null)).catch(() => {}) }, [])
   useEffect(() => {
@@ -353,15 +359,19 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
             <button onClick={() => setBpOpen((v) => !v)} className="text-xs text-zinc-300 underline">{bp.exists ? '⚙️ Perfil del blog (ya guardado)' : '⚙️ Crear el perfil del blog (falta guardarlo)'} {bpOpen ? '▲' : '▼'}</button>
             {bpOpen && (
               <div className="space-y-2">
-                {([['website', 'Web (https://…)', 1], ['tone', 'Tono', 2], ['audience', 'Público', 2], ['topics', 'Temas del blog (uno por línea)', 7], ['rules', 'Reglas para Luis (una por línea)', 5], ['cta', 'Llamado a la acción al final (incluye el enlace o número de WhatsApp)', 2]] as const).map(([k, label, rows]) => (
+                {([['website', 'Web (https://…)', 1], ['tone', 'Tono', 2], ['audience', 'Público', 2], ['topics', 'Temas del blog (uno por línea)', 7], ['rules', 'Reglas para Luis (una por línea)', 5], ['cta', 'Llamado a la acción al final (incluye el enlace o número de WhatsApp)', 2], ['ctaEn', 'Llamado a la acción en inglés (opcional; si lo dejas vacío se arma solo)', 2]] as const).map(([k, label, rows]) => (
                   <label key={k} className="block text-xs text-zinc-400">{label}
                     <textarea value={bp[k]} onChange={(e) => setBp({ ...bp, [k]: e.target.value })} rows={rows} className="mt-1 w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100" />
                   </label>
                 ))}
                 {/https?:\/\/|\+?\d{8,}/.test(bp.cta) ? null : <p className="text-xs text-amber-300">Al llamado a la acción le falta el enlace o número de WhatsApp: agrégalo, por ejemplo https://wa.me/1XXXXXXXXXX</p>}
+                <label className="flex items-start gap-2 text-xs text-zinc-300">
+                  <input type="checkbox" checked={bp.aiWrite} onChange={(e) => setBp({ ...bp, aiWrite: e.target.checked })} className="mt-0.5" />
+                  <span>Si no quedan artículos listos en la cola, que Luis escriba uno con IA <span className="text-zinc-500">(cuesta unos centavos; apagado = solo se manda lo que tú subes)</span></span>
+                </label>
                 <button
                   disabled={busy === 'bp'}
-                  onClick={async () => { if (await call('/api/ceo/team/blog-profile', { method: 'PUT', body: JSON.stringify({ website: bp.website, tone: bp.tone, audience: bp.audience, topics: bp.topics.split('\n'), rules: bp.rules, cta: bp.cta }) }, 'bp')) { setBp({ ...bp, exists: true }); showToast('Perfil del blog guardado', 'success') } }}
+                  onClick={async () => { if (await call('/api/ceo/team/blog-profile', { method: 'PUT', body: JSON.stringify({ website: bp.website, tone: bp.tone, audience: bp.audience, topics: bp.topics.split('\n'), rules: bp.rules, cta: bp.cta, ctaEn: bp.ctaEn, aiWrite: bp.aiWrite }) }, 'bp')) { setBp({ ...bp, exists: true }); showToast('Perfil del blog guardado', 'success') } }}
                   className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
                 >Guardar perfil</button>
               </div>
@@ -392,6 +402,43 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
           )}
           {bt && bt.needsInput.length > 0 && (
             <p className="text-[11px] text-zinc-500">Necesitan tus datos reales (casos, testimonios o novedades), Luis no los escribe solo: {bt.needsInput.map((t) => `«${t.title}»`).join(', ')}. Para escribirlos, pon el tema y los hechos en el cuadro de abajo.</p>
+          )}
+        </div>
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2">
+          <p className="text-xs text-zinc-300">📥 Artículos listos <span className="text-zinc-500">· los escribes tú con otra IA y salen solos, uno por semana, como borrador</span></p>
+          <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={4} placeholder={'Pega aquí uno o varios artículos con este formato:\n@@@ARTICULO\nidioma: es\nclave: cuadrar-la-caja\ntitulo: …\ndescripcion: …\n---\n(contenido en Markdown)\n@@@FIN'} className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 font-mono" />
+          <button
+            disabled={importText.trim().length < 50 || busy === 'import'}
+            onClick={async () => { const d = (await call('/api/ceo/team/blog-articles', { method: 'POST', body: JSON.stringify({ text: importText }) }, 'import')) as { saved: number; errors: string[]; warnings: string[] } | null; if (d) { setImportRes(d); if (d.saved > 0 && d.errors.length === 0) setImportText(''); loadQueue(); loadTopics() } }}
+            className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
+          >{busy === 'import' ? 'Revisando…' : 'Subir a la cola'}</button>
+          {importRes && (
+            <div className="space-y-1 text-xs">
+              {importRes.saved > 0 && <p className="text-emerald-300">✅ {importRes.saved} {importRes.saved === 1 ? 'versión guardada' : 'versiones guardadas'}.</p>}
+              {importRes.errors.map((e) => <p key={e} className="text-red-300">✕ {e}</p>)}
+              {importRes.warnings.map((w) => <p key={w} className="text-amber-300">⚠️ {w}</p>)}
+            </div>
+          )}
+          {queue.length > 0 && (
+            <ul className="space-y-1.5">
+              {queue.map((q) => (
+                <li key={q.key} className="rounded-md border border-zinc-800 bg-zinc-900/50 p-2 text-xs text-zinc-300 space-y-1">
+                  <p>
+                    <b className="text-zinc-100">{q.status === 'ready' ? `#${q.position}` : q.status === 'sent' ? '✅' : '⏸'} {q.title}</b>
+                    <span className="text-zinc-500"> · {q.es ? 'ES' : ''}{q.es && q.en ? ' + ' : ''}{q.en ? 'EN' : ''}{!q.en ? ' (sin inglés)' : ''} · {q.words} palabras{q.isLegal ? ' · con nota legal' : ''}</span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button onClick={() => setOpenKey(openKey === q.key ? null : q.key)} className="text-zinc-400 underline">{openKey === q.key ? 'ocultar' : 'ver'}</button>
+                    {q.status !== 'sent' && <button disabled={busy === `send-${q.key}`} onClick={async () => { const d = (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'send' }) }, `send-${q.key}`)) as { ok?: boolean } | null; if (d?.ok) { showToast('Enviado al blog como borrador', 'success'); loadQueue() } }} className="text-indigo-300 underline disabled:opacity-40">{busy === `send-${q.key}` ? 'enviando…' : 'enviar ahora'}</button>}
+                    {q.status === 'ready' && <button onClick={async () => { if (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'skip' }) }, 'q')) loadQueue() }} className="text-zinc-500 hover:text-zinc-300 underline">pausar</button>}
+                    {q.status === 'skipped' && <button onClick={async () => { if (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'ready' }) }, 'q')) loadQueue() }} className="text-zinc-400 underline">reactivar</button>}
+                    {q.status !== 'sent' && <button onClick={async () => { if (window.confirm('¿Quitar este artículo de la cola?') && await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'delete' }) }, 'q')) loadQueue() }} className="text-red-300/80 underline">quitar</button>}
+                    {q.urls.map((u) => <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="text-indigo-300 underline">abrir en el blog ↗</a>)}
+                  </div>
+                  {openKey === q.key && <pre className="whitespace-pre-wrap rounded bg-zinc-950 border border-zinc-800 p-2 text-[11px] text-zinc-400">{q.preview}…</pre>}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
         <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis toma el siguiente de tu banco de temas" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />

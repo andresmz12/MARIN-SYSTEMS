@@ -77,3 +77,9 @@ De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía aviso
 - **Espejo:** se elige de qué empresa copiar. Desde ese momento, cada post publicado en redes se manda tal cual como **borrador** al blog (sin IA; viñetas ✅/• pasan a lista, los hashtags a etiquetas, la imagen a portada, y se agrega el llamado a la acción del perfil si existe). Máximo 3 cada 30 minutos; no manda lo publicado antes de activarlo ni repite uno ya enviado. Textos de menos de 200 caracteres no se envían (el blog los rechaza).
 - **Envío manual:** en "Publicados esta semana", el menú **📰 Enviar al blog…** manda ese post al blog elegido.
 
+### Artículos listos (los escribe el dueño con otra IA)
+
+- Se pegan en Equipo → Luis → **Artículos listos** con el formato `@@@ARTICULO … @@@FIN` (ver `docs/prompt-articulos-blog.md`, que trae el prompt para la otra IA). La app revisa cada uno: limpia HTML y `#`, bloquea promesas ("garantizado", "ahorrarás"), avisa si la descripción o el largo se salen de lo ideal, agrega la nota legal en temas legales y el llamado a la acción de WhatsApp (en inglés se arma solo).
+- Quedan en una **cola con orden**. Cada martes sale el siguiente (español y luego inglés, enlazados) como **borrador** al blog; también se puede "enviar ahora". Si la cola se vacía, Luis **no** escribe con IA salvo que se marque esa opción en el perfil del blog.
+- Si el título coincide con un tema del banco, ese tema se marca como escrito.
+

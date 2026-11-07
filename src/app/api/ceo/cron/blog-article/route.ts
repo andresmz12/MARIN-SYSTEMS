@@ -22,6 +22,6 @@ async function handler(req: Request) {
 
 const describe = (d: Record<string, unknown>): ActivityLine[] => {
   const rows = (Array.isArray(d.summary) ? d.summary : []) as { company: string; created?: number; error?: string }[]
-  return rows.map((s) => ({ text: s.error ? `No pudo escribir el artículo del blog de ${s.company}: ${s.error}` : `Escribió un artículo para el blog de ${s.company} (${s.created} ${s.created === 1 ? 'versión' : 'versiones'} como borrador)` }))
+  return rows.map((s) => ({ text: !s.error && !s.created ? `Blog de ${s.company}: no hay artículos listos en la cola esta semana` : s.error ? `No pudo escribir el artículo del blog de ${s.company}: ${s.error}` : `Mandó un artículo al blog de ${s.company} (${s.created} ${s.created === 1 ? 'versión' : 'versiones'} como borrador)` }))
 }
 export const POST = backgroundCron('blog-article', agentJob('luis', handler, describe))

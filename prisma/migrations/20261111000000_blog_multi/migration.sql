@@ -25,3 +25,35 @@ CREATE TABLE "BlogMirror" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "BlogMirror_groupKey_targetCompanyId_key" ON "BlogMirror"("groupKey", "targetCompanyId");
+
+-- AlterTable
+ALTER TABLE "BrandProfile" ADD COLUMN "blogCtaEn" TEXT,
+ADD COLUMN "blogAiWrite" BOOLEAN NOT NULL DEFAULT false;
+
+-- CreateTable
+CREATE TABLE "BlogArticle" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "locale" TEXT NOT NULL,
+    "translationKey" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "tags" TEXT[],
+    "content" TEXT NOT NULL,
+    "topicTitle" TEXT,
+    "isLegal" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL DEFAULT 'ready',
+    "position" INTEGER NOT NULL DEFAULT 0,
+    "url" TEXT,
+    "sentAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BlogArticle_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BlogArticle_companyId_locale_translationKey_key" ON "BlogArticle"("companyId", "locale", "translationKey");
+
+-- CreateIndex
+CREATE INDEX "BlogArticle_companyId_status_position_idx" ON "BlogArticle"("companyId", "status", "position");

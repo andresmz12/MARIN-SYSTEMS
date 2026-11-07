@@ -70,3 +70,13 @@ export async function createBlogDraft(target: BlogTarget, input: BlogPostInput):
   for (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k]
   return (await call(target, '/api/blog/posts', { method: 'POST', body: JSON.stringify(payload) })) as BlogPostCreated
 }
+
+/** Envía el borrador reintentando con otro slug si ya existe (409). */
+export async function createBlogDraftRetry(target: BlogTarget, input: BlogPostInput): Promise<BlogPostCreated> {
+  const base = input.slug ?? ''
+  for (let n = 1; n <= 3; n++) {
+    try { return await createBlogDraft(target, { ...input, slug: base ? (n === 1 ? base : `${base}-${n}`) : undefined }) }
+    catch (e) { if (!(e instanceof BlogApiError && e.status === 409) || n === 3) throw e }
+  }
+  throw new BlogApiError('No se pudo crear el borrador.', 500)
+}

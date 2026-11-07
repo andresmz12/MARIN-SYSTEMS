@@ -22,13 +22,15 @@ export async function GET() {
     topics: pillars.length ? pillars : [...D.topics],
     rules: p?.blogRules ?? D.rules,
     cta: p?.blogCta ?? D.cta,
+    ctaEn: p?.blogCtaEn ?? '',
+    aiWrite: p?.blogAiWrite ?? false,
   })
 }
 
 export async function PUT(req: NextRequest) {
   const u = await teamUser()
   if (u instanceof NextResponse) return u
-  const b = (await req.json().catch(() => ({}))) as { website?: string; tone?: string; audience?: string; topics?: string[]; rules?: string; cta?: string }
+  const b = (await req.json().catch(() => ({}))) as { website?: string; tone?: string; audience?: string; topics?: string[]; rules?: string; cta?: string; ctaEn?: string; aiWrite?: boolean }
   const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
   const tone = clean(b.tone, 400), audience = clean(b.audience, 400), rules = clean(b.rules, 1500), cta = clean(b.cta, 400), website = clean(b.website, 200)
   const topics = (Array.isArray(b.topics) ? b.topics : []).map((t) => clean(t, 120)).filter(Boolean).slice(0, 20)
@@ -39,7 +41,7 @@ export async function PUT(req: NextRequest) {
   let company = await prisma.cEOCompany.findFirst({ where: { userId: u.userId, name: { contains: name, mode: 'insensitive' } } })
   if (!company) company = await prisma.cEOCompany.create({ data: { userId: u.userId, name, emoji: '📊', country: ['US'] } })
   const existing = await prisma.brandProfile.findFirst({ where: { companyId: company.id } })
-  const data = { tone, targetAudience: audience, contentPillars: topics as never, website: website || null, blogRules: rules || null, blogCta: cta || null, blogEnabled: true }
+  const data = { tone, targetAudience: audience, contentPillars: topics as never, website: website || null, blogRules: rules || null, blogCta: cta || null, blogCtaEn: clean(b.ctaEn, 400) || null, blogAiWrite: b.aiWrite === true, blogEnabled: true }
   if (existing) await prisma.brandProfile.update({ where: { id: existing.id }, data })
   else await prisma.brandProfile.create({ data: { userId: u.userId, companyId: company.id, autoEnabled: false, newsEnabled: false, ...data } })
   return NextResponse.json({ ok: true, companyId: company.id })

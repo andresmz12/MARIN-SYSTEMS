@@ -432,6 +432,9 @@ model BrandProfile {
   blogEnabled    Boolean         @default(false)
   // Espejo: este blog recibe como borrador los posts que se publican de otra empresa (id) desde esta fecha.
   blogMirrorFrom  String?
+  // Llamado a la acción en inglés (opcional) y si Luis puede escribir con IA cuando la cola de artículos listos se vacía.
+  blogCtaEn       String?
+  blogAiWrite     Boolean         @default(false)
   blogMirrorSince DateTime?
   autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "twitter", "tiktok"])
   createdAt      DateTime        @default(now())
@@ -942,6 +945,30 @@ model BrandAsset {
 }
 
 // ─── EQUIPO DE AGENTES: actividad, gasto, lecciones y ajustes ─────────────────
+
+// Artículos del blog ya escritos (por el dueño, con otra IA) que esperan su turno para mandarse como borrador.
+model BlogArticle {
+  id             String    @id @default(cuid())
+  companyId      String
+  locale         String
+  translationKey String
+  title          String
+  description    String
+  slug           String
+  tags           String[]
+  content        String
+  topicTitle     String?
+  isLegal        Boolean   @default(false)
+  // 'ready' | 'sent' | 'skipped'
+  status         String    @default("ready")
+  position       Int       @default(0)
+  url            String?
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([companyId, locale, translationKey])
+  @@index([companyId, status, position])
+}
 
 // Posts ya enviados a un blog de destino (para no mandar el mismo dos veces).
 model BlogMirror {

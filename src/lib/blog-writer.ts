@@ -5,6 +5,7 @@ import { BlogApiError, blogEnvName, createBlogDraft, listBlogPosts, resolveBlogT
 import { lintPost } from '@/lib/compliance'
 import { prisma } from '@/lib/prisma'
 import { isRepeat } from '@/lib/topic-memory'
+import { sendNextArticle } from '@/lib/blog-queue'
 import { LEGAL_NOTE_EN, LEGAL_NOTE_ES } from '@/lib/blog-topics-data'
 
 // Luis, el redactor del blog: propone un tema nuevo, investiga, escribe el artículo en español y en inglés y los manda
@@ -172,6 +173,12 @@ export async function writeWeeklyArticles(): Promise<{ company: string; ok: bool
   const out: { company: string; ok: boolean; created: number; error?: string; topic?: string }[] = []
   for (const c of await listBlogCompanies()) {
     if (!c.configured) { out.push({ company: c.name, ok: false, created: 0, error: 'blog sin conectar (falta la clave en Railway)' }); continue }
+    // 1) Primero, los artículos que el dueño ya subió (sin costo de IA).
+    const q = await sendNextArticle(c.id)
+    if (!q.empty) { out.push({ company: c.name, ok: q.ok, created: q.sent?.length ?? 0, error: q.error, topic: q.title }); continue }
+    // 2) Si la cola está vacía, Luis solo escribe con IA si el dueño lo permitió.
+    const p = await prisma.brandProfile.findFirst({ where: { companyId: c.id }, select: { blogAiWrite: true } })
+    if (!p?.blogAiWrite) { out.push({ company: c.name, ok: true, created: 0, topic: 'sin artículos listos en la cola' }); continue }
     const r = await writeBlogArticle({ companyId: c.id })
     out.push({ company: c.name, ok: r.ok, created: r.created?.length ?? 0, error: r.error, topic: r.topic })
   }
