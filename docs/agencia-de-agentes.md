@@ -57,3 +57,10 @@ De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía aviso
 - Variables en Railway: `HEALTH_EMAIL_EVERY_MIN` (por defecto `60`; `0` lo apaga) y `ALERT_EMAIL_TO` (a dónde llega).
 - De 11 PM a 7 AM no se revisa ni se envía nada.
 
+## Luis: blog de Reports Systems
+
+- Escribe **un artículo por semana** (martes 9 AM COL) en **español e inglés** y lo manda al blog como **borrador**; nunca publica. El dueño lo revisa y lo publica en Generales → Blog.
+- Proceso: lee los artículos que ya existen (para no repetir) → propone un tema → investiga con fuente → escribe 800–1500 palabras con `##` y sin HTML → adapta al inglés con la misma `translationKey` → revisa promesas → envía. Si hay fuentes, las agrega al final.
+- Variables en Railway: `BLOG_API_KEY` (clave `rsb_…` de "solo borradores"; obligatoria), `BLOG_API_URL` (por defecto `https://reportssystems.com`) y `BLOG_COMPANY_NAME` (empresa del Command Center cuyo perfil de marca guía el tono; por defecto `Reports Systems`).
+- También se puede lanzar a mano desde Command Center → Equipo → "Luis", con un tema opcional. Si el cron de GitHub se salta el martes, la app lo hace sola el martes o miércoles.
+

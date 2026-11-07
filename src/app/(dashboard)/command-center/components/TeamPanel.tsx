@@ -20,6 +20,7 @@ interface Team {
   deadlines: { at: string; items: { date: string; title: string; who: string; source: string }[] } | null
 }
 interface Script { hook: string; clips: { n: number; seconds: number; dialogue: string; onScreen: string; prompt: string }[]; caption: string; hashtags: string[]; editorNotes: string; character: string; usingDefaultCharacter: boolean; flags: string[] }
+interface BlogRun { ok: boolean; topic?: string; created?: { id: string; locale: string; slug: string; title: string; status: string; url: string }[]; warnings?: string[]; error?: string }
 interface Replies { intent: string; replies: { tone: string; text: string; flags: string[] }[]; note: string }
 
 const usd = (n: number) => (n < 0.01 && n > 0 ? '<$0.01' : `$${n.toFixed(2)}`)
@@ -60,6 +61,9 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [script, setScript] = useState<Script | null>(null)
   const [deadlines, setDeadlines] = useState<Team['deadlines']>(null)
   const [limitInput, setLimitInput] = useState('')
+  const [blog, setBlog] = useState<{ configured: boolean; url: string; company: string } | null>(null)
+  const [blogTopic, setBlogTopic] = useState('')
+  const [blogRun, setBlogRun] = useState<BlogRun | null>(null)
   const [character, setCharacter] = useState('')
   const [charSaved, setCharSaved] = useState('')
 
@@ -75,6 +79,7 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
     } catch { setError(true) }
   }, [companyId])
   useEffect(() => { load() }, [load])
+  useEffect(() => { fetch('/api/ceo/team/luis').then((r) => (r.ok ? r.json() : null)).then((d) => setBlog(d)).catch(() => {}) }, [])
   useEffect(() => {
     if (!companyId) return
     fetch(`/api/ceo/team/character?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { text?: string } | null) => { setCharacter(d?.text ?? ''); setCharSaved(d?.text ?? '') }).catch(() => {})
@@ -296,6 +301,30 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
           {deadlines && <p className="text-[11px] text-zinc-500">Consultado {ago(deadlines.at)}. Confirma siempre la fecha en IRS.gov antes de avisarle a un cliente.</p>}
         </Box>
       </div>
+
+      <Box title="📝 Luis: artículos del blog" hint={`Escribe un artículo nuevo en español e inglés y lo manda al blog de ${blog?.company ?? 'Reports Systems'} como BORRADOR. Tú lo revisas y lo publicas desde tu panel del blog. Solo, escribe uno cada martes.`}>
+        {blog && !blog.configured && (
+          <p className="text-xs text-amber-300">Falta conectar el blog: en Railway agrega la variable <b>BLOG_API_KEY</b> con una clave de “solo borradores” (Generales → Blog → Crear clave en tu panel de Reports Systems).</p>
+        )}
+        <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis propone uno nuevo que no se repita" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
+        <button
+          disabled={!blog?.configured || busy === 'luis'}
+          onClick={async () => { const d = (await call('/api/ceo/team/luis', { method: 'POST', body: JSON.stringify({ topic: blogTopic }) }, 'luis')) as BlogRun | null; if (d) { setBlogRun(d); await load() } }}
+          className="px-3 py-1.5 rounded-lg text-sm text-indigo-200 border border-indigo-500/40 hover:bg-indigo-500/10 disabled:opacity-40"
+        >{busy === 'luis' ? 'Escribiendo… (1 a 3 min)' : 'Escribir un artículo ahora'}</button>
+        {blogRun?.ok && (
+          <div className="space-y-1.5 text-sm text-zinc-200">
+            <p>✅ Borrador enviado sobre «{blogRun.topic}».</p>
+            <ul className="space-y-1">
+              {blogRun.created?.map((c) => (
+                <li key={c.id}><b>{c.locale.toUpperCase()}</b> · {c.title} <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-300 underline">abrir ↗</a></li>
+              ))}
+            </ul>
+            {blogRun.warnings?.map((w) => <p key={w} className="text-xs text-amber-300">⚠️ {w}</p>)}
+            <p className="text-xs text-zinc-500">Abre tu panel del blog (Generales → Blog), revisa y publica. El borrador no se ve al público.</p>
+          </div>
+        )}
+      </Box>
 
       <Box title="🎬 Tomás: prompts de video para Veo" hint="Elige un post y te prepara los prompts, clip por clip, para crear el reel en Veo. Tú generas los clips; él no crea el video.">
         <div className="space-y-1.5">

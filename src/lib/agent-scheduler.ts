@@ -3,6 +3,10 @@ import { runLogged } from '@/lib/cron-run'
 import { isQuietHours } from '@/lib/quiet-hours'
 import { maybeSendHourlyReport, maybeSendMorningReport } from '@/lib/morning-report'
 import { hasDuePosts, runPublishDue } from '@/lib/publish-due'
+import { blogConfigured } from '@/lib/blog-api'
+import { agentEnabled } from '@/lib/agent-ledger'
+import { writeBlogArticle } from '@/lib/blog-writer'
+import { prisma } from '@/lib/prisma'
 
 // Monitoreo de fondo: chequea los agentes sin necesidad de tener /agentes abierto.
 // Railway corre un proceso Node persistente, así que un intervalo en memoria basta.
@@ -48,8 +52,33 @@ export function startAgentScheduler() {
       publishing = false
     }
   }
+  // Artículo semanal del blog (Luis): el cron de GitHub corre los martes 9 AM, pero si se salta, la app lo hace sola
+  // el mismo día (o el siguiente) después de las 9 AM, una sola vez por semana.
+  let blogging = false
+  const blogTick = async () => {
+    if (blogging || !blogConfigured()) return
+    blogging = true
+    try {
+      const col = new Date(Date.now() - 5 * 3600 * 1000)
+      const day = col.getUTCDay()
+      if (!(day === 2 || day === 3) || col.getUTCHours() < 9) return
+      if (!(await agentEnabled('luis'))) return
+      const done = await prisma.cronRun.findFirst({ where: { job: 'blog-article', startedAt: { gte: new Date(Date.now() - 5 * 86400000) } }, select: { id: true } })
+      if (done) return
+      await runLogged('blog-article', async () => {
+        const r = await writeBlogArticle()
+        if (!r.ok) throw new Error(r.error ?? 'No se pudo escribir el artículo')
+        return { topic: r.topic, created: r.created?.length ?? 0 }
+      })
+    } catch (err) {
+      console.error('[agent-scheduler] blog falló:', err)
+    } finally {
+      blogging = false
+    }
+  }
   const tick = async () => {
     await publishTick()
+    void blogTick()
     if (running) return // un chequeo lento no se solapa con el siguiente
     if (isQuietHours()) return // descanso nocturno (11 PM - 7 AM Colombia): no vigila ni manda correos
     running = true

@@ -1,0 +1,137 @@
+import { AI_MODEL_RESEARCH, AI_MODEL_SMART, callClaude, extractJson } from '@/lib/ai'
+import { classifyAiError } from '@/lib/ai-health'
+import { logActivity, runAs } from '@/lib/agent-ledger'
+import { BlogApiError, blogConfigured, createBlogDraft, listBlogPosts, type BlogPostCreated, type BlogPostInput } from '@/lib/blog-api'
+import { lintPost } from '@/lib/compliance'
+import { prisma } from '@/lib/prisma'
+
+// Luis, el redactor del blog: propone un tema nuevo, investiga, escribe el artículo en español y en inglés y los manda
+// al blog de Reports Systems SIEMPRE como borrador. El dueño los revisa y los publica desde su panel.
+
+export interface BlogRun {
+  ok: boolean
+  topic?: string
+  created?: BlogPostCreated[]
+  warnings?: string[]
+  error?: string
+}
+
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const slugify = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+const words = (s: string) => s.trim().split(/\s+/).length
+
+/** Limpia lo que la API no admite: HTML, títulos # (el título ya es el único H1) y espacios raros. */
+function cleanMarkdown(md: string): string {
+  return md
+    .replace(/<\/?[a-z][^>]*>/gi, '')
+    .replace(/^#\s+/gm, '## ')
+    .replace(/^#{4,}\s+/gm, '### ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+interface Draft { title: string; description: string; slug: string; tags: string[]; content: string }
+function coerceDraft(raw: unknown): Draft | null {
+  const o = raw as Record<string, unknown> | null
+  if (!o || typeof o.title !== 'string' || typeof o.content !== 'string') return null
+  const title = o.title.trim().slice(0, 140)
+  let description = typeof o.description === 'string' ? o.description.trim() : ''
+  if (description.length > 300) description = description.slice(0, 297) + '…'
+  const content = cleanMarkdown(o.content)
+  const tags = (Array.isArray(o.tags) ? o.tags : []).filter((t): t is string => typeof t === 'string').map((t) => t.trim().slice(0, 40)).filter(Boolean).slice(0, 10)
+  const slug = typeof o.slug === 'string' && SLUG.test(o.slug) ? o.slug : slugify(title)
+  if (title.length < 5 || description.length < 30 || content.length < 200) return null
+  return { title, description, slug, tags, content }
+}
+
+const HOW = `REGLAS DEL ARTÍCULO (obligatorias):
+- Markdown con "##" para los subtítulos (nunca "#"), sin HTML. Entre 800 y 1500 palabras.
+- Útil y concreto: pasos que el lector pueda aplicar, ejemplos simples, listas cortas. Primer párrafo que responde la pregunta del título.
+- NO inventes cifras, estadísticas, leyes, clientes, testimonios ni funciones del producto. Usa SOLO datos de las NOTAS DE INVESTIGACIÓN. Si no hay un dato, no lo afirmes: explica el concepto sin cifras.
+- Sin promesas ni garantías de resultados ("aumentarás", "garantizado"). Tono profesional y cercano; sin relleno.
+- "description": entre 120 y 160 caracteres, atractiva para Google. "title": entre 5 y 140. "tags": de 3 a 6, cortos.`
+
+export async function writeBlogArticle(opts: { companyId?: string; topic?: string } = {}): Promise<BlogRun> {
+  if (!blogConfigured()) return { ok: false, error: 'Falta la clave BLOG_API_KEY en Railway (créala en Generales → Blog → Crear clave, de "solo borradores").' }
+
+  // Empresa del blog (por defecto la que se llama "Reports Systems").
+  const name = process.env.BLOG_COMPANY_NAME || 'Reports Systems'
+  const company = await prisma.cEOCompany.findFirst({
+    where: opts.companyId ? { id: opts.companyId } : { name: { contains: name, mode: 'insensitive' } },
+  })
+  const profile = company ? await prisma.brandProfile.findFirst({ where: { companyId: company.id } }) : null
+  if (!company || !profile) return { ok: false, error: `No encontré la empresa "${name}" con su perfil de marca. Créala en Command Center → Empresas y completa su perfil.` }
+
+  return runAs('luis', async () => {
+    try {
+      // 1) Lo que ya existe, para no repetir.
+      const [es, en] = await Promise.all([listBlogPosts('es'), listBlogPosts('en')])
+      const existing = Array.from(new Set([...es, ...en].map((p) => p.title))).slice(0, 80)
+      const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
+      const brief = `Empresa: ${company.name}. Público: ${profile.targetAudience}. Tono: ${profile.tone}. Temas del blog: ${pillars.join(', ') || 'los de su producto'}.`
+
+      // 2) Tema (barato, con búsqueda web) o el que pidió el dueño.
+      let topic = opts.topic?.trim() ?? ''
+      if (!topic) {
+        const t = await callClaude({
+          model: AI_MODEL_RESEARCH, maxTokens: 800, webSearch: true, maxSearches: 2,
+          messages: [{ role: 'user', content: `[tarea: tema del blog] ${brief}\nArtículos que YA existen (no repetir ni parafrasear): ${existing.join(' | ') || 'ninguno'}.\nBusca qué preguntas se hace hoy este público y propón UN tema nuevo que ayude a quien busca esto en Google. Responde ÚNICAMENTE con JSON: {"topic":"título de trabajo","why":"por qué ahora, 1 frase"}` }],
+        })
+        topic = (extractJson(t) as { topic?: string } | null)?.topic?.trim() ?? ''
+        if (!topic) return { ok: false, error: 'No pude proponer un tema. Intenta de nuevo o escribe uno.' }
+      }
+
+      // 3) Notas de investigación con fuente (barato).
+      const notes = (await callClaude({
+        model: AI_MODEL_RESEARCH, maxTokens: 1500, webSearch: true, maxSearches: 3,
+        messages: [{ role: 'user', content: `[tarea: notas de investigación] Hoy es ${new Date().toISOString().slice(0, 10)}. Para un artículo de blog sobre "${topic}" (${brief}), busca en la web información confiable y actual. Devuelve NOTAS, una por línea: "- dato o idea concreta | fuente (nombre) | URL exacta". Solo datos que viste en una fuente real. Si no hay datos fiables, responde solo: SIN DATOS.` }],
+      })).trim()
+      const usable = notes.length > 40 && !/^SIN DATOS/i.test(notes) ? notes.slice(0, 5000) : ''
+
+      // 4) Artículo en español.
+      const esRaw = await callClaude({
+        model: AI_MODEL_SMART, maxTokens: 4500,
+        messages: [{ role: 'user', content: `[tarea: escribir artículo en español] ${brief}\nTema: ${topic}\nArtículos ya publicados (no repetir): ${existing.join(' | ') || 'ninguno'}\nNOTAS DE INVESTIGACIÓN:\n${usable || '(no hay notas: no uses cifras ni datos externos)'}\n\n${HOW}\n\nResponde ÚNICAMENTE con JSON: {"title":"…","description":"…","slug":"minusculas-con-guiones","tags":["…"],"content":"markdown completo"}` }],
+      })
+      const esDraft = coerceDraft(extractJson(esRaw))
+      if (!esDraft) return { ok: false, topic, error: 'El artículo en español salió incompleto. Intenta de nuevo.' }
+      if (words(esDraft.content) < 600) return { ok: false, topic, error: `El artículo salió muy corto (${words(esDraft.content)} palabras). Intenta de nuevo.` }
+
+      // 5) Versión en inglés (adaptada, no literal).
+      const enRaw = await callClaude({
+        model: AI_MODEL_SMART, maxTokens: 4500,
+        messages: [{ role: 'user', content: `[tarea: versión en inglés] Adapt this Spanish blog article into natural English for an English-speaking audience (not a word-for-word translation). Keep the same facts and structure; same Markdown rules (use "##" for headings, no HTML); do not add any new facts or numbers. "description" 120-160 characters.\n\n${JSON.stringify(esDraft)}\n\nReply ONLY with JSON: {"title":"…","description":"…","slug":"lowercase-with-hyphens","tags":["…"],"content":"full markdown"}` }],
+      })
+      const enDraft = coerceDraft(extractJson(enRaw))
+
+      // 6) Fuentes al final (solo enlaces reales de las notas).
+      const urls = Array.from(new Set((usable.match(/https?:\/\/[^\s|)\]]+/g) ?? []).map((u) => u.replace(/[.,;]+$/, '')))).slice(0, 6)
+      const addSources = (d: Draft, label: string): Draft => (urls.length ? { ...d, content: `${d.content}\n\n## ${label}\n\n${urls.map((u) => `- ${u}`).join('\n')}` } : d)
+
+      // 7) Revisión de cumplimiento (promesas) antes de enviar.
+      const blocked = [esDraft, enDraft].filter((d): d is Draft => !!d).flatMap((d) => lintPost({ copy: d.content }).filter((i) => i.level === 'error').map((i) => i.message))
+      if (blocked.length) return { ok: false, topic, error: `No se envió: el texto ${Array.from(new Set(blocked)).join('; ')}.` }
+
+      // 8) Enviar como borrador (reintenta con otro slug si ya existe).
+      const translationKey = esDraft.slug.slice(0, 80)
+      const send = async (d: Draft, locale: 'es' | 'en'): Promise<BlogPostCreated> => {
+        const base: BlogPostInput = { title: d.title, description: d.description, content: d.content, locale, tags: d.tags, translationKey }
+        for (let n = 1; n <= 3; n++) {
+          try { return await createBlogDraft({ ...base, slug: n === 1 ? d.slug : `${d.slug}-${n}` }) }
+          catch (e) { if (!(e instanceof BlogApiError && e.status === 409) || n === 3) throw e }
+        }
+        throw new BlogApiError('No se pudo crear el borrador.', 500)
+      }
+      const created: BlogPostCreated[] = [await send(addSources(esDraft, 'Fuentes'), 'es')]
+      const warnings: string[] = []
+      if (enDraft) created.push(await send(addSources(enDraft, 'Sources'), 'en'))
+      else warnings.push('La versión en inglés salió incompleta: solo se envió la de español.')
+      if (!usable) warnings.push('No hubo notas con fuente: el artículo no lleva cifras ni sección de fuentes. Revísalo con cuidado.')
+      await logActivity('luis', 'blog', `Envió el borrador «${esDraft.title.slice(0, 70)}» (${created.map((c) => c.locale.toUpperCase()).join(' y ')}) al blog`, { companyId: company.id })
+      return { ok: true, topic, created, warnings }
+    } catch (err) {
+      if (err instanceof BlogApiError) return { ok: false, error: err.message }
+      return { ok: false, error: classifyAiError(err).message }
+    }
+  })
+}

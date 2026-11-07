@@ -11,6 +11,7 @@ on:
     - cron: "0 12 * * 2,5"   # topic-research — martes y viernes 7:00 AM COL; el investigador deja ideas nuevas (2 por semana para cuidar el presupuesto de IA)
     - cron: "0 13 * * 6"   # metrics-report — sábados 8:00 AM COL, antes de generar la semana
     - cron: "0 15 * * 1,4"   # news-watch — lunes y jueves 10:00 AM COL; convierte noticias nuevas en borradores (2 por semana para cuidar el presupuesto de IA)
+    - cron: "0 14 * * 2"   # blog-article — martes 9:00 AM COL; Luis manda un artículo nuevo (ES y EN) al blog como borrador
     - cron: "10 18-23 * * 1-5"   # publish-due — L-V 1:10-6:10 PM COL, cada hora; publica lo aprobado cuya hora ya llegó
   workflow_dispatch:         # permite correrlo manualmente desde GitHub Actions
     inputs:
@@ -22,6 +23,7 @@ on:
           - auto-content
           - publish-due
           - news-watch
+          - blog-article
           - topic-research
           - metrics-report
           - weekly-angles
@@ -131,7 +133,7 @@ jobs:
             https://marin-systems-production.up.railway.app/api/ceo/cron/publish-due
 
   news-watch:
-    name: News Watch (daily 10:00 AM COL)
+    name: News Watch (Mon/Thu 10:00 AM COL)
     runs-on: ubuntu-latest
     if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'news-watch')) || github.event.schedule == '0 15 * * 1,4'
     steps:
@@ -144,8 +146,22 @@ jobs:
             -d '{}' \
             https://marin-systems-production.up.railway.app/api/ceo/cron/news-watch
 
+  blog-article:
+    name: Blog Article (Tue 9:00 AM COL)
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'blog-article')) || github.event.schedule == '0 14 * * 2'
+    steps:
+      - name: POST /ceo/cron/blog-article
+        run: |
+          curl --fail -s -X POST \
+            --max-time 290 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://marin-systems-production.up.railway.app/api/ceo/cron/blog-article
+
   topic-research:
-    name: Topic Research (daily 7:00 AM COL)
+    name: Topic Research (Tue/Fri 7:00 AM COL)
     runs-on: ubuntu-latest
     if: (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'topic-research')) || github.event.schedule == '0 12 * * 2,5'
     steps:

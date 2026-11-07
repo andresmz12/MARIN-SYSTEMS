@@ -3,7 +3,7 @@ import { prisma } from './prisma'
 
 // Registro del equipo de agentes: qué hizo cada uno, cuánto gastó de IA, ajustes y lecciones.
 
-export type AgentKey = 'juan' | 'fernanda' | 'felipe' | 'samantha' | 'maria' | 'isabel' | 'tomas' | 'jarvis' | 'monitor' | 'system'
+export type AgentKey = 'juan' | 'fernanda' | 'felipe' | 'samantha' | 'maria' | 'isabel' | 'tomas' | 'luis' | 'jarvis' | 'monitor' | 'system'
 
 export const AGENT_INFO: Record<AgentKey, { name: string; role: string; emoji: string }> = {
   juan: { name: 'Juan', role: 'Investigador de temas y noticias', emoji: '🔎' },
@@ -12,13 +12,14 @@ export const AGENT_INFO: Record<AgentKey, { name: string; role: string; emoji: s
   samantha: { name: 'Samantha', role: 'Analista de métricas', emoji: '📊' },
   maria: { name: 'María', role: 'Comunidad: respuestas a comentarios', emoji: '💬' },
   isabel: { name: 'Isabel', role: 'Finanzas: fechas de impuestos', emoji: '🧾' },
-  tomas: { name: 'Tomás', role: 'Video: guiones para reels', emoji: '🎬' },
+  tomas: { name: 'Tomás', role: 'Video: prompts para Veo', emoji: '🎬' },
+  luis: { name: 'Luis', role: 'Redactor del blog (Reports Systems)', emoji: '📝' },
   jarvis: { name: 'Jarvis', role: 'Asistente personal', emoji: '🤖' },
   monitor: { name: 'Monitoreo', role: 'Vigila que las apps funcionen', emoji: '🛰️' },
   system: { name: 'Sistema', role: 'Otras tareas de IA', emoji: '⚙️' },
 }
 /** Agentes que se pueden apagar o ajustar desde la pantalla. */
-export const TOGGLEABLE: AgentKey[] = ['juan', 'fernanda', 'felipe', 'samantha']
+export const TOGGLEABLE: AgentKey[] = ['juan', 'fernanda', 'felipe', 'samantha', 'luis']
 
 interface Ctx { agent: AgentKey; companyId?: string }
 const store = new AsyncLocalStorage<Ctx>()
