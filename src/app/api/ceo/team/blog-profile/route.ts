@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest) {
   let company = await prisma.cEOCompany.findFirst({ where: { userId: u.userId, name: { contains: name, mode: 'insensitive' } } })
   if (!company) company = await prisma.cEOCompany.create({ data: { userId: u.userId, name, emoji: '📊', country: ['US'] } })
   const existing = await prisma.brandProfile.findFirst({ where: { companyId: company.id } })
-  const data = { tone, targetAudience: audience, contentPillars: topics as never, website: website || null, blogRules: rules || null, blogCta: cta || null }
+  const data = { tone, targetAudience: audience, contentPillars: topics as never, website: website || null, blogRules: rules || null, blogCta: cta || null, blogEnabled: true }
   if (existing) await prisma.brandProfile.update({ where: { id: existing.id }, data })
   else await prisma.brandProfile.create({ data: { userId: u.userId, companyId: company.id, autoEnabled: false, newsEnabled: false, ...data } })
   return NextResponse.json({ ok: true, companyId: company.id })

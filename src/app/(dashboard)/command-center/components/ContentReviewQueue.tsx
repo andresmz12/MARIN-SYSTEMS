@@ -51,6 +51,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [cropMode, setCropMode] = useState(false)
   const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string[]>([])
+  const [blogDest, setBlogDest] = useState<{ id: string; name: string }[]>([])
   const [imgAi, setImgAi] = useState<{ openaiReady: boolean; model: string; logo: string | null; face: string | null } | null>(null)
   const [assetVer, setAssetVer] = useState(0)
   const [slideDraft, setSlideDraft] = useState<Record<string, Slide[]>>({})
@@ -561,6 +562,20 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     } finally {
       setBusyId(null)
     }
+  }
+
+  useEffect(() => {
+    fetch('/api/ceo/team/blog-destinations').then((r) => (r.ok ? r.json() : null))
+      .then((d: { companies?: { id: string; name: string; hasKey: boolean }[] } | null) => setBlogDest((d?.companies ?? []).filter((c) => c.hasKey && c.id !== companyId).map((c) => ({ id: c.id, name: c.name }))))
+      .catch(() => setBlogDest([]))
+  }, [companyId])
+
+  // Manda el post, tal cual, como borrador al blog de otra empresa (sin IA).
+  async function sendToBlog(postId: string, destId: string) {
+    const res = await fetch(`/api/ceo/content/${postId}/to-blog`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: destId }) })
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; skipped?: string; error?: string; created?: { url: string } }
+    if (res.ok) showToast(d.skipped ?? 'Enviado al blog como borrador. Revísalo y publícalo allá.', d.skipped ? 'info' : 'success')
+    else showToast(d.error ?? 'No se pudo enviar al blog', 'error')
   }
 
   async function restoreVersion(id: string) {
@@ -1616,6 +1631,17 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 <span className="flex-1 truncate">{PLATFORM_CONFIG[post.platform]?.emoji} {post.topic}</span>
                 {post.externalUrl && (
                   <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
+                )}
+                {blogDest.length > 0 && (
+                  <select
+                    defaultValue=""
+                    onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void sendToBlog(post.id, v) }}
+                    className="bg-zinc-800 border border-zinc-700 rounded-md px-1.5 py-0.5 text-[11px] text-zinc-300"
+                    title="Manda este post como borrador al blog de otra empresa"
+                  >
+                    <option value="">📰 Enviar al blog…</option>
+                    {blogDest.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
                 )}
                 <button onClick={() => reopenPost(post)} className="text-amber-200/90 hover:text-amber-100" title="Volver a Por aprobar para cambiar texto, imagen o carrusel">✏️ Editar</button>
                 <button onClick={() => deletePost(post)} className="text-red-300/80 hover:text-red-200" title="Eliminar este post">🗑️ Eliminar</button>

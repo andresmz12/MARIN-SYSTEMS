@@ -1,7 +1,7 @@
 import { AI_MODEL_RESEARCH, AI_MODEL_SMART, callClaude, extractJson } from '@/lib/ai'
 import { classifyAiError } from '@/lib/ai-health'
 import { logActivity, runAs } from '@/lib/agent-ledger'
-import { BlogApiError, blogConfigured, createBlogDraft, listBlogPosts, type BlogPostCreated, type BlogPostInput } from '@/lib/blog-api'
+import { BlogApiError, blogEnvName, createBlogDraft, listBlogPosts, resolveBlogTarget, type BlogPostCreated, type BlogPostInput } from '@/lib/blog-api'
 import { lintPost } from '@/lib/compliance'
 import { prisma } from '@/lib/prisma'
 import { isRepeat } from '@/lib/topic-memory'
@@ -53,21 +53,19 @@ const HOW = `REGLAS DEL ARTÍCULO (obligatorias):
 - Sin promesas ni garantías de resultados ("aumentarás", "garantizado"). Tono profesional y cercano; sin relleno.
 - "description": entre 120 y 160 caracteres, atractiva para Google. "title": entre 5 y 140. "tags": de 3 a 6, cortos.`
 
-export async function writeBlogArticle(opts: { companyId?: string; topic?: string } = {}): Promise<BlogRun> {
-  if (!blogConfigured()) return { ok: false, error: 'Falta la clave BLOG_API_KEY en Railway (créala en Generales → Blog → Crear clave, de "solo borradores").' }
+export async function writeBlogArticle(opts: { companyId: string; topic?: string }): Promise<BlogRun> {
 
   // Empresa del blog (por defecto la que se llama "Reports Systems").
-  const name = process.env.BLOG_COMPANY_NAME || 'Reports Systems'
-  const company = await prisma.cEOCompany.findFirst({
-    where: opts.companyId ? { id: opts.companyId } : { name: { contains: name, mode: 'insensitive' } },
-  })
+  const company = await prisma.cEOCompany.findFirst({ where: { id: opts.companyId } })
   const profile = company ? await prisma.brandProfile.findFirst({ where: { companyId: company.id } }) : null
-  if (!company || !profile) return { ok: false, error: `No encontré la empresa "${name}" con su perfil de marca. Créala en Command Center → Empresas y completa su perfil.` }
+  if (!company || !profile) return { ok: false, error: 'No encontré la empresa o su perfil de marca. Guarda primero el perfil del blog en Equipo → Luis.' }
+  const target = resolveBlogTarget(company, profile)
+  if (!target) return { ok: false, error: `Falta conectar el blog de ${company.name}: guarda la dirección del blog en su perfil y agrega en Railway la variable ${blogEnvName(company.name)} con una clave de "solo borradores".` }
 
   return runAs('luis', async () => {
     try {
       // 1) Lo que ya existe, para no repetir.
-      const [es, en] = await Promise.all([listBlogPosts('es'), listBlogPosts('en')])
+      const [es, en] = await Promise.all([listBlogPosts(target, 'es'), listBlogPosts(target, 'en')])
       const existing = Array.from(new Set([...es, ...en].map((p) => p.title))).slice(0, 80)
       const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
       const rules = (profile.blogRules ?? '').trim()
@@ -143,7 +141,7 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
       const send = async (d: Draft, locale: 'es' | 'en'): Promise<BlogPostCreated> => {
         const base: BlogPostInput = { title: d.title, description: d.description, content: d.content, locale, tags: d.tags, translationKey }
         for (let n = 1; n <= 3; n++) {
-          try { return await createBlogDraft({ ...base, slug: n === 1 ? d.slug : `${d.slug}-${n}` }) }
+          try { return await createBlogDraft(target, { ...base, slug: n === 1 ? d.slug : `${d.slug}-${n}` }) }
           catch (e) { if (!(e instanceof BlogApiError && e.status === 409) || n === 3) throw e }
         }
         throw new BlogApiError('No se pudo crear el borrador.', 500)
@@ -161,4 +159,21 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
       return { ok: false, error: classifyAiError(err).message }
     }
   })
+}
+
+/** Empresas que tienen blog con artículo semanal de Luis (perfil con blogEnabled). */
+export async function listBlogCompanies() {
+  const profiles = await prisma.brandProfile.findMany({ where: { blogEnabled: true }, include: { company: true } })
+  return profiles.map((p) => ({ id: p.companyId, name: p.company.name, configured: !!resolveBlogTarget(p.company, p) }))
+}
+
+/** Artículo semanal: uno por cada empresa con blog conectado. */
+export async function writeWeeklyArticles(): Promise<{ company: string; ok: boolean; created: number; error?: string; topic?: string }[]> {
+  const out: { company: string; ok: boolean; created: number; error?: string; topic?: string }[] = []
+  for (const c of await listBlogCompanies()) {
+    if (!c.configured) { out.push({ company: c.name, ok: false, created: 0, error: 'blog sin conectar (falta la clave en Railway)' }); continue }
+    const r = await writeBlogArticle({ companyId: c.id })
+    out.push({ company: c.name, ok: r.ok, created: r.created?.length ?? 0, error: r.error, topic: r.topic })
+  }
+  return out
 }

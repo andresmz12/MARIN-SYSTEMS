@@ -66,6 +66,10 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [blogRun, setBlogRun] = useState<BlogRun | null>(null)
   const [bp, setBp] = useState<{ exists: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string } | null>(null)
   const [bpOpen, setBpOpen] = useState(false)
+  const [dest, setDest] = useState<{ id: string; name: string; blogApiUrl: string; envVar: string; hasKey: boolean; mirrorFrom: string; weekly: boolean; sent: number }[]>([])
+  const [destEdit, setDestEdit] = useState<Record<string, { url?: string; from?: string }>>({})
+  const loadDest = useCallback(() => { fetch('/api/ceo/team/blog-destinations').then((r) => (r.ok ? r.json() : null)).then((d: { companies?: typeof dest } | null) => setDest(d?.companies ?? [])).catch(() => {}) }, [])
+  useEffect(() => { loadDest() }, [loadDest])
   const [bt, setBt] = useState<{ ready: boolean; total: number; pending: number; used: number; skipped: number; next: { id: string; title: string; category: string; kind: string }[]; needsInput: { id: string; title: string }[]; recent?: { title: string }[] } | null>(null)
   const loadTopics = useCallback(() => { fetch('/api/ceo/team/blog-topics').then((r) => (r.ok ? r.json() : null)).then((d) => setBt(d)).catch(() => {}) }, [])
   useEffect(() => { loadTopics() }, [loadTopics])
@@ -87,7 +91,7 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   useEffect(() => {
     fetch('/api/ceo/team/blog-profile').then((r) => (r.ok ? r.json() : null)).then((d: { exists: boolean; website: string; tone: string; audience: string; topics: string[]; rules: string; cta: string } | null) => { if (d) setBp({ ...d, topics: d.topics.join('\n') }) }).catch(() => {})
   }, [])
-  useEffect(() => { fetch('/api/ceo/team/luis').then((r) => (r.ok ? r.json() : null)).then((d) => setBlog(d)).catch(() => {}) }, [])
+  useEffect(() => { fetch('/api/ceo/team/luis').then((r) => (r.ok ? r.json() : null)).then((d: { companies?: { name: string; configured: boolean }[] } | null) => setBlog(d ? { configured: !!d.companies?.some((c) => c.configured), url: '', company: d.companies?.[0]?.name ?? 'Reports Systems' } : null)).catch(() => {}) }, [])
   useEffect(() => {
     if (!companyId) return
     fetch(`/api/ceo/team/character?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { text?: string } | null) => { setCharacter(d?.text ?? ''); setCharSaved(d?.text ?? '') }).catch(() => {})
@@ -309,6 +313,36 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
           {deadlines && <p className="text-[11px] text-zinc-500">Consultado {ago(deadlines.at)}. Confirma siempre la fecha en IRS.gov antes de avisarle a un cliente.</p>}
         </Box>
       </div>
+
+      <Box title="🔁 Blogs de destino: mandar lo mismo que publicamos" hint="Para el blog de otra app: lo que se publica en redes de una empresa se manda tal cual, como BORRADOR, al blog de otra (sin IA, sin crear nada nuevo). Tú lo revisas y lo publicas en ese blog.">
+        <ul className="space-y-3">
+          {dest.map((c) => {
+            const e = destEdit[c.id] ?? {}
+            const url = e.url ?? c.blogApiUrl
+            const from = e.from ?? c.mirrorFrom
+            const dirty = e.url !== undefined || e.from !== undefined
+            return (
+              <li key={c.id} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-1.5">
+                <p className="text-sm text-zinc-200"><b>{c.name}</b> <span className={`text-xs ${c.hasKey ? 'text-emerald-300' : 'text-zinc-500'}`}>{c.hasKey ? '· blog conectado' : c.blogApiUrl ? '· falta la clave en Railway' : '· sin blog'}</span>{c.sent > 0 ? <span className="text-xs text-zinc-500"> · {c.sent} enviados</span> : null}</p>
+                <div className="flex flex-wrap gap-2">
+                  <input value={url} onChange={(ev) => setDestEdit((x) => ({ ...x, [c.id]: { ...x[c.id], url: ev.target.value } }))} placeholder="Dirección del blog, ej: https://miblog.com" className="flex-1 min-w-[220px] bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200" />
+                  <select value={from} onChange={(ev) => setDestEdit((x) => ({ ...x, [c.id]: { ...x[c.id], from: ev.target.value } }))} className="bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200" title="Qué empresa publica lo que se va a copiar a este blog">
+                    <option value="">No copiar automáticamente</option>
+                    {dest.filter((o) => o.id !== c.id).map((o) => <option key={o.id} value={o.id}>Copiar lo que publique {o.name}</option>)}
+                  </select>
+                  <button
+                    disabled={!dirty || busy === `dest-${c.id}`}
+                    onClick={async () => { if (await call('/api/ceo/team/blog-destinations', { method: 'PUT', body: JSON.stringify({ companyId: c.id, blogApiUrl: url, mirrorFrom: from || null }) }, `dest-${c.id}`)) { setDestEdit((x) => { const { [c.id]: _, ...r } = x; return r }); showToast('Blog guardado', 'success'); loadDest() } }}
+                    className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
+                  >Guardar</button>
+                </div>
+                {url && !c.hasKey && <p className="text-xs text-amber-300">En Railway agrega la variable <b>{c.envVar}</b> con la clave del blog (solo borradores). No la pegues en el chat.</p>}
+                {c.mirrorFrom && c.hasKey && <p className="text-xs text-zinc-500">Desde que lo activaste, cada post publicado se manda aquí como borrador (máximo 3 cada 30 minutos).</p>}
+              </li>
+            )
+          })}
+        </ul>
+      </Box>
 
       <Box title="📝 Luis: artículos del blog" hint={`Escribe un artículo nuevo en español e inglés y lo manda al blog de ${blog?.company ?? 'Reports Systems'} como BORRADOR. Tú lo revisas y lo publicas desde tu panel del blog. Solo, escribe uno cada martes.`}>
         {blog && !blog.configured && (

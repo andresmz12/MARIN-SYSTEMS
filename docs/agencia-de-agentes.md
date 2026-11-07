@@ -71,3 +71,9 @@ De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía aviso
 - **Temas legales** (permisos, licencias, cumplimiento, cheque devuelto, cobro, impuestos, seguros, notario, etc.): se explica lo general, sin cifras ni leyes no verificadas, y se agrega siempre la nota de confirmar con un abogado o con la autoridad del estado.
 - **Casos, testimonios y novedades** ("Un día en una tienda ordenada…", "Qué cambió en una tienda al llevar el control…", "Novedades de Reports Systems"): Luis NO los escribe solo, porque dependen de hechos reales y del permiso del cliente. Solo salen si el dueño escribe el tema y los hechos en el cuadro de "Tema".
 
+### Blogs de destino (mandar lo mismo a otro blog)
+
+- Cada empresa puede tener un blog (misma API: `POST /api/blog/posts`). La **dirección** se guarda en Command Center → Equipo → "Blogs de destino"; la **clave** (secreta, de solo borradores) va en Railway como `BLOG_API_KEY_<NOMBRE_DE_LA_EMPRESA>` (por ejemplo `BLOG_API_KEY_MY_PROFIT_AND_LOSS`).
+- **Espejo:** se elige de qué empresa copiar. Desde ese momento, cada post publicado en redes se manda tal cual como **borrador** al blog (sin IA; viñetas ✅/• pasan a lista, los hashtags a etiquetas, la imagen a portada, y se agrega el llamado a la acción del perfil si existe). Máximo 3 cada 30 minutos; no manda lo publicado antes de activarlo ni repite uno ya enviado. Textos de menos de 200 caracteres no se envían (el blog los rechaza).
+- **Envío manual:** en "Publicados esta semana", el menú **📰 Enviar al blog…** manda ese post al blog elegido.
+

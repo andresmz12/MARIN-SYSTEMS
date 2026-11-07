@@ -3,9 +3,9 @@ import { runLogged } from '@/lib/cron-run'
 import { isQuietHours } from '@/lib/quiet-hours'
 import { maybeSendHourlyReport, maybeSendMorningReport } from '@/lib/morning-report'
 import { hasDuePosts, runPublishDue } from '@/lib/publish-due'
-import { blogConfigured } from '@/lib/blog-api'
+import { runMirrors } from '@/lib/blog-mirror'
 import { agentEnabled } from '@/lib/agent-ledger'
-import { writeBlogArticle } from '@/lib/blog-writer'
+import { listBlogCompanies, writeWeeklyArticles } from '@/lib/blog-writer'
 import { prisma } from '@/lib/prisma'
 
 // Monitoreo de fondo: chequea los agentes sin necesidad de tener /agentes abierto.
@@ -55,20 +55,22 @@ export function startAgentScheduler() {
   // Artículo semanal del blog (Luis): el cron de GitHub corre los martes 9 AM, pero si se salta, la app lo hace sola
   // el mismo día (o el siguiente) después de las 9 AM, una sola vez por semana.
   let blogging = false
+  let lastMirror = 0
   const blogTick = async () => {
-    if (blogging || !blogConfigured()) return
+    if (blogging) return
     blogging = true
     try {
       const col = new Date(Date.now() - 5 * 3600 * 1000)
       const day = col.getUTCDay()
       if (!(day === 2 || day === 3) || col.getUTCHours() < 9) return
       if (!(await agentEnabled('luis'))) return
+      if (!(await listBlogCompanies()).some((c) => c.configured)) return
       const done = await prisma.cronRun.findFirst({ where: { job: 'blog-article', startedAt: { gte: new Date(Date.now() - 5 * 86400000) } }, select: { id: true } })
       if (done) return
       await runLogged('blog-article', async () => {
-        const r = await writeBlogArticle()
-        if (!r.ok) throw new Error(r.error ?? 'No se pudo escribir el artículo')
-        return { topic: r.topic, created: r.created?.length ?? 0 }
+        const rs = await writeWeeklyArticles()
+        if (rs.length > 0 && rs.every((r) => !r.ok)) throw new Error(rs.map((r) => `${r.company}: ${r.error}`).join('; '))
+        return { articles: rs.map((r) => ({ company: r.company, topic: r.topic, created: r.created })) }
       })
     } catch (err) {
       console.error('[agent-scheduler] blog falló:', err)
@@ -76,8 +78,20 @@ export function startAgentScheduler() {
       blogging = false
     }
   }
+  // Espejo de blogs: manda como borrador al blog de otra empresa lo que ya se publicó en redes (cada 30 min, sin IA).
+  const mirrorTick = async () => {
+    if (Date.now() - lastMirror < 29 * 60_000) return
+    lastMirror = Date.now()
+    try {
+      const r = await runMirrors()
+      if (r.errors.length) console.error('[agent-scheduler] espejo del blog:', r.errors.join('; '))
+    } catch (err) {
+      console.error('[agent-scheduler] espejo del blog falló:', err)
+    }
+  }
   const tick = async () => {
     await publishTick()
+    void mirrorTick()
     void blogTick()
     if (running) return // un chequeo lento no se solapa con el siguiente
     if (isQuietHours()) return // descanso nocturno (11 PM - 7 AM Colombia): no vigila ni manda correos

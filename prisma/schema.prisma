@@ -427,6 +427,12 @@ model BrandProfile {
   website        String?
   blogRules      String?
   blogCta        String?
+  // Dirección del blog (https://…) y si esta empresa tiene un artículo semanal de Luis.
+  blogApiUrl     String?
+  blogEnabled    Boolean         @default(false)
+  // Espejo: este blog recibe como borrador los posts que se publican de otra empresa (id) desde esta fecha.
+  blogMirrorFrom  String?
+  blogMirrorSince DateTime?
   autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "twitter", "tiktok"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -936,6 +942,19 @@ model BrandAsset {
 }
 
 // ─── EQUIPO DE AGENTES: actividad, gasto, lecciones y ajustes ─────────────────
+
+// Posts ya enviados a un blog de destino (para no mandar el mismo dos veces).
+model BlogMirror {
+  id              String   @id @default(cuid())
+  groupKey        String
+  targetCompanyId String
+  sourcePostId    String
+  slug            String?
+  url             String?
+  createdAt       DateTime @default(now())
+
+  @@unique([groupKey, targetCompanyId])
+}
 
 // Banco de temas del blog (Luis): cola con prioridad; Luis toma el siguiente pendiente y lo marca como usado.
 model BlogTopic {
