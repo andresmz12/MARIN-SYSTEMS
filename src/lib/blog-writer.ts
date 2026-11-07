@@ -47,7 +47,7 @@ function coerceDraft(raw: unknown): Draft | null {
 const HOW = `REGLAS DEL ARTÍCULO (obligatorias):
 - Markdown con "##" para los subtítulos (nunca "#"), sin HTML. Entre 800 y 1500 palabras.
 - Útil y concreto: pasos que el lector pueda aplicar, ejemplos simples, listas cortas. Primer párrafo que responde la pregunta del título.
-- NO inventes cifras, estadísticas, leyes, clientes, testimonios ni funciones del producto. Usa SOLO datos de las NOTAS DE INVESTIGACIÓN. Si no hay un dato, no lo afirmes: explica el concepto sin cifras.
+- Termina SIEMPRE con una sección práctica antes del cierre (por ejemplo "## Qué hacer hoy": pasos o lista de chequeo que el lector pueda hacer ese mismo día).\n- NO inventes cifras, estadísticas, leyes, clientes, testimonios ni funciones del producto. Usa SOLO datos de las NOTAS DE INVESTIGACIÓN. Si no hay un dato, no lo afirmes: explica el concepto sin cifras.
 - Sin promesas ni garantías de resultados ("aumentarás", "garantizado"). Tono profesional y cercano; sin relleno.
 - "description": entre 120 y 160 caracteres, atractiva para Google. "title": entre 5 y 140. "tags": de 3 a 6, cortos.`
 
@@ -68,14 +68,16 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
       const [es, en] = await Promise.all([listBlogPosts('es'), listBlogPosts('en')])
       const existing = Array.from(new Set([...es, ...en].map((p) => p.title))).slice(0, 80)
       const pillars = Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : []
-      const brief = `Empresa: ${company.name}. Público: ${profile.targetAudience}. Tono: ${profile.tone}. Temas del blog: ${pillars.join(', ') || 'los de su producto'}.`
+      const rules = (profile.blogRules ?? '').trim()
+      const cta = (profile.blogCta ?? '').trim()
+      const brief = `Empresa: ${company.name}${profile.website ? ` (${profile.website})` : ''}. Público: ${profile.targetAudience}. Tono: ${profile.tone}. Temas del blog: ${pillars.join(', ') || 'los de su producto'}.${rules ? `\nREGLAS DEL DUEÑO (obligatorias):\n${rules}` : ''}`
 
       // 2) Tema (barato, con búsqueda web) o el que pidió el dueño.
       let topic = opts.topic?.trim() ?? ''
       if (!topic) {
         const t = await callClaude({
           model: AI_MODEL_RESEARCH, maxTokens: 800, webSearch: true, maxSearches: 2,
-          messages: [{ role: 'user', content: `[tarea: tema del blog] ${brief}\nArtículos que YA existen (no repetir ni parafrasear): ${existing.join(' | ') || 'ninguno'}.\nBusca qué preguntas se hace hoy este público y propón UN tema nuevo que ayude a quien busca esto en Google. Responde ÚNICAMENTE con JSON: {"topic":"título de trabajo","why":"por qué ahora, 1 frase"}` }],
+          messages: [{ role: 'user', content: `[tarea: tema del blog] ${brief}\nElige uno de los temas del blog que menos se haya cubierto, con un ángulo nuevo.\nArtículos que YA existen (no repetir ni parafrasear): ${existing.join(' | ') || 'ninguno'}.\nBusca qué preguntas se hace hoy este público y propón UN tema nuevo que ayude a quien busca esto en Google. Responde ÚNICAMENTE con JSON: {"topic":"título de trabajo","why":"por qué ahora, 1 frase"}` }],
         })
         topic = (extractJson(t) as { topic?: string } | null)?.topic?.trim() ?? ''
         if (!topic) return { ok: false, error: 'No pude proponer un tema. Intenta de nuevo o escribe uno.' }
@@ -100,13 +102,19 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
       // 5) Versión en inglés (adaptada, no literal).
       const enRaw = await callClaude({
         model: AI_MODEL_SMART, maxTokens: 4500,
-        messages: [{ role: 'user', content: `[tarea: versión en inglés] Adapt this Spanish blog article into natural English for an English-speaking audience (not a word-for-word translation). Keep the same facts and structure; same Markdown rules (use "##" for headings, no HTML); do not add any new facts or numbers. "description" 120-160 characters.\n\n${JSON.stringify(esDraft)}\n\nReply ONLY with JSON: {"title":"…","description":"…","slug":"lowercase-with-hyphens","tags":["…"],"content":"full markdown"}` }],
+        messages: [{ role: 'user', content: `[tarea: versión en inglés] Adapt this Spanish blog article into natural English for an English-speaking audience (not a word-for-word translation). Keep the same facts and structure; same Markdown rules (use "##" for headings, no HTML); do not add any new facts or numbers. "description" 120-160 characters.\n\n${JSON.stringify(esDraft)}\n\nReply ONLY with JSON: {"title":"…","description":"…","slug":"lowercase-with-hyphens","tags":["…"],"content":"full markdown"${cta ? `,"cta":"this call to action in natural English, keeping any link or phone number exactly as written: ${cta.replace(/"/g, "'")}"` : ''}}` }],
       })
       const enDraft = coerceDraft(extractJson(enRaw))
 
       // 6) Fuentes al final (solo enlaces reales de las notas).
       const urls = Array.from(new Set((usable.match(/https?:\/\/[^\s|)\]]+/g) ?? []).map((u) => u.replace(/[.,;]+$/, '')))).slice(0, 6)
+      const ctaEs = cta ? `\n\n---\n\n${cta}` : ''
+      const enRawObj = extractJson(enRaw) as { cta?: unknown } | null
+      const linksOf = (t: string) => t.match(/https?:\/\/\S+|\+?\d[\d\s().-]{7,}\d/g) ?? []
+      const ctaEnText = typeof enRawObj?.cta === 'string' && linksOf(cta).every((l) => (enRawObj.cta as string).includes(l.replace(/[.,;]+$/, ''))) ? (enRawObj.cta as string).trim() : cta
+      const ctaEn = cta ? `\n\n---\n\n${ctaEnText}` : ''
       const addSources = (d: Draft, label: string): Draft => (urls.length ? { ...d, content: `${d.content}\n\n## ${label}\n\n${urls.map((u) => `- ${u}`).join('\n')}` } : d)
+      const withCta = (d: Draft, c: string): Draft => ({ ...d, content: `${d.content}${c}` })
 
       // 7) Revisión de cumplimiento (promesas) antes de enviar.
       const blocked = [esDraft, enDraft].filter((d): d is Draft => !!d).flatMap((d) => lintPost({ copy: d.content }).filter((i) => i.level === 'error').map((i) => i.message))
@@ -122,9 +130,9 @@ export async function writeBlogArticle(opts: { companyId?: string; topic?: strin
         }
         throw new BlogApiError('No se pudo crear el borrador.', 500)
       }
-      const created: BlogPostCreated[] = [await send(addSources(esDraft, 'Fuentes'), 'es')]
+      const created: BlogPostCreated[] = [await send(withCta(addSources(esDraft, 'Fuentes'), ctaEs), 'es')]
       const warnings: string[] = []
-      if (enDraft) created.push(await send(addSources(enDraft, 'Sources'), 'en'))
+      if (enDraft) created.push(await send(withCta(addSources(enDraft, 'Sources'), ctaEn), 'en'))
       else warnings.push('La versión en inglés salió incompleta: solo se envió la de español.')
       if (!usable) warnings.push('No hubo notas con fuente: el artículo no lleva cifras ni sección de fuentes. Revísalo con cuidado.')
       await logActivity('luis', 'blog', `Envió el borrador «${esDraft.title.slice(0, 70)}» (${created.map((c) => c.locale.toUpperCase()).join(' y ')}) al blog`, { companyId: company.id })

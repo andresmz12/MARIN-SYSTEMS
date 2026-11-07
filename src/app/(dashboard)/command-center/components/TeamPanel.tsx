@@ -64,6 +64,8 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [blog, setBlog] = useState<{ configured: boolean; url: string; company: string } | null>(null)
   const [blogTopic, setBlogTopic] = useState('')
   const [blogRun, setBlogRun] = useState<BlogRun | null>(null)
+  const [bp, setBp] = useState<{ exists: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string } | null>(null)
+  const [bpOpen, setBpOpen] = useState(false)
   const [character, setCharacter] = useState('')
   const [charSaved, setCharSaved] = useState('')
 
@@ -79,6 +81,9 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
     } catch { setError(true) }
   }, [companyId])
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    fetch('/api/ceo/team/blog-profile').then((r) => (r.ok ? r.json() : null)).then((d: { exists: boolean; website: string; tone: string; audience: string; topics: string[]; rules: string; cta: string } | null) => { if (d) setBp({ ...d, topics: d.topics.join('\n') }) }).catch(() => {})
+  }, [])
   useEffect(() => { fetch('/api/ceo/team/luis').then((r) => (r.ok ? r.json() : null)).then((d) => setBlog(d)).catch(() => {}) }, [])
   useEffect(() => {
     if (!companyId) return
@@ -305,6 +310,26 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
       <Box title="📝 Luis: artículos del blog" hint={`Escribe un artículo nuevo en español e inglés y lo manda al blog de ${blog?.company ?? 'Reports Systems'} como BORRADOR. Tú lo revisas y lo publicas desde tu panel del blog. Solo, escribe uno cada martes.`}>
         {blog && !blog.configured && (
           <p className="text-xs text-amber-300">Falta conectar el blog: en Railway agrega la variable <b>BLOG_API_KEY</b> con una clave de “solo borradores” (Generales → Blog → Crear clave en tu panel de Reports Systems).</p>
+        )}
+        {bp && (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2">
+            <button onClick={() => setBpOpen((v) => !v)} className="text-xs text-zinc-300 underline">{bp.exists ? '⚙️ Perfil del blog (ya guardado)' : '⚙️ Crear el perfil del blog (falta guardarlo)'} {bpOpen ? '▲' : '▼'}</button>
+            {bpOpen && (
+              <div className="space-y-2">
+                {([['website', 'Web (https://…)', 1], ['tone', 'Tono', 2], ['audience', 'Público', 2], ['topics', 'Temas del blog (uno por línea)', 7], ['rules', 'Reglas para Luis (una por línea)', 5], ['cta', 'Llamado a la acción al final (incluye el enlace o número de WhatsApp)', 2]] as const).map(([k, label, rows]) => (
+                  <label key={k} className="block text-xs text-zinc-400">{label}
+                    <textarea value={bp[k]} onChange={(e) => setBp({ ...bp, [k]: e.target.value })} rows={rows} className="mt-1 w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100" />
+                  </label>
+                ))}
+                {/https?:\/\/|\+?\d{8,}/.test(bp.cta) ? null : <p className="text-xs text-amber-300">Al llamado a la acción le falta el enlace o número de WhatsApp: agrégalo, por ejemplo https://wa.me/1XXXXXXXXXX</p>}
+                <button
+                  disabled={busy === 'bp'}
+                  onClick={async () => { if (await call('/api/ceo/team/blog-profile', { method: 'PUT', body: JSON.stringify({ website: bp.website, tone: bp.tone, audience: bp.audience, topics: bp.topics.split('\n'), rules: bp.rules, cta: bp.cta }) }, 'bp')) { setBp({ ...bp, exists: true }); showToast('Perfil del blog guardado', 'success') } }}
+                  className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
+                >Guardar perfil</button>
+              </div>
+            )}
+          </div>
         )}
         <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis propone uno nuevo que no se repita" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
         <button

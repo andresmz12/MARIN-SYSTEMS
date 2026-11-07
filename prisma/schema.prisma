@@ -423,6 +423,10 @@ model BrandProfile {
   visualStyle    Json?
   // Descripción fija del personaje de los videos con IA (la misma persona en todos los clips).
   videoCharacter String?
+  // Blog (Luis): web de la empresa, reglas para el redactor y llamado a la acción de cada artículo.
+  website        String?
+  blogRules      String?
+  blogCta        String?
   autoPlatforms  String[]        @default(["instagram", "facebook", "linkedin", "twitter", "tiktok"])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
