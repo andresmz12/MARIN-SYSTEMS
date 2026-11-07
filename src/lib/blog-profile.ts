@@ -19,5 +19,5 @@ export const BLOG_PROFILE_DEFAULT = {
     'No uses HTML.',
     'No pidas ni insertes datos de clientes reales.',
   ].join('\n'),
-  cta: 'Pide una demo por WhatsApp: ',
+  cta: 'Pide una demo por WhatsApp: https://wa.me/13124989026',
 } as const
