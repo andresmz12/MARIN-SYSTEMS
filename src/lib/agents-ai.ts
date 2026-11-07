@@ -66,13 +66,18 @@ Sé estricto: ante la duda, "dudoso". No inventes fuentes; si citas una, debe se
 
 Responde ÚNICAMENTE con este JSON:
 {"summary":"una frase para el dueño","items":[{"claim":"el dato","status":"confirmado|dudoso|incorrecto|sin_fuente","note":"qué encontraste o qué corregir","source":"URL o nombre de la fuente"}]}`
-  try {
-    const text = await callClaude({ model: AI_MODEL_SMART, messages: [{ role: 'user', content: prompt }], maxTokens: 1500, webSearch: true })
-    return coerceFactCheck(extractJson(text))
-  } catch (err) {
-    console.error('[fact-check]', err)
-    return null
+  // Con búsqueda web la respuesta puede cortarse a mitad del JSON si el tope es corto (antes: 1500): por eso 3200 y un reintento.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const text = await callClaude({ model: AI_MODEL_SMART, messages: [{ role: 'user', content: attempt === 1 ? prompt : `${prompt}\n\nIMPORTANTE: responde con el JSON COMPLETO y BREVE (máximo 8 datos, cada "note" de menos de 150 caracteres).` }], maxTokens: 3200, webSearch: true })
+      const result = coerceFactCheck(extractJson(text))
+      if (result) return result
+      console.error(`[fact-check] intento ${attempt}: respuesta sin JSON válido`)
+    } catch (err) {
+      console.error(`[fact-check] intento ${attempt}:`, err)
+    }
   }
+  return null
 }
 
 // ───────────────────────── Analista de métricas ─────────────────────────

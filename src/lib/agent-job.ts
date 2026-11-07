@@ -37,7 +37,7 @@ export const describeNews = (d: Record<string, unknown>): ActivityLine[] =>
   }))
 
 export const describeContent = (d: Record<string, unknown>): ActivityLine[] =>
-  rows(d).map((r) => ({ text: r.error ? `No pudo redactar la tanda de ${r.company}: ${r.error}` : r.created ? `Redactó ${r.created} posts para ${r.company}` : `No redactó posts para ${r.company}${r.skipped ? ` (${r.skipped})` : ''}` }))
+  rows(d).map((r) => ({ text: r.error ? `No pudo redactar la tanda de ${r.company}: ${r.error}` : r.created ? `Redactó ${r.posts ?? r.created} ${(r.posts ?? r.created) === 1 ? 'post' : 'posts'} para ${r.company}${r.posts && r.posts !== r.created ? ` (${r.created} publicaciones en total, una por red)` : ''}` : `No redactó posts para ${r.company}${r.skipped ? ` (${r.skipped})` : ''}` }))
 
 export const describeMetrics = (d: Record<string, unknown>): ActivityLine[] =>
   rows(d).map((r) => ({ text: r.error ? `No pudo analizar métricas de ${r.company}: ${r.error}` : r.skipped ? `No analizó métricas de ${r.company}: ${r.skipped}` : `Analizó ${r.posts ?? ''} posts de ${r.company} y mandó el informe` }))

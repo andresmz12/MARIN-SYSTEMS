@@ -113,7 +113,7 @@ export async function factCheckGroup(groupId: string): Promise<void> {
     library,
   }))
   if (!result) {
-    await logActivity('felipe', 'fact-check', `No pudo verificar «${post.topic.slice(0, 60)}»`)
+    await logActivity('felipe', 'fact-check', `No pudo verificar «${post.topic.slice(0, 60)}» tras 2 intentos: el post quedó SIN verificar, revísalo con «Verificar datos»`)
     return
   }
   const bad = result.items.filter((i) => i.status === 'incorrecto').length

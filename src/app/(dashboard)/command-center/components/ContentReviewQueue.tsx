@@ -1312,6 +1312,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                   </div>
                 )
               })()}
+              {!post.factCheck && (post.facts?.length ?? 0) > 0 && (
+                <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-2.5 py-1.5 text-xs text-amber-200">⚠️ Felipe no pudo verificar los datos de este post. Dale <b>Verificar datos</b> antes de aprobarlo.</p>
+              )}
               {issues.length > 0 ? (
                 <div className={`rounded-lg border p-2.5 ${hasError ? 'border-red-500/40 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
                   <p className={`text-[11px] uppercase tracking-wide mb-1 ${hasError ? 'text-red-300' : 'text-amber-300'}`}>🛡️ Revisión de cumplimiento · {issues.length} {issues.length === 1 ? 'punto' : 'puntos'}</p>
@@ -1429,14 +1432,14 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           </div>
         )
         const both = fresh.length > 0 && legacy.length > 0
-        const readyIds = pending.filter((p) => !!p.imageUrl && p.factCheck?.verdict !== 'error' && !p.copy.includes('[Contenido de ') && !lintPost({ copy: edits[p.id] ?? p.copy, imageText: textOf(p).headline.trim() ? textOf(p) : null }).some((i) => i.level === 'error')).map((p) => p.id)
+        const readyIds = pending.filter((p) => !!p.imageUrl && !!p.factCheck && p.factCheck.verdict !== 'error' && !p.copy.includes('[Contenido de ') && !lintPost({ copy: edits[p.id] ?? p.copy, imageText: textOf(p).headline.trim() ? textOf(p) : null }).some((i) => i.level === 'error')).map((p) => p.id)
         const selIds = selected.filter((id) => pending.some((p) => p.id === id))
         return (
           <div className="space-y-8">
             {pending.length > 1 && (
               <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur px-3 py-2">
                 <span className="text-xs text-zinc-400 flex-1 min-w-[180px]">
-                  {selIds.length > 0 ? `${selIds.length} seleccionados` : `${readyIds.length} de ${pending.length} están listos (con imagen, sin errores de datos ni de cumplimiento)`}
+                  {selIds.length > 0 ? `${selIds.length} seleccionados` : `${readyIds.length} de ${pending.length} están listos (con imagen, datos verificados y sin errores de cumplimiento)`}
                 </span>
                 {selIds.length > 0 ? (
                   <>

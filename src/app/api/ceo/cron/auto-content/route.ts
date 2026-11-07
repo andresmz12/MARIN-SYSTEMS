@@ -56,7 +56,7 @@ async function handler(req: Request) {
       include: { company: { select: { id: true, name: true } } },
     })
 
-    const summary: { company: string; created: number; skipped?: string; error?: string }[] = []
+    const summary: { company: string; created: number; posts?: number; skipped?: string; error?: string }[] = []
 
     for (const profile of profiles) {
       const name = profile.company.name
@@ -183,7 +183,7 @@ async function handler(req: Request) {
           const notify = await sendContentReadyEmail({ companyName: name, count: created, pendingTotal: pending + created })
           if (!notify.success) console.error('[cron/auto-content] aviso por correo falló:', notify.error)
         }
-        summary.push({ company: name, created, ...(failedDays ? { skipped: `${failedDays} día(s) fallaron y se omitieron` } : {}) })
+        summary.push({ company: name, created, posts: groups.length, ...(failedDays ? { skipped: `${failedDays} día(s) fallaron y se omitieron` } : {}) })
       } catch (err) {
         console.error(`[cron/auto-content] ${name}`, err)
         summary.push({ company: name, created: 0, error: String(err) })
