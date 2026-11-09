@@ -29,6 +29,9 @@ interface Props {
   /** Modo recorrido: cámara en primera persona (W A S D / flechas / joystick) para caminar por la oficina. */
   walk?: boolean
   onExitWalk?: () => void
+  /** Ver por los ojos de un agente (id): la cámara lo sigue mientras camina, trabaja o baila. */
+  followId?: string | null
+  onFollowStep?: (dir: 1 | -1) => void
   ceo: CeoStats
   onSelect: (id: string, departmentId: string | null) => void
   /** Cierra la tarjeta del agente elegido. */
@@ -305,14 +308,16 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, hideNames = false, walk = false, onExitWalk, ceo, onSelect, onClose }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, hideNames = false, walk = false, onExitWalk, followId = null, onFollowStep, ceo, onSelect, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const popRef = useRef<HTMLDivElement>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
-  const live = useRef({ statusOf, minutes, selectedId, focus, ceo, party, walk, hideNames })
-  live.current = { statusOf, minutes, selectedId, focus, ceo, party, walk, hideNames }
+  const live = useRef({ statusOf, minutes, selectedId, focus, ceo, party, walk, hideNames, followId })
+  live.current = { statusOf, minutes, selectedId, focus, ceo, party, walk, hideNames, followId }
+  const stepRef = useRef(onFollowStep)
+  stepRef.current = onFollowStep
   const exitRef = useRef(onExitWalk)
   exitRef.current = onExitWalk
   // Recorrido: joystick en pantalla (celular) y texto de a quién estás mirando
@@ -1205,6 +1210,10 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), plaqueMat)
         plaque.rotation.y = Math.PI
         put(plaque, dcx, 2.35, RZ0 - 0.13, F)
+        // Techo oscuro de la disco (solo se ve desde adentro, en el recorrido o viendo como un agente)
+        const discoCeil = new THREE.Mesh(new THREE.PlaneGeometry(DW + 0.3, RLEN + 0.2), new THREE.MeshBasicMaterial({ color: 0x0b0718 }))
+        discoCeil.rotation.x = Math.PI / 2
+        put(discoCeil, dcx, WH + 0.16, RZC, walkGroup)
         D.visible = false
         discoDoor = { x0: doorX0 - 0.2, x1: doorX1 + 0.2, z0: RZ0 - 0.7, z1: RZ0 + 0.7 }
 
@@ -1329,15 +1338,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     }
     // ── Recorrido en primera persona ──
     let walkOn = false
+    let fpOn = false // recorrido libre o viendo por los ojos de un agente
+    let followed: Actor | null = null
+    const look = { yaw: 0, pitch: 0 }
+    const fEye = new THREE.Vector3()
+    const fDir = new THREE.Vector3()
+    const tHead = new THREE.Vector3()
+    const tDir = new THREE.Vector3()
+    let followInit = false
     const me = { x: 0, z: 0, yaw: 0, pitch: 0, bob: 0, y: 1.65, placed: false }
     const keys = new Set<string>()
     const WALK_KEYS = ['w', 'a', 's', 'd', 'q', 'e', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']
     const onKey = (e: KeyboardEvent, down: boolean) => {
-      if (!walkOn) return
+      if (!walkOn && !followed) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       const k = e.key.toLowerCase()
       if (k === 'escape') { if (down) exitRef.current?.(); return }
+      if (followed && (k === 'arrowright' || k === 'arrowleft')) { e.preventDefault(); if (down) stepRef.current?.(k === 'arrowright' ? 1 : -1); return }
+      if (!walkOn) return
       if (WALK_KEYS.includes(k)) { e.preventDefault(); if (down) keys.add(k); else keys.delete(k) }
     }
     const kd = (e: KeyboardEvent) => onKey(e, true)
@@ -1366,6 +1385,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         return
       }
       if (!drag) return
+      if (followed) {
+        look.yaw -= (e.clientX - drag.x) * 0.005
+        look.pitch = Math.max(-1.0, Math.min(1.0, look.pitch - (e.clientY - drag.y) * 0.004))
+        drag = { x: e.clientX, y: e.clientY }
+        return
+      }
       if (walkOn) {
         me.yaw -= (e.clientX - drag.x) * 0.005
         me.pitch = Math.max(-1.2, Math.min(1.2, me.pitch - (e.clientY - drag.y) * 0.004))
@@ -1395,8 +1420,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (best) selectRef.current(best.id, best.d)
       else closeRef.current() // tocar el piso vacío quita la selección (nombre, anillo y tarjeta)
     }
-    const onUp = (e: PointerEvent) => { if (!walkOn) pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
-    const onWheel = (e: WheelEvent) => { e.preventDefault(); if (walkOn) return; zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
+    const onUp = (e: PointerEvent) => { if (!fpOn) pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); if (fpOn) return; zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
@@ -1697,10 +1722,19 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       last = t
       const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
       partyOn = live.current.party || isPartyTime(live.current.minutes)
-      // Entrar o salir del recorrido
-      if (live.current.walk && !walkOn) {
+      // Entrar o salir del recorrido libre, o de "ver como un agente"
+      const wantWalk = !!live.current.walk
+      const fo = live.current.followId ? actors.find((a) => a.id === live.current.followId && !a.ghost) ?? null : null
+      if (fo !== followed) {
+        if (followed) followed.person.group.visible = true
+        followed = fo
+        followInit = false
+        look.yaw = 0
+        look.pitch = 0
+        if (fo) fo.person.group.visible = false // su propio cuerpo no se ve desde sus ojos
+      }
+      if (wantWalk && !walkOn) {
         walkOn = true
-        walkGroup.visible = true
         keys.clear()
         if (!me.placed) {
           const sp = nav.nearestFreePt({ x: fcx, z: floor.minZ + 3.5 }) ?? { x: fcx, z: floor.minZ + 3.5 }
@@ -1710,12 +1744,14 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           me.pitch = -0.05
           me.placed = true
         }
-        Object.values(labelRefs.current).forEach((el) => { if (el) el.style.display = 'none' })
-      } else if (!live.current.walk && walkOn) {
+      } else if (!wantWalk && walkOn) {
         walkOn = false
-        walkGroup.visible = false
         keys.clear()
       }
+      const nowFp = walkOn || !!followed
+      if (nowFp && !fpOn) Object.values(labelRefs.current).forEach((el) => { if (el) el.style.display = 'none' })
+      fpOn = nowFp
+      walkGroup.visible = fpOn
       const isNightNow = live.current.party || live.current.minutes >= 23 * 60 || live.current.minutes < 7 * 60
       partyAmt += ((partyOn ? 1 : 0) - partyAmt) * Math.min(1, dt * 2)
       nightAmt += ((isNightNow ? 1 : 0) - nightAmt) * Math.min(1, dt * 2)
@@ -1767,7 +1803,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const el = labelRefs.current[o.id]
         if (el) {
           const here = away && o.mv?.stage !== 'sit' ? o.person.group.position : null
-          if (!walkOn) pushLabel(el, here ? here.x : o.wrap.position.x, 2.3 + (here ? here.y : 0), here ? here.z : o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
+          if (!fpOn) pushLabel(el, here ? here.x : o.wrap.position.x, 2.3 + (here ? here.y : 0), here ? here.z : o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
           el.dataset.status = s
           el.dataset.sel = sel === o.id ? '1' : '0'
           el.style.opacity = fcs === 'all' || fcs === o.deptId ? '' : '0.4'
@@ -1817,7 +1853,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         }
       }
       const ceoEl = labelRefs.current.ceo
-      if (ceoEl && !walkOn) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
+      if (ceoEl && !fpOn) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
       flushLabels()
       // Tarjeta del agente elegido: flota encima de su etiqueta, sin salirse del cuadro.
       const pop = popRef.current
@@ -1898,7 +1934,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           lookRef.current.style.opacity = best && !live.current.hideNames ? '1' : '0'
         }
       }
-      renderer.render(scene, walkOn ? fpCam : camera)
+      // Ver como un agente: la cámara va pegada a sus ojos y copia hacia dónde mira
+      if (followed && !walkOn) {
+        const g = followed.person.group
+        followed.person.head.getWorldPosition(tHead)
+        followed.person.head.getWorldDirection(tDir)
+        g.getWorldDirection(fDir) // dirección del cuerpo (para no marearse con el movimiento de la cabeza)
+        tDir.lerp(fDir, 0.4).normalize()
+        // un poquito adelante de la cara para no ver "por dentro" de la cabeza
+        tHead.addScaledVector(fDir, 0.2)
+        tHead.y += 0.03
+        if (!followInit) { fEye.copy(tHead); fDir.copy(tDir); followInit = true }
+        else { fEye.lerp(tHead, Math.min(1, dt * 14)); fDir.lerp(tDir, Math.min(1, dt * 7)).normalize() }
+        const baseYaw = Math.atan2(fDir.x, fDir.z) + look.yaw
+        const basePitch = Math.max(-1.2, Math.min(1.2, Math.asin(Math.max(-1, Math.min(1, fDir.y))) + look.pitch))
+        const cp = Math.cos(basePitch)
+        fpCam.position.copy(fEye)
+        fpCam.lookAt(fEye.x + Math.sin(baseYaw) * cp, fEye.y + Math.sin(basePitch), fEye.z + Math.cos(baseYaw) * cp)
+      }
+      renderer.render(scene, fpOn ? fpCam : camera)
     }
     raf = requestAnimationFrame(frame)
 
@@ -1954,12 +2008,23 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     }
   }
 
+  const followName = followId ? departments.flatMap((d) => d.agents).find((a) => a.id === followId)?.name ?? '' : ''
+
   return (
     <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#dfe9f2]">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Oficina con las áreas de cada departamento y la oficina de Andrés Marín" />
-      {walk && (
+      {followId && !walk && (
         <div className="pointer-events-none absolute inset-0 select-none">
           <div className="pointer-events-auto absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-lg bg-black/65 px-3 py-2 text-[11px] font-semibold text-white backdrop-blur">
+            <span>🎥 Viendo como <b>{followName}</b> · arrastra para mirar alrededor</span>
+            <button type="button" onClick={() => stepRef.current?.(-1)} className="rounded-md bg-white/90 px-2 py-0.5 text-[11px] font-bold text-zinc-900">◀</button>
+            <button type="button" onClick={() => stepRef.current?.(1)} className="rounded-md bg-white/90 px-2 py-0.5 text-[11px] font-bold text-zinc-900">Siguiente ▶</button>
+            <button type="button" onClick={() => exitRef.current?.()} className="rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-zinc-900">Salir (Esc)</button>
+          </div>
+        </div>
+      )}
+      {walk && (
+        <div className="pointer-events-none absolute inset-0 select-none">          <div className="pointer-events-auto absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-lg bg-black/65 px-3 py-2 text-[11px] font-semibold text-white backdrop-blur">
             <span>🚶 Recorrido · <b>W A S D</b> o flechas caminan · arrastra para mirar · <b>Shift</b> corre</span>
             <button type="button" onClick={() => exitRef.current?.()} className="rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-zinc-900">Salir (Esc)</button>
           </div>

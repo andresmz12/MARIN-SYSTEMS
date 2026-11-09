@@ -61,6 +61,8 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [hideNames, setHideNames] = useState(false)
   // Recorrido en primera persona: caminas por la oficina con W A S D
   const [walk, setWalk] = useState(false)
+  // Ver por los ojos de un agente (id del agente que se sigue)
+  const [followId, setFollowId] = useState<string | null>(null)
   useEffect(() => { try { setHideNames(localStorage.getItem('office-hide-names') === '1') } catch { /* sin almacenamiento */ } }, [])
   const toggleNames = () => setHideNames((v) => { try { localStorage.setItem('office-hide-names', v ? '0' : '1') } catch { /* sin almacenamiento */ } return !v })
   const [full, setFull] = useState(false)
@@ -121,6 +123,15 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   }, [demo, playing])
 
   const everyone = useMemo(() => (departments ?? []).flatMap((d) => d.agents.map((a) => ({ a, d }))), [departments])
+  // Agentes que se pueden "ser" (los puestos libres no)
+  const followables = useMemo(() => everyone.filter((x) => x.a.status !== 'ghost').map((x) => x.a.id), [everyone])
+  const stepFollow = useCallback((dir: 1 | -1) => {
+    setFollowId((cur) => {
+      if (followables.length === 0) return null
+      const i = cur ? followables.indexOf(cur) : -1
+      return followables[(i + dir + followables.length) % followables.length]
+    })
+  }, [followables])
   const picked = everyone.find((x) => x.a.id === selected) ?? null
   // Con un cuarto enfocado, el panel muestra a su primer agente; con el edificio entero, al primero que necesite atención.
   const focusedDept = departments?.find((d) => d.id === focus) ?? null
@@ -205,7 +216,9 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             party={party}
             hideNames={hideNames}
             walk={walk}
-            onExitWalk={() => setWalk(false)}
+            onExitWalk={() => { setWalk(false); setFollowId(null) }}
+            followId={followId}
+            onFollowStep={stepFollow}
             ceo={ceoStats}
             onSelect={(id, d) => {
               setSelected(id)
@@ -324,7 +337,14 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           </>
         )}
         <button
-          onClick={() => { setWalk(!walk); setSelected(null) }}
+          onClick={() => { if (followId) setFollowId(null); else { setWalk(false); setSelected(null); setFollowId(followables[Math.floor(Math.random() * Math.max(1, followables.length))] ?? null) } }}
+          title="Mira la oficina por los ojos de un agente: lo sigue mientras camina, trabaja o baila"
+          className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${followId ? 'border-sky-500/60 bg-sky-500/15 text-sky-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
+        >
+          {followId ? '🎥 Dejar de ver como agente' : '🎥 Ver como un agente'}
+        </button>
+        <button
+          onClick={() => { setFollowId(null); setWalk(!walk); setSelected(null) }}
           title="Camina por la oficina como si fueras un agente (W A S D o flechas, y arrastra para mirar)"
           className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${walk ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
         >
