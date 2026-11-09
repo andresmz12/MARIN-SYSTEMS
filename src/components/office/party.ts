@@ -30,3 +30,8 @@ export const TIPSY_LINES = [
   'Los quiero a todos, servidores incluidos 🥹',
   'Jajaja… ¿de qué nos reíamos?',
 ]
+
+/** Brindis en grupo (todos levantan el vaso a la vez). */
+export const TOAST_LINES = ['¡Salud! 🥂', '¡Por el uptime! 🍻', '¡Por la agencia! 🥂', '¡Por los 200 OK! 🍹']
+export const SELFIE_LINES = ['📸 ¡Sonrían!', '📸 Esta va pa\' Instagram', '✌️ ¡Selfie con el DJ!']
+export const PAIR_LINES = ['💃 ¡Qué bien bailas!', 'Me pisó… dos veces 😅', '¡Choca esos cinco! ✋']

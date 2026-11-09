@@ -61,6 +61,16 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [hideNames, setHideNames] = useState(false)
   // Recorrido en primera persona: caminas por la oficina con W A S D
   const [walk, setWalk] = useState(false)
+  // Modo ligero (menos efectos): se activa solo en celulares y se recuerda
+  const [lite, setLite] = useState(false)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('office-lite')
+      if (saved !== null) setLite(saved === '1')
+      else if (window.matchMedia?.('(pointer: coarse)').matches) setLite(true)
+    } catch { /* sin almacenamiento */ }
+  }, [])
+  const toggleLite = () => setLite((v) => { try { localStorage.setItem('office-lite', v ? '0' : '1') } catch { /* sin almacenamiento */ } return !v })
   // Ver por los ojos de un agente (id del agente que se sigue)
   const [followId, setFollowId] = useState<string | null>(null)
   useEffect(() => { try { setHideNames(localStorage.getItem('office-hide-names') === '1') } catch { /* sin almacenamiento */ } }, [])
@@ -218,6 +228,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             party={party}
             hideNames={hideNames}
             walk={walk}
+            lite={lite}
             onExitWalk={() => { setWalk(false); setFollowId(null) }}
             followId={followId}
             onFollowStep={stepFollow}
@@ -351,6 +362,13 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${walk ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
         >
           {walk ? '🚶 Salir del recorrido' : '🚶 Entrar a la oficina'}
+        </button>
+        <button
+          onClick={toggleLite}
+          title={lite ? 'Volver al detalle completo (sombras y efectos)' : 'Menos efectos y sin sombras, para celulares o equipos lentos'}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${lite ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
+        >
+          {lite ? '✨ Detalle completo' : '⚡ Modo ligero'}
         </button>
         <button
           onClick={toggleNames}

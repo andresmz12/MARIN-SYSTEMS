@@ -30,7 +30,7 @@ export interface PersonSpec {
   ghost: boolean
 }
 
-export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave' | 'play' | 'dance' | 'dj' | 'bartend'
+export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave' | 'play' | 'dance' | 'dj' | 'bartend' | 'barsit' | 'dancepair'
 
 interface Arm {
   shoulder: THREE.Group
@@ -53,6 +53,9 @@ export interface Person {
   cup: THREE.Object3D
   paper: THREE.Mesh
   snack: THREE.Object3D
+  phone: THREE.Object3D
+  mouth: THREE.Object3D
+  eyes: THREE.Object3D[]
   seed: number
   /** 0 = sentada, 1 = de pie (se suaviza sola). */
   stance: number
@@ -174,6 +177,7 @@ const rz = <T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T 
 /** Mano con palma, cuatro dedos juntos y pulgar. */
 function buildHand(side: 1 | -1, skin: number): THREE.Group {
   const h = new THREE.Group()
+  h.scale.setScalar(1.18)
   h.add(at(part(bx(0.074, 0.075, 0.034), skin), 0, -0.035, 0))
   h.add(rz(at(part(bx(0.07, 0.055, 0.03), skin), 0, -0.095, 0.006), 0.25, 0, 0))
   h.add(rz(at(part(bx(0.022, 0.05, 0.026), skin), -side * 0.046, -0.05, 0.012), 0, 0, side * 0.5))
@@ -183,16 +187,16 @@ function buildHand(side: 1 | -1, skin: number): THREE.Group {
 function buildArm(side: 1 | -1, sleeve: number, skin: number, suited: boolean, width: number, longSleeve: boolean): Arm {
   const shoulder = new THREE.Group()
   shoulder.position.set(side * width, 0.47, 0)
-  shoulder.add(at(part(ball(0.058), sleeve, 0.85, suited), 0, 0, 0))
-  shoulder.add(at(part(cyl(0.052, 0.045, 0.3), sleeve, 0.85, suited), 0, -0.15, 0))
+  shoulder.add(at(part(ball(0.066), sleeve, 0.85, suited), 0, 0, 0))
+  shoulder.add(at(part(cyl(0.058, 0.05, 0.3), sleeve, 0.85, suited), 0, -0.15, 0))
   // Puño de la manga corta
   if (!suited && !longSleeve) shoulder.add(at(part(cyl(0.056, 0.056, 0.022), sleeve, 0.85), 0, -0.29, 0))
   const elbow = new THREE.Group()
   elbow.position.y = -0.3
   shoulder.add(elbow)
   const lower = suited || longSleeve ? sleeve : skin
-  elbow.add(at(part(ball(0.046), lower, 0.85, suited), 0, 0, 0))
-  elbow.add(at(part(cyl(0.043, 0.035, 0.26), lower, 0.85, suited), 0, -0.13, 0))
+  elbow.add(at(part(ball(0.051), lower, 0.85, suited), 0, 0, 0))
+  elbow.add(at(part(cyl(0.049, 0.039, 0.26), lower, 0.85, suited), 0, -0.13, 0))
   if (suited || longSleeve) elbow.add(at(part(cyl(0.046, 0.046, 0.025), suited ? 0xf6f6f8 : sleeve), 0, -0.26, 0))
   const hand = buildHand(side, skin)
   hand.position.y = -0.285
@@ -204,12 +208,12 @@ function buildLeg(side: 1 | -1, legColor: number, suited: boolean, shoe: number,
   const hip = new THREE.Group()
   hip.position.set(side * 0.1, 0, 0)
   hip.add(at(part(ball(0.085), legColor, 0.85, suited), 0, 0, 0))
-  hip.add(at(part(cyl(0.088, 0.073, 0.46), legColor, dress ? 0.5 : 0.85, suited), 0, -0.23, 0))
+  hip.add(at(part(cyl(0.095, 0.078, 0.46), legColor, dress ? 0.5 : 0.85, suited), 0, -0.23, 0))
   const knee = new THREE.Group()
   knee.position.y = -0.46
   hip.add(knee)
   knee.add(at(part(ball(0.074), legColor, 0.85, suited), 0, 0, 0))
-  knee.add(at(part(cyl(0.072, 0.052, 0.44), legColor, dress ? 0.5 : 0.85, suited), 0, -0.22, 0))
+  knee.add(at(part(cyl(0.078, 0.058, 0.44), legColor, dress ? 0.5 : 0.85, suited), 0, -0.22, 0))
   // Tobillo, zapato con suela y puntera
   knee.add(at(part(ball(0.05), legColor), 0, -0.45, 0))
   const upper = sc(part(ball(1), shoe, suited ? 0.3 : 0.6), 0.07, 0.05, 0.14)
@@ -243,6 +247,16 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
     const cloth = outfit === 'dress' ? top : spec.skirt ?? 0x2f3b5c
     hips.add(sc(at(part(cyl(0.19, 0.31, 0.34, 20), cloth, 0.8), 0, -0.16, 0), 1, 1, 0.8))
     hips.add(sc(at(part(cyl(0.312, 0.312, 0.02, 20), new THREE.Color(cloth).multiplyScalar(0.82).getHex(), 0.8), 0, -0.325, 0), 1, 1, 0.8))
+    const pleat = new THREE.Color(cloth).multiplyScalar(0.88).getHex()
+    for (let i = 0; i < 16; i++) {
+      const pg = new THREE.Group()
+      pg.rotation.y = (i / 16) * Math.PI * 2
+      pg.scale.z = 0.8
+      const rib = at(part(bx(0.014, 0.33, 0.02), pleat, 0.8), 0, -0.16, 0.253)
+      rib.rotation.x = -0.34
+      pg.add(rib)
+      hips.add(pg)
+    }
   }
 
   const torso = new THREE.Group()
@@ -309,7 +323,7 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
     torso.add(at(part(bx(0.41, 0.03, 0.26), 0x14151b, 0.5), 0, -0.1, 0))
     torso.add(at(part(bx(0.04, 0.03, 0.01), 0xc9a24a, 0.3), 0, -0.1, 0.133))
   }
-  torso.add(at(part(cyl(0.05, 0.057, 0.12, 12), skin), 0, 0.57, 0))
+  torso.add(at(part(cyl(0.052, 0.06, 0.15, 12), skin), 0, 0.575, 0))
 
   // ── Cabeza ──
   const head = new THREE.Group()
@@ -320,8 +334,11 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   ;([1, -1] as const).forEach((sd) => head.add(sc(at(part(ball(0.034, 8, 8), skin, 0.7), sd * 0.143, 0.15, -0.005), 0.55, 1, 0.8)))
   // Ojos: blanco, iris y pupila; cejas; nariz
   const eyeCol = spec.eye ?? 0x3b2a1e
+  const eyeMeshes: THREE.Object3D[] = []
   ;([1, -1] as const).forEach((sd) => {
-    head.add(sc(at(part(ball(0.03, 10, 8), 0xffffff, 0.35), sd * 0.054, 0.172, 0.126), 1, 0.8, 0.5))
+    const eyeW = sc(at(part(ball(0.03, 10, 8), 0xffffff, 0.35), sd * 0.054, 0.172, 0.126), 1, 0.8, 0.5)
+    eyeMeshes.push(eyeW)
+    head.add(eyeW)
     head.add(sc(at(part(ball(0.0195, 12, 10), eyeCol, 0.25), sd * 0.054, 0.172, 0.1375), 1, 1.05, 0.5))
     head.add(at(part(ball(0.008, 6, 6), 0x050506, 0.3), sd * 0.054, 0.172, 0.142))
     head.add(at(part(ball(0.004, 6, 6), 0xffffff, 0.2), sd * 0.058, 0.177, 0.145))
@@ -335,7 +352,8 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   head.add(sc(at(part(ball(0.02, 8, 8), new THREE.Color(skin).multiplyScalar(0.93).getHex(), 0.7), 0, 0.14, 0.145), 0.9, 1, 1))
   // Sonrisa suave y natural: labios y un arco apenas curvado, con comisuras marcadas
   const lip = female ? spec.lip ?? 0xc2455a : new THREE.Color(skin).multiplyScalar(0.62).getHex()
-  head.add(sc(rz(at(part(new THREE.TorusGeometry(0.031, female ? 0.0085 : 0.0065, 8, 18, Math.PI * 0.8), lip, 0.45), 0, 0.114, 0.1415), 0, 0, Math.PI * 1.1), 1.05, 0.55, 1))
+  const mouthMesh = sc(rz(at(part(new THREE.TorusGeometry(0.031, female ? 0.0085 : 0.0065, 8, 18, Math.PI * 0.8), lip, 0.45), 0, 0.114, 0.1415), 0, 0, Math.PI * 1.1), 1.05, 0.55, 1)
+  head.add(mouthMesh)
   ;([1, -1] as const).forEach((sd) => head.add(at(part(ball(0.0055, 6, 6), new THREE.Color(skin).multiplyScalar(0.8).getHex(), 0.7), sd * 0.033, 0.1195, 0.1405)))
 
   // Barba (hombres) con el mismo color del pelo
@@ -434,6 +452,13 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   const paper = at(part(bx(0.2, 0.01, 0.26), 0xffffff), 0, -0.37, 0.12)
   paper.visible = false
   armL.elbow.add(paper)
+  // Celular (para las selfies)
+  const phone = new THREE.Group()
+  phone.add(part(bx(0.07, 0.13, 0.012), 0x15171c, 0.4))
+  phone.add(at(part(bx(0.06, 0.115, 0.004), 0x4a8cff, 0.3), 0, 0, 0.007))
+  phone.position.set(0, -0.36, 0.08)
+  phone.visible = false
+  armR.elbow.add(phone)
   const snack = new THREE.Group()
   const kind = seed % 4
   if (kind === 0) {
@@ -455,7 +480,7 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   armL.elbow.add(snack)
 
   g.scale.setScalar(spec.scale)
-  return { group: g, hips, torso, head, armL, armR, legL, legR, cup: cupG, paper, snack, seed, stance: 0, phase: 0 }
+  return { group: g, hips, torso, head, armL, armR, legL, legR, cup: cupG, paper, snack, phone, mouth: mouthMesh, eyes: eyeMeshes, seed, stance: 0, phase: 0 }
 }
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k
@@ -482,7 +507,7 @@ interface Target {
 export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016, walkSpeed = 0) {
   const k = Math.min(1, dt * 8)
   const s = p.seed
-  const standing = pose === 'walk' || pose === 'stand' || pose === 'coffee' || pose === 'deliver' || pose === 'wave' || pose === 'play' || pose === 'dance' || pose === 'dj' || pose === 'bartend'
+  const standing = pose === 'walk' || pose === 'stand' || pose === 'coffee' || pose === 'deliver' || pose === 'wave' || pose === 'play' || pose === 'dance' || pose === 'dj' || pose === 'bartend' || pose === 'dancepair'
   p.stance = lerp(p.stance, standing ? 1 : 0, Math.min(1, dt * 6))
   p.phase += dt * 7.5 * walkSpeed
 
@@ -494,6 +519,8 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
   const tipsy = s % 6 === 1
   let showPaper = false
   let showSnack = false
+  let showPhone = false
+  const toast = t % 14 < 1.8 // brindis en grupo, todos a la vez
 
   if (pose === 'type') {
     const g = gestureAt(p, t)
@@ -529,7 +556,14 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
       showCup = true
       T.lS = -0.45; T.lE = -1.15
       if (bite) { T.rS = -0.95; T.rE = -1.95; T.headX = 0.02 } else { T.rS = -0.6; T.rE = -1.3 }
-    } else { T.lS = -0.15; T.lE = -0.3; T.rS = -2.4; T.rE = -2.0 } // un brazo detrás de la cabeza
+    } else if (s % 2 === 0) { T.lS = -0.15; T.lE = -0.3; T.rS = -2.4; T.rE = -2.0 } // un brazo detrás de la cabeza
+    else {
+      // Conversando: gesticula con la mano y gira la cabeza hacia quien le habla
+      T.lS = -0.45; T.lE = -1.15
+      T.rS = -0.9 + Math.sin(t * 3 + s) * 0.35; T.rE = -1.2 + Math.sin(t * 2.4 + s) * 0.3
+      T.headY = Math.sin(t * 0.7 + s) * 0.55
+    }
+    if (s % 3 === 1 && toast) { T.rS = -2.2; T.rE = -0.5 }
   } else if (pose === 'help') {
     T.torsoX = -0.02
     T.headX = -0.05
@@ -589,6 +623,14 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
       T.lE = -0.3; T.rE = -0.3
       bounce = 1.9
     }
+    if (toast && (tipsy || s % 2 === 0)) { T.rS = -2.4; T.rE = -0.4 } // brindis con el vaso en alto
+    if (s % 5 === 2 && (t * 0.08 + s * 0.17) % 1 < 0.3) {
+      // Selfie: una mano estira el celular y la otra hace la V
+      showPhone = true
+      T.rS = -1.55; T.rE = -0.25; T.rZ = 0
+      T.lS = -2.4; T.lE = -0.3
+      T.headX = -0.05; T.headY = 0.1
+    }
   } else if (pose === 'dj') {
     // En la cabina: las manos sobre los tornamesas y la cabeza al ritmo.
     const beat = t * 5 + s
@@ -607,11 +649,30 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.headX = -0.05 + Math.max(0, Math.sin(t * 1.4 + s)) * 0.12
     T.rS = -0.95; T.rE = -1.9; T.lS = -0.05; T.lE = -0.12
     showCup = true
+    if (toast) { T.rS = -2.2; T.rE = -0.5 }
     if (s % 2 === 1) {
       // Además picando algo con la otra mano
       showSnack = true
       if (Math.sin(t * 1.3 + s) > 0.4) { T.lS = -0.95; T.lE = -1.95 } else { T.lS = -0.6; T.lE = -1.3 }
     }
+  } else if (pose === 'barsit') {
+    // Sentado en un taburete del bar: el brazo en la barra, bebe y brinda
+    const sip = Math.sin(t * 0.9 + s * 2) > 0.5
+    showCup = true
+    T.torsoX = -0.04
+    T.headX = 0.05
+    T.headY = Math.sin(t * 0.6 + s) * 0.35
+    T.lS = -0.85; T.lE = -0.9
+    if (toast) { T.rS = -2.2; T.rE = -0.5 } else if (sip) { T.rS = -0.95; T.rE = -1.95 } else { T.rS = -0.8; T.rE = -1.0 }
+  } else if (pose === 'dancepair') {
+    // Bailando en pareja: brazos al frente, giro de cintura y de vez en cuando choque de manos
+    const beat = t * 3.2 + s
+    T.torsoY = Math.sin(beat) * 0.25
+    T.torsoX = 0.05
+    T.headY = Math.sin(beat + 1) * 0.3
+    T.headX = 0.05
+    if ((t * 0.12 + s * 0.2) % 1 < 0.12) { T.rS = -2.1; T.rE = -0.2; T.lS = -0.5; T.lE = -0.6 }
+    else { T.lS = -1.25; T.lE = -0.7; T.rS = -1.25; T.rE = -0.7 }
   } else if (pose === 'bartend') {
     // Bartender: agita la coctelera, sirve el trago y lo pasa por la barra.
     const cyc = (t * 0.22 + s * 0.31) % 1
@@ -636,9 +697,16 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.lS = -0.45; T.rS = -0.45; T.lE = -0.6; T.rE = -0.6
   }
 
-  if (pose === 'dance' && (tipsy || s % 2 === 0)) showCup = true
+  if (pose === 'dance' && (tipsy || s % 2 === 0) && !showPhone) showCup = true
+  // Expresión: de vez en cuando se ríen (sonrisa más grande y ojos achinados)
+  const happy = pose === 'dance' || pose === 'dancepair' || pose === 'barsit' || pose === 'lounge' || pose === 'coffee'
+  const laugh = happy && Math.sin(t * 0.9 + s * 3) > 0.55
+  p.mouth.scale.x = lerp(p.mouth.scale.x, laugh ? 1.35 : 1.05, k)
+  p.mouth.scale.y = lerp(p.mouth.scale.y, laugh ? 1.1 : 0.55, k)
+  p.eyes.forEach((e) => { e.scale.y = lerp(e.scale.y, laugh ? 0.4 : 0.8, k) })
   p.cup.visible = showCup
   p.snack.visible = showSnack
+  p.phone.visible = showPhone
   p.paper.visible = showPaper
 
   p.torso.rotation.x = lerp(p.torso.rotation.x, T.torsoX, k)
@@ -665,6 +733,9 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
   p.legL.knee.rotation.x = lerp(Math.PI / 2, kneeBend(p.phase + Math.PI), st)
   p.legR.knee.rotation.x = lerp(Math.PI / 2, kneeBend(p.phase), st)
   p.hips.position.y = lerp(SIT_Y, STAND_Y, st) + Math.abs(Math.sin(p.phase)) * 0.04 * walkSpeed
+  if (pose === 'dancepair') {
+    p.hips.position.y += Math.abs(Math.sin(t * 3.2 + s)) * 0.035
+  }
   if (pose === 'dance') {
     // Rebote al ritmo: sube y baja con las rodillas.
     const bn = Math.sin(t * (bounce > 1 ? 9 : 6) + s)
