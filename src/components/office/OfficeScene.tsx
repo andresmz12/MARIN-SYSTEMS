@@ -24,6 +24,8 @@ interface Props {
   minutes: number
   /** Fiesta a pedido (botón "Hora de fiesta"): la disco se abre y todos van a bailar a cualquier hora. */
   party?: boolean
+  /** Oculta los nombres sobre cada persona (para grabar o presentar). */
+  hideNames?: boolean
   ceo: CeoStats
   onSelect: (id: string, departmentId: string | null) => void
   /** Cierra la tarjeta del agente elegido. */
@@ -41,7 +43,9 @@ const PLATFORM_H = 0.35
 const LOUNGE_W = 17
 const LOUNGE_D = 12.6
 /** Ancho reservado para la discoteca, a la izquierda de la sala de descanso. */
-const DISCO_W = 17.5
+const DISCO_W = 25
+/** Fondo reservado para la discoteca (más profunda que la sala de descanso). */
+const DISCO_D = 17.5
 
 interface ZonePlan {
   dept: OfficeDepartment
@@ -100,7 +104,7 @@ export function planOffice(depts: OfficeDepartment[]): Plan {
   // La discoteca y la sala de descanso (TV, juegos y bar) ocupan el fondo, a la izquierda de la oficina del CEO: si no cabe, el piso crece.
   const ceoLeft = ceo.x - CEO_W / 2 - 0.8
   const floorMinX = Math.min(minX - 2.2, ceoLeft - LOUNGE_W - 1.2) - DISCO_W
-  const floorMaxZ = Math.max(ceo.z + CEO_D / 2 + 1.6, maxZ + LOUNGE_D + 1.0)
+  const floorMaxZ = Math.max(ceo.z + CEO_D / 2 + 1.6, maxZ + Math.max(LOUNGE_D, DISCO_D) + 1.0)
   return {
     zones,
     ceo,
@@ -298,7 +302,7 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, ceo, onSelect, onClose }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, hideNames = false, ceo, onSelect, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -569,6 +573,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     // Fiesta: de 11 PM a 3 AM quien descansa se va a bailar a la discoteca. partyAmt sube y baja suave (0 a 1).
     let partyOn = false
     let partyAmt = 0
+    let partyCenter: Pt = { x: 0, z: 0 }
     let nightAmt = 0
     const usable = (sd: LoungeSeat) => (partyOn ? sd.zone === 'disco' : sd.zone !== 'disco')
     {
@@ -938,7 +943,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const DX0 = floor.minX + 1.0
         const DW = DISCO_W - 1.6
         const dcx = DX0 + DW / 2
-        const RZ0 = MZ - 12.6
+        const RZ0 = MZ - (DISCO_D - 0.4)
         const RZ1 = MZ - 0.4
         const RZC = (RZ0 + RZ1) / 2
         const RLEN = RZ1 - RZ0
@@ -959,20 +964,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         d(box(DW, 5.4, 0.14, 0x120d24), dcx, 2.7, MZ - 0.3)
 
         // Pista: ocho por cuatro baldosas que cambian de color al ritmo
+        // Zona de baile: entre los reservados (izquierda), el bar (derecha), la puerta (frente) y el escenario (fondo)
+        const TC = Math.max(6, Math.floor((DW - 9.5) / 1.35))
+        const TR = Math.max(4, Math.floor((RLEN - 6.6) / 1.35))
+        const px = DX0 + 4.3 + (TC * 1.35) / 2
+        const pz = RZ0 + 2.4 + (TR * 1.35) / 2
         const tiles: { m: THREE.MeshStandardMaterial; c: number; r: number }[] = []
-        for (let r = 0; r < 4; r++) {
-          for (let c = 0; c < 8; c++) {
+        for (let r = 0; r < TR; r++) {
+          for (let c = 0; c < TC; c++) {
             const m = new THREE.MeshStandardMaterial({ color: 0x1b1530, emissive: 0x000000, roughness: 0.3 })
-            d(new THREE.Mesh(new THREE.BoxGeometry(1.29, 0.05, 1.29), m), dcx + (c - 3.5) * 1.35, 0.05, MZ - 6.4 + (r - 1.5) * 1.35)
+            d(new THREE.Mesh(new THREE.BoxGeometry(1.29, 0.05, 1.29), m), px + (c - (TC - 1) / 2) * 1.35, 0.05, pz + (r - (TR - 1) / 2) * 1.35)
             tiles.push({ m, c, r })
           }
         }
 
         // Escenario del DJ con pantalla LED (barras de ecualizador) y letrero de neón
-        d(box(6.2, 0.2, 2.6, 0x1c1530), dcx, 0.1, MZ - 1.9)
-        d(box(6.2, 0.05, 0.05, 0xff3df0, glow(0xff3df0, 0.9)), dcx, 0.22, MZ - 3.22)
+        d(box(9.4, 0.2, 2.6, 0x1c1530), dcx, 0.1, MZ - 1.9)
+        d(box(9.4, 0.05, 0.05, 0xff3df0, glow(0xff3df0, 0.9)), dcx, 0.22, MZ - 3.22)
         const ledCv = document.createElement('canvas')
-        ledCv.width = 512
+        ledCv.width = 768
         ledCv.height = 192
         const lg = ledCv.getContext('2d')
         const ledTex = new THREE.CanvasTexture(ledCv)
@@ -980,8 +990,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const drawLed = (time: number, a: number) => {
           if (!lg) return
           lg.fillStyle = '#0b0718'
-          lg.fillRect(0, 0, 512, 192)
-          for (let i = 0; i < 24; i++) {
+          lg.fillRect(0, 0, 768, 192)
+          for (let i = 0; i < 36; i++) {
             const h = a * (24 + (0.5 + 0.5 * Math.sin(time * 6 + i * 0.9)) * (0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * 2.3 + i * 1.7))) * 140)
             lg.fillStyle = `hsl(${(time * 60 + i * 14) % 360},95%,58%)`
             lg.fillRect(i * 21 + 3, 186 - h, 16, h)
@@ -989,9 +999,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           ledTex.needsUpdate = true
         }
         drawLed(0, 0)
-        const led = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 2.1), new THREE.MeshBasicMaterial({ map: ledTex }))
+        const led = new THREE.Mesh(new THREE.PlaneGeometry(9.2, 2.3), new THREE.MeshBasicMaterial({ map: ledTex }))
         led.rotation.y = Math.PI
-        d(led, dcx, 2.6, MZ - 0.42)
+        d(led, dcx, 2.5, MZ - 0.42)
         const nv = document.createElement('canvas')
         nv.width = 1024
         nv.height = 256
@@ -1009,7 +1019,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const neonMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(nv), transparent: true, color: 0x555555 })
         const neon = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), neonMat)
         neon.rotation.y = Math.PI
-        d(neon, dcx, 4.5, MZ - 0.42)
+        d(neon, dcx, 4.4, MZ - 0.42)
         const doorSign = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.42), neonMat)
         doorSign.rotation.y = Math.PI
         d(doorSign, dcx, 3.4, RZ0 - 0.14)
@@ -1024,7 +1034,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         d(box(0.7, 0.08, 0.5, 0x2b2b36), dcx, 1.24, bz)
         propRects.push({ x0: dcx - 1.5, x1: dcx + 1.5, z0: bz - 0.45, z1: bz + 0.45 })
         const woofers: THREE.Mesh[] = []
-        ;[dcx - 3.9, dcx + 3.9].forEach((sx) => {
+        ;[dcx - 5.4, dcx + 5.4].forEach((sx) => {
           d(box(0.95, 2.1, 0.8, 0x15121f), sx, 1.05, MZ - 1.4)
           ;[0.55, 1.5].forEach((y) => {
             const w = new THREE.Mesh(new THREE.CylinderGeometry(y > 1 ? 0.2 : 0.3, y > 1 ? 0.2 : 0.3, 0.06, 16), mat(0x2f2a44))
@@ -1036,38 +1046,43 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         })
 
         // Bola disco con haces de luz sobre la pista
-        const bcz = MZ - 6.4
-        d(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 6), mat(0x9aa1ad)), dcx, 5.3, bcz)
+        const bcz = pz
+        d(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 6), mat(0x9aa1ad)), px, 5.3, bcz)
         const ballMat = new THREE.MeshStandardMaterial({ color: 0xe8ecff, metalness: 1, roughness: 0.12, flatShading: true, emissive: 0x8f8fff, emissiveIntensity: 0 })
-        const ball = d(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), ballMat), dcx, 4.6, bcz)
+        const ball = d(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), ballMat), px, 4.6, bcz)
         const beams: { g: THREE.Group; mat: THREE.MeshBasicMaterial }[] = [0xff3df0, 0x3dd9ff, 0xffe14d, 0x7cff6b].map((color) => {
           const bm = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
           const g = new THREE.Group()
           put(new THREE.Mesh(new THREE.ConeGeometry(1.1, 4.2, 18, 1, true), bm), 0, -2.1, 0, g)
-          d(g, dcx, 4.6, bcz)
+          d(g, px, 4.6, bcz)
           return { g, mat: bm }
         })
         const lightA = new THREE.PointLight(0xff3df0, 0, 14, 2)
         const lightB = new THREE.PointLight(0x3dd9ff, 0, 14, 2)
-        put(lightA, dcx - 3.5, 3.4, MZ - 5.0, root)
-        put(lightB, dcx + 3.5, 3.4, MZ - 7.5, root)
+        put(lightA, px - 4.5, 3.4, pz + 1.5, root)
+        put(lightB, px + 4.5, 3.4, pz - 1.5, root)
 
         // Bar largo pegado a la pared derecha, con repisa de botellas y copas de colores
         const barX = RX1 - 1.0
-        d(box(0.8, 1.1, 7.0, 0x3a2a52), barX, 0.55, MZ - 6.8)
-        d(box(1.0, 0.08, 7.3, 0x6b4ca0), barX, 1.12, MZ - 6.8)
-        d(box(0.05, 0.06, 6.8, 0x3dd9ff, glow(0x3dd9ff, 0.9)), barX - 0.42, 0.2, MZ - 6.8)
-        d(box(0.4, 0.1, 6.6, 0x2a1f40), RX1 - 0.4, 2.0, MZ - 6.8)
+        const barZ0 = RZ0 + 2.4
+        const barZ1 = MZ - 3.3
+        const barL = barZ1 - barZ0
+        const barC = (barZ0 + barZ1) / 2
+        d(box(0.8, 1.1, barL, 0x3a2a52), barX, 0.55, barC)
+        d(box(1.0, 0.08, barL + 0.3, 0x6b4ca0), barX, 1.12, barC)
+        d(box(0.05, 0.06, barL - 0.2, 0x3dd9ff, glow(0x3dd9ff, 0.9)), barX - 0.42, 0.2, barC)
+        d(box(0.4, 0.1, barL - 0.4, 0x2a1f40), RX1 - 0.4, 2.0, barC)
         const bottle = [0x3fbf6b, 0xe5484d, 0xf2b84b, 0x4f8cff, 0xb58cff, 0xffffff]
-        for (let i = 0; i < 16; i++) {
-          const bzz = MZ - 9.7 + i * 0.4
+        for (let i = 0; i < Math.floor((barL - 0.6) / 0.4); i++) {
+          const bzz = barZ0 + 0.3 + i * 0.4
           d(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 10), mat(bottle[i % bottle.length], { transparent: true, opacity: 0.9 })), RX1 - 0.4, 2.26, bzz)
           if (i % 2 === 0) d(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 10), mat(bottle[(i + 2) % bottle.length], { transparent: true, opacity: 0.85 })), barX - 0.1, 1.26, bzz + 0.2)
         }
-        propRects.push({ x0: barX - 0.55, x1: RX1, z0: MZ - 10.5, z1: MZ - 3.1 })
+        propRects.push({ x0: barX - 0.55, x1: RX1, z0: barZ0 - 0.1, z1: barZ1 + 0.1 })
 
         // Reservados (sofás con mesita) pegados a la pared izquierda
-        const boothZ = [MZ - 2.6, MZ - 6.3, MZ - 10.0]
+        const boothZ: number[] = []
+        for (let zc = MZ - 2.6; zc - 1.5 > RZ0 + 1.0; zc -= 3.7) boothZ.push(zc)
         boothZ.forEach((zc) => {
           d(box(0.6, 1.0, 2.9, 0x3b1f5c), DX0 + 0.55, 0.5, zc)
           d(box(1.0, 0.45, 2.9, 0x6a2d8f), DX0 + 1.25, 0.23, zc)
@@ -1148,14 +1163,19 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
 
         // Asientos de la fiesta: el DJ, seis en el bar, seis en los reservados (arriba) y dieciséis bailando
         seatList.push({ x: dcx, z: MZ - 1.2, y: 0.2, face: Math.PI, dj: true, zone: 'disco', approach: { x: dcx + 2.3, z: MZ - 1.2 } })
-        for (let k = 0; k < 6; k++) seatList.push({ x: barX - 1.1, z: MZ - 9.5 + k * 1.15, face: Math.PI / 2, drink: true, zone: 'disco', approach: { x: barX - 2.1, z: MZ - 9.5 + k * 1.15 } })
-        for (let j = 0; j < 4; j++) {
-          for (let i = 0; i < 4; i++) {
-            const sx = dcx + (i - 1.5) * 1.9 + (j % 2 ? 0.45 : -0.45)
-            const sz = MZ - 6.4 + (j - 1.5) * 1.2
+        const nBar = Math.floor((barL - 0.6) / 1.15)
+        for (let k = 0; k < nBar; k++) seatList.push({ x: barX - 1.1, z: barZ0 + 0.6 + k * 1.15, face: Math.PI / 2, drink: true, zone: 'disco', approach: { x: barX - 2.1, z: barZ0 + 0.6 + k * 1.15 } })
+        // Bailarines: una cuadrícula holgada sobre toda la pista (siempre hay lugar de sobra para todos los agentes)
+        const nCol = Math.max(4, Math.floor((TC * 1.35) / 1.5))
+        const nRow = Math.max(3, Math.floor((TR * 1.35) / 1.3))
+        for (let j = 0; j < nRow; j++) {
+          for (let i = 0; i < nCol; i++) {
+            const sx = px + (i - (nCol - 1) / 2) * 1.5 + ((i * 7 + j * 3) % 5 - 2) * 0.1
+            const sz = pz + (j - (nRow - 1) / 2) * 1.3 + ((i * 5 + j * 11) % 5 - 2) * 0.1
             seatList.push({ x: sx, z: sz, face: (i + j) % 2 === 0 ? 0 : Math.PI, zone: 'disco', approach: { x: sx, z: sz - 0.9 } })
           }
         }
+        partyCenter = { x: px, z: pz }
         loungeTickers.push((time) => {
           const a = partyAmt
           D.visible = a > 0.02
@@ -1380,20 +1400,55 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       return true
     }
     // ── Descanso: quien no trabaja se va al área de descanso y vuelve a su escritorio cuando le toca ──
+    // Elige un asiento libre: en la fiesta el primero es el DJ y el resto se reparte (pista, bar y reservados);
+    // el resto del tiempo, la sala de descanso.
+    const pickSeat = (): number | undefined => {
+      if (!lounge) return undefined
+      const seats = lounge.seats
+      const free = seats.map((sd, i) => (sd.by || !usable(sd) ? -1 : i)).filter((i) => i >= 0)
+      if (free.length === 0) return undefined
+      if (partyOn) {
+        const dj = free.find((i) => seats[i].dj)
+        if (dj !== undefined) return dj
+        const r = Math.random()
+        const kind = r < 0.18 ? 'bar' : r < 0.36 ? 'sit' : 'dance'
+        let pool = free.filter((i) => (kind === 'bar' ? seats[i].drink : kind === 'sit' ? seats[i].sit : !seats[i].drink && !seats[i].sit && !seats[i].dj))
+        if (pool.length === 0) pool = free
+        if (kind === 'dance') {
+          // Los primeros bailan cerca de la bola disco; la pista se va llenando hacia afuera.
+          const dist = (i: number) => Math.hypot(seats[i].x - partyCenter.x, seats[i].z - partyCenter.z)
+          pool = pool.sort((x, y) => dist(x) - dist(y)).slice(0, 8)
+        }
+        return pool[Math.floor(Math.random() * pool.length)]
+      }
+      // Si ya hay uno esperando en la mesa de ping-pong, el siguiente tiende a unirse para jugar.
+      const playFree = free.filter((i) => seats[i].play)
+      const waiting = seats.filter((sd) => sd.play && sd.by).length === 1
+      return playFree.length > 0 && (waiting ? Math.random() < 0.5 : Math.random() < 0.12) ? playFree[0] : free[Math.floor(Math.random() * free.length)]
+    }
     const startRest = (o: Actor): boolean => {
       if (!lounge || o.mv || o.ghost) return false
-      const free = lounge.seats.map((sd, i) => (sd.by || !usable(sd) ? -1 : i)).filter((i) => i >= 0)
-      if (free.length === 0) return false
-      const djFree = partyOn ? free.find((i) => lounge!.seats[i].dj) : undefined
-      // Si ya hay uno esperando en la mesa de ping-pong, el siguiente tiende a unirse para jugar.
-      const playFree = free.filter((i) => lounge!.seats[i].play)
-      const waiting = lounge.seats.filter((sd) => sd.play && sd.by).length === 1
-      const idx = djFree !== undefined ? djFree : playFree.length > 0 && (waiting ? Math.random() < 0.5 : Math.random() < 0.12) ? playFree[0] : free[Math.floor(Math.random() * free.length)]
+      const idx = pickSeat()
+      if (idx === undefined) return false
       const seat = lounge.seats[idx]
       const path = nav.findPath(exitPt(o), seat.approach)
       if (!path) return false
       seat.by = o.id
       o.mv = { kind: 'rest', stage: 'stand', path, i: 0, t: 0, wait: 0, face: seat.face, seat: idx }
+      return true
+    }
+    // Quien quedó en el lado equivocado (empezó o terminó la fiesta) camina directo a su nuevo lugar, sin pasar por el escritorio.
+    const redirect = (o: Actor): boolean => {
+      const m = o.mv
+      if (!lounge || !m || m.kind !== 'rest') return false
+      const idx = pickSeat()
+      if (idx === undefined) return false
+      const g = o.person.group
+      const path = nav.findPath({ x: g.position.x, z: g.position.z }, lounge.seats[idx].approach)
+      if (!path) return false
+      if (m.seat !== undefined) delete lounge.seats[m.seat].by
+      lounge.seats[idx].by = o.id
+      o.mv = { kind: 'rest', stage: 'out', path, i: 0, t: 0, wait: 0, face: lounge.seats[idx].face, seat: idx }
       return true
     }
     // Al abrir la pantalla nadie vuelve a caminar desde cero: quien está descansando aparece ya sentado en su lugar.
@@ -1402,12 +1457,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const ok = (sd: LoungeSeat) => !sd.by && usable(sd)
       let idx = -1
       if (partyOn) {
-        // De fiesta: el primero cae en la cabina del DJ y los demás se reparten al azar por la pista y el bar.
-        idx = lounge.seats.findIndex((sd) => sd.dj && ok(sd))
-        if (idx < 0) {
-          const pool = lounge.seats.map((sd, i) => (ok(sd) ? i : -1)).filter((i) => i >= 0)
-          if (pool.length) idx = pool[Math.floor(Math.random() * pool.length)]
-        }
+        idx = pickSeat() ?? -1
       } else {
         // Al cargar, los primeros en descansar aparecen jugando ping-pong (los dos lugares de pie van primero).
         idx = Math.random() < 0.4 ? lounge.seats.findIndex((sd) => sd.play && ok(sd)) : -1
@@ -1637,12 +1687,16 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (lounge && time > nextShift) {
         const walking = actors.filter((a) => a.mv && a.mv.stage !== 'rest').length
         if (walking < (partyOn ? 8 : 4)) {
-          // Se levantan quienes vuelven a trabajar y quienes quedaron en el lado equivocado (empezó o terminó la fiesta).
-          const wake = actors.find((a) => a.mv?.kind === 'rest' && (st(a.id) !== 'sleep' || (a.mv.seat !== undefined && !usable(lounge!.seats[a.mv.seat]))) && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest'))
+          const resting = (a: Actor) => a.mv?.kind === 'rest' && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest')
+          // 1) quien vuelve a trabajar se levanta; 2) quien quedó en el lado equivocado va directo a su nuevo lugar
+          const wake = actors.find((a) => resting(a) && st(a.id) !== 'sleep')
+          const wrong = actors.find((a) => resting(a) && st(a.id) === 'sleep' && a.mv!.seat !== undefined && !usable(lounge!.seats[a.mv!.seat]))
           if (wake) { wakeUp(wake); nextShift = time + (partyOn ? 0.3 : 0.5) }
+          else if (wrong && redirect(wrong)) nextShift = time + (partyOn ? 0.3 : 0.5)
           else {
-            const go = actors.find((a) => !a.ghost && !a.mv && st(a.id) === 'sleep')
-            if (go && startRest(go)) nextShift = time + (partyOn ? 0.3 : 0.7)
+            // El primero que no pueda ir (sin lugar o sin camino) no bloquea a los demás.
+            const go = actors.filter((a) => !a.ghost && !a.mv && st(a.id) === 'sleep').find((a) => startRest(a))
+            nextShift = time + (go ? (partyOn ? 0.3 : 0.7) : 1.5)
           }
         }
       }
@@ -1774,7 +1828,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             ref={(el) => { labelRefs.current[a.id] = el }}
             type="button"
             onClick={() => onSelect(a.id, d.id)}
-            className="office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-zinc-300 bg-white/95 py-px pl-1.5 pr-2 text-[9px] font-bold leading-tight text-zinc-800 shadow-sm data-[sel='1']:border-indigo-500 data-[sel='1']:ring-2 data-[sel='1']:ring-indigo-300/70"
+            className={`${hideNames ? 'invisible ' : ''}office-label pointer-events-auto absolute flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-zinc-300 bg-white/95 py-px pl-1.5 pr-2 text-[9px] font-bold leading-tight text-zinc-800 shadow-sm data-[sel='1']:border-indigo-500 data-[sel='1']:ring-2 data-[sel='1']:ring-indigo-300/70`}
           >
             <span className="office-dot h-1.5 w-1.5 rounded-full bg-zinc-400" />
             {a.name}{a.status === 'ghost' ? ' · pronto' : ''}

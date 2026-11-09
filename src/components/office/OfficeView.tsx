@@ -57,6 +57,10 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [demo, setDemo] = useState(false)
   // "Hora de fiesta": abre la disco y manda a todos a bailar a cualquier hora (para grabar videos).
   const [party, setParty] = useState(false)
+  // Ocultar los nombres sobre cada persona (para grabar o presentar); se recuerda en este navegador.
+  const [hideNames, setHideNames] = useState(false)
+  useEffect(() => { try { setHideNames(localStorage.getItem('office-hide-names') === '1') } catch { /* sin almacenamiento */ } }, [])
+  const toggleNames = () => setHideNames((v) => { try { localStorage.setItem('office-hide-names', v ? '0' : '1') } catch { /* sin almacenamiento */ } return !v })
   const [full, setFull] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   // Pantalla completa real si el navegador deja (iPhone no); si no, el panel igual cubre toda la ventana.
@@ -197,6 +201,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             statusOf={statusOf}
             minutes={clockMin}
             party={party}
+            hideNames={hideNames}
             ceo={ceoStats}
             onSelect={(id, d) => {
               setSelected(id)
@@ -314,6 +319,13 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             </label>
           </>
         )}
+        <button
+          onClick={toggleNames}
+          title={hideNames ? 'Mostrar los nombres sobre cada persona' : 'Ocultar los nombres sobre cada persona'}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${hideNames ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
+        >
+          {hideNames ? '👁 Mostrar nombres' : '🙈 Ocultar nombres'}
+        </button>
         <button
           onClick={() => setParty(!party)}
           title={party ? 'Terminar la fiesta' : 'Abre la disco y manda a todos a bailar (para grabar videos)'}
