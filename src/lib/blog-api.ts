@@ -40,7 +40,7 @@ export class BlogApiError extends Error {
 async function call(target: BlogTarget, path: string, init: RequestInit): Promise<unknown> {
   let res: Response
   try {
-    res = await fetch(`${target.baseUrl}${path}`, { ...init, headers: { Authorization: `Bearer ${target.key}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) }, signal: AbortSignal.timeout(30_000) })
+    res = await fetch(`${target.baseUrl}${path}`, { ...init, headers: { Authorization: `Bearer ${target.key}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) }, signal: AbortSignal.timeout(60_000) })
   } catch {
     throw new BlogApiError('No se pudo conectar con el blog.', 504, 'network')
   }

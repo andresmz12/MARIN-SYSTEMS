@@ -1,4 +1,4 @@
-import { BlogApiError, blogEnvName, createBlogDraftRetry, resolveBlogTarget, type BlogPostCreated } from '@/lib/blog-api'
+import { BlogApiError, blogEnvName, createBlogDraftRetry, listBlogPosts, resolveBlogTarget, type BlogPostCreated, type BlogPostListed } from '@/lib/blog-api'
 import { parseArticles, withLegalNote, type ImportResult } from '@/lib/blog-import'
 import { logActivity } from '@/lib/agent-ledger'
 import { prisma } from '@/lib/prisma'
@@ -69,8 +69,21 @@ export async function sendNextArticle(companyId: string, key?: string): Promise<
   if (!first) return { ok: true, empty: true }
   const pair = await prisma.blogArticle.findMany({ where: { companyId, translationKey: first.translationKey, status: 'ready' }, orderBy: { locale: 'asc' } })
   const sent: BlogPostCreated[] = []
+  // Si un envío anterior llegó al blog pero la respuesta se perdió (tiempo agotado), el borrador ya existe allá:
+  // se marca como enviado en vez de volver a crearlo (evita duplicados y el error falso).
+  const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+  const already = async (locale: 'es' | 'en', slug: string, title: string): Promise<BlogPostListed | undefined> => {
+    try { return (await listBlogPosts(target, locale)).find((p) => p.slug === slug || norm(p.title) === norm(title)) } catch { return undefined }
+  }
   try {
     for (const a of pair.sort((x, y) => (x.locale === 'es' ? -1 : 1) - (y.locale === 'es' ? -1 : 1))) {
+      const dup = await already(a.locale as 'es' | 'en', a.slug, a.title)
+      if (dup) {
+        const url = `${target.baseUrl}/${a.locale}/blog/${dup.slug}`
+        await prisma.blogArticle.update({ where: { id: a.id }, data: { status: 'sent', sentAt: new Date(), url, slug: dup.slug } })
+        sent.push({ id: '', locale: a.locale, slug: dup.slug, title: dup.title, status: dup.status ?? 'draft', url })
+        continue
+      }
       const created = await createBlogDraftRetry(target, {
         title: a.title, description: a.description, content: a.content, locale: a.locale as 'es' | 'en', slug: a.slug, tags: a.tags, translationKey: a.translationKey.slice(0, 80),
       })
