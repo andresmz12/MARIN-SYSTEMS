@@ -265,29 +265,177 @@ interface Actor {
   ghost: boolean
 }
 
+// Teclado con teclas (una sola textura compartida)
+let keyboardTex: THREE.CanvasTexture | null = null
+function keyboardTexture(): THREE.CanvasTexture {
+  if (keyboardTex) return keyboardTex
+  const cv = document.createElement('canvas')
+  cv.width = 256
+  cv.height = 96
+  const g = cv.getContext('2d')
+  if (g) {
+    g.fillStyle = '#2b2f3a'
+    g.fillRect(0, 0, 256, 96)
+    g.fillStyle = '#e9ecf1'
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 15; c++) g.fillRect(6 + c * 16.2, 6 + r * 17.4, 13.5, 14)
+  }
+  keyboardTex = new THREE.CanvasTexture(cv)
+  return keyboardTex
+}
+
+/** Placa con el nombre y el cargo, pegada al frente del escritorio. */
+function nameplate(name: string, role: string, accent: number): THREE.Mesh {
+  const cv = document.createElement('canvas')
+  cv.width = 512
+  cv.height = 160
+  const g = cv.getContext('2d')
+  if (g) {
+    g.fillStyle = '#ffffff'
+    g.fillRect(0, 0, 512, 160)
+    g.fillStyle = `#${accent.toString(16).padStart(6, '0')}`
+    g.fillRect(0, 0, 18, 160)
+    g.fillStyle = '#1f2937'
+    g.textBaseline = 'middle'
+    let size = 68
+    g.font = `800 ${size}px system-ui, sans-serif`
+    while (g.measureText(name).width > 440 && size > 30) { size -= 4; g.font = `800 ${size}px system-ui, sans-serif` }
+    g.fillText(name, 40, 62)
+    g.fillStyle = '#6b7280'
+    g.font = '600 34px system-ui, sans-serif'
+    g.fillText(role.length > 26 ? `${role.slice(0, 25)}…` : role, 40, 124)
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.194), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) }))
+  m.rotation.y = Math.PI
+  return m
+}
+
 function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent: number): Actor {
   const ghost = a.status === 'ghost'
+  let hv = 7
+  for (let i = 0; i < a.id.length; i++) hv = (hv * 31 + a.id.charCodeAt(i)) >>> 0
   const desk = new THREE.Group()
-  const wood = 0xe8d9bd
-  put(box(2.0, 0.08, 1.0, wood), 0, 0.8, 0, desk)
-  ;[[-0.92, -0.42], [0.92, -0.42], [-0.92, 0.42], [0.92, 0.42]].forEach((p) => put(box(0.06, 0.78, 0.06, 0xf6f6f4), p[0], 0.39, p[1], desk))
-  // Monitor con el encendido según el estado
-  put(box(0.1, 0.22, 0.08, 0x2a2e38), 0, 0.95, -0.28, desk)
+  const wood = 0xe3d2b3
+  const metal = 0x8d95a3
+  // Cubierta con borde, pedestal de cajones, patas metálicas y panel frontal con el nombre
+  put(box(2.0, 0.06, 1.0, wood), 0, 0.81, 0, desk)
+  put(box(2.04, 0.02, 1.04, 0xc9b48c), 0, 0.77, 0, desk)
+  put(box(0.52, 0.66, 0.84, 0xf1ede4), -0.72, 0.43, 0.05, desk)
+  ;[0.62, 0.43, 0.24].forEach((yy) => {
+    put(box(0.46, 0.17, 0.015, 0xe6e0d2), -0.72, yy, 0.485, desk)
+    put(box(0.14, 0.02, 0.02, metal), -0.72, yy + 0.04, 0.5, desk)
+  })
+  ;[[0.95, -0.44], [0.95, 0.44]].forEach((p) => put(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.78, 8), mat(metal, { metalness: 0.5 })), p[0], 0.39, p[1], desk))
+  put(box(0.05, 0.05, 0.9, metal), 0.95, 0.06, 0, desk)
+  put(box(1.35, 0.46, 0.03, 0xf4f1ea), 0.28, 0.54, -0.46, desk)
+  const plate = nameplate(a.name, a.role, accent)
+  put(plate, 0.28, 0.56, -0.48, desk)
+
+  // Pantallas: doble, una con laptop al lado, o una grande
+  const variant = hv % 3
   const screen = box(0.92, 0.55, 0.05, 0x14171d, { emissive: new THREE.Color(0x000000), emissiveIntensity: 1 }) as THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
-  put(screen, 0, 1.3, -0.3, desk)
-  put(box(0.62, 0.025, 0.2, 0xcfd3da), 0, 0.85, 0.2, desk)
-  put(box(0.1, 0.1, 0.1, 0xf4f4f4), 0.75, 0.9, 0.05, desk) // taza
-  put(box(0.14, 0.02, 0.14, 0x2a2e38), -0.82, 0.85, -0.3, desk) // lámpara de escritorio
-  put(box(0.02, 0.32, 0.02, 0x2a2e38), -0.82, 1.02, -0.3, desk)
-  put(box(0.2, 0.05, 0.12, 0xd6b35a), -0.76, 1.2, -0.3, desk)
-  put(box(0.16, 0.012, 0.1, 0xf6efe0), 0.58, 0.845, 0.14, desk) // mouse pad
-  put(box(0.34, 0.012, 0.24, 0xf6efe0), -0.7, 0.845, 0.1, desk) // cuaderno
-  // Silla con el color del área
+  const mainX = variant === 0 ? -0.3 : 0.05
+  put(box(0.24, 0.02, 0.16, 0x2a2e38), mainX, 0.85, -0.3, desk)
+  put(box(0.05, 0.2, 0.05, 0x2a2e38), mainX, 0.95, -0.3, desk)
+  put(box(0.97, 0.6, 0.04, 0x1a1d24), mainX, 1.3, -0.33, desk)
+  put(screen, mainX, 1.3, -0.3, desk)
+  if (variant === 0) {
+    put(box(0.24, 0.02, 0.16, 0x2a2e38), 0.7, 0.85, -0.3, desk)
+    put(box(0.05, 0.2, 0.05, 0x2a2e38), 0.7, 0.95, -0.3, desk)
+    const m2 = box(0.74, 0.46, 0.04, 0x1a1d24)
+    m2.rotation.y = 0.25
+    put(m2, 0.7, 1.24, -0.3, desk)
+    const s2 = box(0.68, 0.4, 0.02, 0x0f2438, { emissive: new THREE.Color(0x1d4f8a), emissiveIntensity: 0.35 })
+    s2.rotation.y = 0.25
+    put(s2, 0.7 + Math.sin(0.25) * -0.025, 1.24, -0.275, desk)
+  } else if (variant === 1) {
+    // Laptop abierta a un lado
+    put(box(0.5, 0.02, 0.34, 0xc3c8d0), 0.68, 0.84, 0.0, desk)
+    const lid = box(0.5, 0.32, 0.015, 0xaab0ba)
+    lid.rotation.x = -0.25
+    put(lid, 0.68, 1.0, -0.16, desk)
+    put(box(0.44, 0.26, 0.01, 0x123a5a, { emissive: new THREE.Color(0x2b78c2), emissiveIntensity: 0.3 }), 0.68, 1.0, -0.153, desk)
+  } else {
+    // Tablet en soporte y libreta
+    put(box(0.2, 0.02, 0.15, 0x3a3f4a), 0.7, 0.84, -0.1, desk)
+    const tb = box(0.3, 0.22, 0.015, 0x20242c, { emissive: new THREE.Color(0x4a8cff), emissiveIntensity: 0.25 })
+    tb.rotation.x = -0.3
+    put(tb, 0.7, 0.96, -0.14, desk)
+  }
+  // Teclado, mouse y tapete
+  put(box(0.7, 0.006, 0.28, 0x30343f), mainX, 0.842, 0.2, desk)
+  const kb = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.02, 0.16), new THREE.MeshStandardMaterial({ map: keyboardTexture(), roughness: 0.6 }))
+  put(kb, mainX - 0.03, 0.86, 0.2, desk)
+  const mouse = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), mat(0xeef0f4))
+  mouse.scale.set(0.7, 0.45, 1)
+  put(mouse, mainX + 0.3, 0.862, 0.2, desk)
+  // Lámpara de escritorio articulada
+  put(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.02, 12), mat(0x2a2e38)), -0.9, 0.85, -0.3, desk)
+  const arm1 = box(0.02, 0.34, 0.02, 0x2a2e38)
+  arm1.rotation.z = 0.2
+  put(arm1, -0.86, 1.03, -0.3, desk)
+  const arm2 = box(0.02, 0.3, 0.02, 0x2a2e38)
+  arm2.rotation.z = -1.0
+  put(arm2, -0.72, 1.24, -0.3, desk)
+  put(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.1, 12, 1, true), mat(0xd6b35a, { side: THREE.DoubleSide, emissive: new THREE.Color(0xffe9a8), emissiveIntensity: 0.25 })), -0.6, 1.3, -0.3, desk)
+  // Objetos personales: cada quien tiene los suyos
+  const bits = [hv % 6, (hv >>> 3) % 6, (hv >>> 6) % 6]
+  const put1 = (k: number, px: number, pz: number) => {
+    if (k === 0) { // planta suculenta
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.045, 0.08, 10), mat(0xc77b52)), px, 0.88, pz, desk)
+      put(new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat(0x4f9e5f)), px, 0.97, pz, desk)
+    } else if (k === 1) { // portarretrato
+      const fr = box(0.16, 0.2, 0.015, 0x6b4a2b)
+      fr.rotation.x = -0.2
+      put(fr, px, 0.93, pz, desk)
+      put(box(0.12, 0.16, 0.016, [0xf2b8a2, 0x9ec5e8, 0xbfe3b4][hv % 3]), px, 0.93, pz + 0.004, desk)
+    } else if (k === 2) { // audífonos sobre el escritorio
+      put(new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 6, 14, Math.PI), mat(0x20242c)), px, 0.92, pz, desk)
+      ;[-0.075, 0.075].forEach((dx) => put(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 10), mat(0x2f6fe4)), px + dx, 0.88, pz, desk))
+    } else if (k === 3) { // pila de libros
+      ;[0x3d6bb3, 0xc0503a, 0x4f9e5f].forEach((c, i) => put(box(0.22 - i * 0.02, 0.035, 0.16, c), px, 0.85 + i * 0.036, pz, desk))
+    } else if (k === 4) { // vaso con bolígrafos
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.09, 10), mat(0x374151)), px, 0.885, pz, desk)
+      ;[0xe5484d, 0x2f6fe4, 0xf2b84b].forEach((c, i) => { const pn = box(0.008, 0.07, 0.008, c); pn.rotation.z = (i - 1) * 0.25; put(pn, px + (i - 1) * 0.015, 0.95, pz, desk) })
+    } else { // taza de café
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.1, 10), mat([0xffffff, 0xf2b84b, 0xe5484d][hv % 3])), px, 0.89, pz, desk)
+      put(new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 6, 10), mat(0xeeeeee)), px + 0.05, 0.89, pz, desk)
+    }
+  }
+  put1(bits[0], 0.9, 0.0)
+  put1(bits[1], -0.35, 0.05)
+  if (bits[2] !== bits[0] && bits[2] !== bits[1]) put1(bits[2], 0.92, 0.3)
+  // Notas adhesivas en el borde del monitor y libreta con bolígrafo
+  ;[0xfff176, 0xff8a80, 0x80d8ff].forEach((c, i) => put(box(0.07, 0.07, 0.004, c), mainX + 0.5 + (i % 2) * 0.02, 1.15 + i * 0.09, -0.355, desk))
+  put(box(0.3, 0.012, 0.22, 0xf6efe0), mainX - 0.5, 0.848, 0.15, desk)
+  put(box(0.14, 0.006, 0.006, 0x2f6fe4), mainX - 0.42, 0.858, 0.12, desk)
+  // Teléfono de escritorio
+  put(box(0.14, 0.04, 0.11, 0x22252d), -0.35, 0.86, -0.25, desk)
+
+  // Silla ergonómica: asiento y respaldo acolchados, cabecero, brazos, pistón y base de cinco puntas con ruedas
   const chairColor = deep(accent, 0.78)
-  put(box(0.55, 0.07, 0.55, chairColor), 0, 0.5, 0.95, desk)
-  put(box(0.55, 0.55, 0.07, chairColor), 0, 0.82, 1.23, desk)
-  put(box(0.07, 0.46, 0.07, 0x3a3f4a), 0, 0.24, 0.95, desk)
-  put(box(0.5, 0.04, 0.5, 0x3a3f4a), 0, 0.03, 0.95, desk)
+  put(box(0.56, 0.08, 0.54, chairColor), 0, 0.52, 0.95, desk)
+  put(box(0.5, 0.05, 0.5, 0x2a2e38), 0, 0.47, 0.95, desk)
+  put(box(0.5, 0.46, 0.08, chairColor), 0, 0.82, 1.24, desk)
+  put(box(0.3, 0.14, 0.06, deep(accent, 0.66)), 0, 1.13, 1.25, desk)
+  put(box(0.52, 0.12, 0.1, 0x2a2e38), 0, 0.6, 1.22, desk)
+  ;[-0.31, 0.31].forEach((ax) => {
+    put(box(0.04, 0.2, 0.04, 0x2a2e38), ax, 0.62, 0.96, desk)
+    put(box(0.07, 0.03, 0.26, 0x2a2e38), ax, 0.73, 0.98, desk)
+  })
+  put(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.34, 8), mat(0x6b7280, { metalness: 0.5 })), 0, 0.28, 0.95, desk)
+  for (let k = 0; k < 5; k++) {
+    const ang = (k / 5) * Math.PI * 2
+    const sp = box(0.3, 0.03, 0.05, 0x2a2e38)
+    sp.position.set(Math.cos(ang) * 0.15, 0.08, 0.95 + Math.sin(ang) * 0.15)
+    sp.rotation.y = -ang
+    desk.add(sp)
+    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 8), mat(0x15171c))
+    wh.rotation.z = Math.PI / 2
+    wh.rotation.y = -ang + Math.PI / 2
+    put(wh, Math.cos(ang) * 0.3, 0.035, 0.95 + Math.sin(ang) * 0.3, desk)
+  }
+  // Torre de PC debajo, para algunos
+  if (hv % 2 === 0) put(box(0.2, 0.42, 0.42, 0x2b2f3a), 0.55, 0.23, -0.1, desk)
 
   contactShadow(2.9, 2.6, 0, 0.55, desk, 0.34)
   const seat = new THREE.Group()
@@ -1356,6 +1504,179 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         })
       }
       lounge = { seats: seatList }
+    }
+
+    // ── Agencia completa: recepción con logo, sala de espera, credenzas con libros y una sala de juntas de vidrio ──
+    {
+      const canvasPlane = (w: number, h: number, cw: number, ch: number, draw: (g: CanvasRenderingContext2D) => void) => {
+        const cv = document.createElement('canvas')
+        cv.width = cw
+        cv.height = ch
+        const g = cv.getContext('2d')
+        if (g) draw(g)
+        return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }))
+      }
+      const rect = (cx: number, cz: number, w: number, dd: number) => propRects.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - dd / 2, z1: cz + dd / 2 })
+      const wallX = floor.maxX
+      const sx = wallX - 0.65 // línea de muebles pegados a la pared derecha
+      const z0 = floor.minZ + 1.6
+      // Recepción: mostrador con logo, telón con el nombre y una recepcionista
+      put(box(0.75, 1.08, 4.2, 0xf4efe4), sx - 0.9, 0.54, z0 + 2.1, root)
+      put(box(0.95, 0.07, 4.4, 0x8a5a38), sx - 0.9, 1.11, z0 + 2.1, root)
+      const logoFront = canvasPlane(3.6, 0.8, 1024, 230, (g) => {
+        g.fillStyle = '#2f3b5c'
+        g.font = '800 120px system-ui, sans-serif'
+        g.textBaseline = 'middle'
+        g.fillText('Corporación Marin', 30, 100)
+        g.fillStyle = '#b8863b'
+        g.fillRect(34, 180, 380, 12)
+      })
+      logoFront.rotation.y = -Math.PI / 2
+      put(logoFront, sx - 1.28, 0.58, z0 + 2.1, root)
+      put(box(0.14, 1.9, 3.6, 0x2f3b5c), wallX - 0.2, 2.15, z0 + 2.1, root)
+      const logoWall = canvasPlane(3.3, 1.5, 1024, 466, (g) => {
+        g.fillStyle = '#ffffff'
+        g.font = '800 150px system-ui, sans-serif'
+        g.textBaseline = 'middle'
+        g.textAlign = 'center'
+        g.fillText('Corporación', 512, 170)
+        g.fillText('Marin', 512, 330)
+        g.fillStyle = '#b8863b'
+        g.fillRect(352, 410, 320, 14)
+      })
+      logoWall.rotation.y = -Math.PI / 2
+      put(logoWall, wallX - 0.29, 2.15, z0 + 2.1, root)
+      put(box(0.5, 0.06, 0.5, 0x2a2e38), wallX - 0.45, 0.5, z0 + 2.1, root) // silla
+      put(box(0.06, 0.5, 0.5, 0x2a2e38), wallX - 0.2, 0.78, z0 + 2.1, root)
+      const recep = buildPerson({ ...specFor('recepcion', 0xb8863b, false, 'Lucía'), outfit: 'blouse', hairStyle: 'long' }, 2)
+      recep.group.scale.multiplyScalar(1.1)
+      recep.group.position.set(wallX - 0.85, 0, z0 + 2.1)
+      recep.group.rotation.y = -Math.PI / 2
+      root.add(recep.group)
+      loungeTickers.push((time) => animatePerson(recep, 'type', time, 0.016, 0))
+      rect(sx - 0.95, z0 + 2.1, 1.1, 4.6)
+      plantAt(sx - 0.9, z0 - 0.4, 1.1)
+      // Sala de espera: sofá, mesita con revistas y una planta alta
+      const wz = z0 + 6.4
+      put(box(0.9, 0.45, 2.4, 0x51657f), sx, 0.23, wz, root)
+      put(box(0.3, 0.55, 2.4, 0x3f5069), sx + 0.3, 0.55, wz, root)
+      put(box(0.6, 0.35, 1.1, 0xcdac78), sx - 1.05, 0.18, wz, root)
+      put(box(0.34, 0.02, 0.24, 0xe5484d), sx - 1.05, 0.37, wz - 0.2, root)
+      put(box(0.34, 0.02, 0.24, 0x2f6fe4), sx - 1.05, 0.39, wz + 0.2, root)
+      rect(sx, wz, 1.5, 2.6)
+      rect(sx - 1.05, wz, 0.8, 1.3)
+      plantAt(sx - 0.1, wz + 2.0, 1.4)
+      // Credenzas con libros, plantas y premios a lo largo de la pared
+      const zEnd = floor.maxZ - 3.2
+      let cz2 = wz + 4.6
+      let ci = 0
+      while (cz2 < zEnd) {
+        put(box(0.55, 0.95, 2.6, 0xe9dfcc), sx, 0.48, cz2, root)
+        put(box(0.62, 0.05, 2.7, 0x8a5a38), sx, 0.97, cz2, root)
+        ;[0.5, 1.2].forEach((dz) => put(box(0.015, 0.8, 0.5, 0xd7ccb6), sx - 0.28, 0.48, cz2 + (dz - 0.85), root))
+        if (ci % 3 === 0) { // libros
+          ;[0x3d6bb3, 0xc0503a, 0x4f9e5f, 0xf2b84b, 0x8a5aa8, 0x2f3b5c].forEach((c, i) => put(box(0.06, 0.22 + (i % 3) * 0.04, 0.3, c), sx + 0.02, 1.12, cz2 - 0.9 + i * 0.1, root))
+          put(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.04, 12), mat(0xd4af37, { metalness: 0.6 })), sx, 1.02, cz2 + 0.6, root)
+          put(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.34, 10), mat(0xd4af37, { metalness: 0.6 })), sx, 1.2, cz2 + 0.6, root)
+        } else if (ci % 3 === 1) { // plantas y un cartel enmarcado
+          plantAt(sx, cz2 - 0.7, 0.9)
+          const fr = box(0.05, 0.5, 0.7, 0x2a2e38)
+          put(fr, sx + 0.2, 1.25, cz2 + 0.5, root)
+          put(box(0.055, 0.42, 0.62, [0xf2b8a2, 0x9ec5e8, 0xbfe3b4][ci % 3 === 1 ? 0 : 1]), sx + 0.18, 1.25, cz2 + 0.5, root)
+        } else { // árbol grande
+          plantAt(sx, cz2, 1.7)
+        }
+        rect(sx, cz2, 0.8, 2.8)
+        cz2 += 3.6
+        ci++
+      }
+
+      // Sala de juntas: se busca un hueco libre en el piso y se arma un cubo de vidrio con mesa, sillas, pantalla y pizarra
+      const zoneRects = plan.zones.map((zz) => ({ x0: zz.cx - zz.w / 2 - 1.6, x1: zz.cx + zz.w / 2 + 1.6, z0: zz.cz - zz.d / 2 - 1.6, z1: zz.cz + zz.d / 2 + 1.6 }))
+      const X0m = floor.minX + 1.2 + DISCO_W
+      const blockers: Rect[] = [
+        ...zoneRects,
+        { x0: plan.ceo.x - CEO_W / 2 - 2, x1: plan.ceo.x + CEO_W / 2 + 2, z0: plan.ceo.z - CEO_D / 2 - 2, z1: plan.ceo.z + CEO_D / 2 + 2 },
+        { x0: X0m - 1.5, x1: X0m + LOUNGE_W + 1, z0: floor.maxZ - LOUNGE_D - 1.5, z1: floor.maxZ + 1 },
+        { x0: floor.minX - 1, x1: floor.minX + DISCO_W + 0.8, z0: floor.maxZ - DISCO_D - 1.5, z1: floor.maxZ + 1 },
+        { x0: wallX - 3.6, x1: wallX + 1, z0: floor.minZ - 1, z1: floor.maxZ + 1 },
+        ...propRects.map((r) => ({ x0: r.x0 - 0.8, x1: r.x1 + 0.8, z0: r.z0 - 0.8, z1: r.z1 + 0.8 })),
+      ]
+      const MW = 8.2
+      const MD = 5.6
+      let best: { x: number; z: number; d: number } | null = null
+      for (let gx = floor.minX + 2; gx < floor.maxX - 3; gx += 1) {
+        for (let gz = floor.minZ + 3; gz < floor.maxZ - 3; gz += 1) {
+          const r: Rect = { x0: gx - MW / 2, x1: gx + MW / 2, z0: gz - MD / 2, z1: gz + MD / 2 }
+          if (blockers.some((b) => r.x0 < b.x1 && r.x1 > b.x0 && r.z0 < b.z1 && r.z1 > b.z0)) continue
+          const dist = Math.hypot(gx - fcx, gz - fcz)
+          if (!best || dist < best.d) best = { x: gx, z: gz, d: dist }
+        }
+      }
+      if (best) {
+        const mx = best.x
+        const mz = best.z
+        const gm = new THREE.MeshStandardMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.3, depthWrite: false })
+        const MH = 3.0
+        const fcol = 0x2f3b5c
+        const doorW = 1.3
+        // paredes de vidrio (la del frente deja una puerta) y marcos
+        put(new THREE.Mesh(new THREE.BoxGeometry(MW, MH, 0.05), gm), mx, MH / 2, mz + MD / 2, root)
+        put(new THREE.Mesh(new THREE.BoxGeometry(0.05, MH, MD), gm), mx - MW / 2, MH / 2, mz, root)
+        put(new THREE.Mesh(new THREE.BoxGeometry(0.05, MH, MD), gm), mx + MW / 2, MH / 2, mz, root)
+        const seg = (MW - doorW) / 2
+        ;[-1, 1].forEach((sd) => put(new THREE.Mesh(new THREE.BoxGeometry(seg, MH, 0.05), gm), mx + sd * (doorW / 2 + seg / 2), MH / 2, mz - MD / 2, root))
+        put(box(MW, 0.1, 0.1, fcol), mx, MH, mz + MD / 2, root)
+        put(box(MW, 0.1, 0.1, fcol), mx, MH, mz - MD / 2, root)
+        put(box(0.1, 0.1, MD, fcol), mx - MW / 2, MH, mz, root)
+        put(box(0.1, 0.1, MD, fcol), mx + MW / 2, MH, mz, root)
+        ;[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ax, az]) => put(box(0.1, MH, 0.1, fcol), mx + ax * MW / 2, MH / 2, mz + az * MD / 2, root))
+        ;[-doorW / 2, doorW / 2].forEach((dx) => put(box(0.1, MH, 0.1, fcol), mx + dx, MH / 2, mz - MD / 2, root))
+        // franja esmerilada a la altura de la vista
+        put(box(MW, 0.35, 0.056, 0xffffff, { transparent: true, opacity: 0.35 }), mx, 1.3, mz + MD / 2, root)
+        ;[-1, 1].forEach((sd) => put(box(seg, 0.35, 0.056, 0xffffff, { transparent: true, opacity: 0.35 }), mx + sd * (doorW / 2 + seg / 2), 1.3, mz - MD / 2, root))
+        // mesa grande, sillas y pantalla
+        put(box(4.2, 0.07, 1.5, 0xb88a5a), mx, 0.78, mz, root)
+        ;[-1.8, 1.8].forEach((dx) => put(box(0.12, 0.76, 1.1, 0x2a2e38), mx + dx, 0.38, mz, root))
+        for (let i = 0; i < 4; i++) {
+          const cx = mx - 1.5 + i * 1.0
+          ;[-1, 1].forEach((side) => {
+            put(box(0.5, 0.07, 0.5, 0x3b5b8c), cx, 0.5, mz + side * 1.1, root)
+            put(box(0.5, 0.5, 0.07, 0x3b5b8c), cx, 0.8, mz + side * 1.33, root)
+            put(box(0.06, 0.46, 0.06, 0x2a2e38), cx, 0.24, mz + side * 1.1, root)
+          })
+        }
+        put(box(0.1, 1.5, 2.8, 0x15171c), mx + MW / 2 - 0.4, 1.7, mz, root) // pantalla de pared
+        put(box(0.02, 1.35, 2.6, 0x1d4f8a, { emissive: new THREE.Color(0x2b78c2), emissiveIntensity: 0.45 }), mx + MW / 2 - 0.46, 1.7, mz, root)
+        // pizarra con notas adhesivas
+        const board = canvasPlane(2.6, 1.3, 800, 400, (g) => {
+          g.fillStyle = '#ffffff'
+          g.fillRect(0, 0, 800, 400)
+          g.fillStyle = '#2f3b5c'
+          g.font = '700 38px system-ui, sans-serif'
+          g.fillText('Ideas de la semana', 24, 50)
+          const cols = ['#fff176', '#ff8a80', '#80d8ff', '#b9f6ca', '#ffd180']
+          for (let i = 0; i < 18; i++) {
+            g.fillStyle = cols[i % cols.length]
+            g.fillRect(24 + (i % 6) * 126, 80 + Math.floor(i / 6) * 105, 100, 86)
+            g.fillStyle = 'rgba(0,0,0,0.35)'
+            g.fillRect(36 + (i % 6) * 126, 100 + Math.floor(i / 6) * 105, 76, 6)
+            g.fillRect(36 + (i % 6) * 126, 118 + Math.floor(i / 6) * 105, 52, 6)
+          }
+        })
+        board.rotation.y = Math.PI / 2
+        put(board, mx - MW / 2 + 0.06, 1.7, mz, root)
+        plantAt(mx - MW / 2 + 0.6, mz + MD / 2 - 0.6, 1.1)
+        // obstáculos: mesa y sillas, y las paredes (la puerta queda libre)
+        propRects.push(
+          { x0: mx - 2.3, x1: mx + 2.3, z0: mz - 1.7, z1: mz + 1.7 },
+          { x0: mx - MW / 2 - 0.1, x1: mx - MW / 2 + 0.1, z0: mz - MD / 2, z1: mz + MD / 2 },
+          { x0: mx + MW / 2 - 0.1, x1: mx + MW / 2 + 0.1, z0: mz - MD / 2, z1: mz + MD / 2 },
+          { x0: mx - MW / 2, x1: mx + MW / 2, z0: mz + MD / 2 - 0.1, z1: mz + MD / 2 + 0.1 },
+          { x0: mx - MW / 2, x1: mx - doorW / 2, z0: mz - MD / 2 - 0.1, z1: mz - MD / 2 + 0.1 },
+          { x0: mx + doorW / 2, x1: mx + MW / 2, z0: mz - MD / 2 - 0.1, z1: mz - MD / 2 + 0.1 },
+        )
+      }
     }
 
     // ── Rutas: los muebles son obstáculos y las personas los rodean ──
