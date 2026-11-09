@@ -161,8 +161,9 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
     if (!a) return 'sleep'
     // De fiesta van todos, también los puestos libres
     const partyNow = party || (demo ? isPartyTime(demoMin) : isPartyTime(real.minutes))
-    if (a.status === 'ghost') return partyNow ? 'sleep' : 'ghost'
-    if (party) return 'sleep'
+    // De fiesta van todos: también los puestos libres y los que tienen una alerta de monitoreo
+    if (partyNow) return 'sleep'
+    if (a.status === 'ghost') return 'ghost'
     if (a.status === 'alert') return 'alert'
     if (!demo) return isNight(real.minutes) ? 'sleep' : a.status
     return scheduledNow(a, demoDay, demoMin) && !isNight(demoMin) ? 'work' : 'sleep'

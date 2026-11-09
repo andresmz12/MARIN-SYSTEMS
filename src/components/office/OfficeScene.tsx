@@ -248,6 +248,8 @@ interface Move {
   face: number
   /** Descanso: asiento del salón y punto desde donde se acomoda. */
   seat?: number
+  /** Segundos caminando hacia su lugar (si se pasa de la raya, aparece directo). */
+  age?: number
   from?: Pt
 }
 
@@ -2244,6 +2246,18 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (!m) return null
       const g = o.person.group
       m.t += dt
+      if (m.kind === 'rest' && m.stage === 'out' && lounge && m.seat !== undefined) {
+        m.age = (m.age ?? 0) + dt
+        if (m.age > 40) {
+          const seat = lounge.seats[m.seat]
+          g.position.set(seat.x, seat.y ?? 0, seat.z)
+          g.rotation.y = seat.face
+          o.heading = seat.face
+          m.stage = 'rest'
+          m.t = 0
+          return { pose: restPose(seat), speed: 0 }
+        }
+      }
       if (m.stage === 'stand') {
         if (m.t > 0.55) {
           const sp = seatPt(o)
@@ -2263,7 +2277,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const dx = target.x - g.position.x
         const dz = target.z - g.position.z
         const dist = Math.hypot(dx, dz)
-        const step = 2.0 * dt
+        const step = (partyOn ? 3.4 : 2.0) * dt
         if (dist > 0.02) o.heading += angDiff(o.heading, Math.atan2(dx, dz)) * Math.min(1, dt * 9)
         if (dist <= step) {
           g.position.x = target.x
@@ -2281,7 +2295,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const up = inRect({ x: g.position.x, z: g.position.z }, platformRect) ? PLATFORM_H : 0
         g.position.y += (up - g.position.y) * Math.min(1, dt * 8)
         g.rotation.y = o.heading
-        return { pose: m.stage === 'out' && m.kind === 'deliver' ? 'deliver' : 'walk', speed: 1 }
+        return { pose: m.stage === 'out' && m.kind === 'deliver' ? 'deliver' : 'walk', speed: partyOn ? 1.6 : 1 }
       }
       if (m.stage === 'settle' && lounge && m.seat !== undefined && m.from) {
         const seat = lounge.seats[m.seat]
@@ -2492,17 +2506,18 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       // Se hace de a poco (uno cada ~0,7 s y máximo 4 caminando) para que se vea natural.
       if (lounge && time > nextShift) {
         const walking = actors.filter((a) => a.mv && a.mv.stage !== 'rest').length
-        if (walking < (partyOn ? 8 : 4)) {
+        if (walking < (partyOn ? 14 : 4)) {
           const resting = (a: Actor) => a.mv?.kind === 'rest' && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest')
           // 1) quien vuelve a trabajar se levanta; 2) quien quedó en el lado equivocado va directo a su nuevo lugar
           const wake = actors.find((a) => resting(a) && st(a.id) !== 'sleep')
           const wrong = actors.find((a) => resting(a) && st(a.id) === 'sleep' && a.mv!.seat !== undefined && !usable(lounge!.seats[a.mv!.seat]))
-          if (wake) { wakeUp(wake); nextShift = time + (partyOn ? 0.3 : 0.5) }
-          else if (wrong && redirect(wrong)) nextShift = time + (partyOn ? 0.3 : 0.5)
+          if (wake) { wakeUp(wake); nextShift = time + (partyOn ? 0.15 : 0.5) }
+          else if (wrong && redirect(wrong)) nextShift = time + (partyOn ? 0.15 : 0.5)
           else {
             // El primero que no pueda ir (sin lugar o sin camino) no bloquea a los demás.
-            const go = actors.filter((a) => (!a.ghost || partyOn) && !a.mv && st(a.id) === 'sleep').find((a) => startRest(a))
-            nextShift = time + (go ? (partyOn ? 0.3 : 0.7) : 1.5)
+            // Si alguien no encuentra camino hasta la fiesta, aparece directo en su lugar: nadie se queda sentado
+            const go = actors.filter((a) => (!a.ghost || partyOn) && !a.mv && st(a.id) === 'sleep').find((a) => startRest(a) || (partyOn && settleNow(a)))
+            nextShift = time + (go ? (partyOn ? 0.15 : 0.7) : 1.5)
           }
         }
       }
