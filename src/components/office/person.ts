@@ -16,7 +16,7 @@ export interface PersonSpec {
   ghost: boolean
 }
 
-export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave' | 'play'
+export type PersonPose = 'type' | 'rest' | 'lounge' | 'help' | 'idle' | 'walk' | 'stand' | 'coffee' | 'deliver' | 'wave' | 'play' | 'dance' | 'dj'
 
 interface Arm {
   shoulder: THREE.Group
@@ -252,7 +252,7 @@ interface Target {
 export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016, walkSpeed = 0) {
   const k = Math.min(1, dt * 8)
   const s = p.seed
-  const standing = pose === 'walk' || pose === 'stand' || pose === 'coffee' || pose === 'deliver' || pose === 'wave' || pose === 'play'
+  const standing = pose === 'walk' || pose === 'stand' || pose === 'coffee' || pose === 'deliver' || pose === 'wave' || pose === 'play' || pose === 'dance' || pose === 'dj'
   p.stance = lerp(p.stance, standing ? 1 : 0, Math.min(1, dt * 6))
   p.phase += dt * 7.5 * walkSpeed
 
@@ -313,6 +313,27 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.headY = Math.sin(t * 2.6 + s) * 0.25
     T.rS = -1.05 + sw * 0.45; T.rE = -0.9 - Math.max(0, sw) * 0.5
     T.lS = -0.5; T.lE = -0.7
+  } else if (pose === 'dance') {
+    // De fiesta: brazos arriba alternando, cadera de lado a lado y cabeza al ritmo (un poquito pasado de copas).
+    const beat = t * 6 + s
+    T.torsoX = 0.04 + Math.sin(beat * 0.5) * 0.1
+    T.torsoY = Math.sin(t * 2.4 + s) * 0.45
+    T.headX = 0.05 + Math.abs(Math.sin(beat)) * 0.18
+    T.headY = Math.sin(t * 1.7 + s * 2) * 0.4
+    const wild = s % 3 === 0
+    T.lS = (wild ? -2.5 : -1.6) + Math.sin(beat) * 0.55
+    T.rS = (wild ? -2.5 : -1.2) + Math.sin(beat + Math.PI) * 0.55
+    T.lE = -0.5 - Math.max(0, Math.sin(beat)) * 0.5
+    T.rE = -0.5 - Math.max(0, -Math.sin(beat)) * 0.5
+    T.rZ = Math.sin(beat * 0.5) * 0.35
+  } else if (pose === 'dj') {
+    // En la cabina: las manos sobre los tornamesas y la cabeza al ritmo.
+    const beat = t * 5 + s
+    T.torsoX = 0.14
+    T.headX = 0.08 + Math.abs(Math.sin(beat)) * 0.2
+    T.headY = Math.sin(t * 1.3 + s) * 0.3
+    T.lS = -1.05 + Math.sin(beat * 2) * 0.15; T.lE = -0.9
+    T.rS = -1.05 + Math.sin(beat * 2 + 1.5) * 0.15; T.rE = -0.9
   } else if (pose === 'stand') {
     T.torsoX = 0.02 + breath
     T.headX = 0.02
@@ -354,4 +375,11 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
   p.legL.knee.rotation.x = lerp(Math.PI / 2, kneeBend(p.phase + Math.PI), st)
   p.legR.knee.rotation.x = lerp(Math.PI / 2, kneeBend(p.phase), st)
   p.hips.position.y = lerp(SIT_Y, STAND_Y, st) + Math.abs(Math.sin(p.phase)) * 0.04 * walkSpeed
+  if (pose === 'dance') {
+    // Rebote al ritmo: sube y baja con las rodillas.
+    const bounce = Math.sin(t * 6 + s)
+    p.hips.position.y += Math.abs(bounce) * 0.07
+    p.legL.knee.rotation.x += Math.max(0, bounce) * 0.45
+    p.legR.knee.rotation.x += Math.max(0, -bounce) * 0.45
+  }
 }

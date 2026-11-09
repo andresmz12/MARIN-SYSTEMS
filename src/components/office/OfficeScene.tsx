@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import type { AgentStatus, OfficeAgent, OfficeDepartment } from '@/lib/office'
 import { animatePerson, buildPerson, specFor, type Person, type PersonPose } from './person'
+import { DJ_LINES, PARTY_LINES, isPartyTime } from './party'
 import { NavGrid, inRect, type Pt, type Rect } from './navigation'
 
 export interface CeoStats {
@@ -37,6 +38,8 @@ const PLATFORM_H = 0.35
 /** Tamaño reservado para la sala de descanso. */
 const LOUNGE_W = 17
 const LOUNGE_D = 12.6
+/** Ancho reservado para la discoteca, a la izquierda de la sala de descanso. */
+const DISCO_W = 11.5
 
 interface ZonePlan {
   dept: OfficeDepartment
@@ -92,9 +95,9 @@ export function planOffice(depts: OfficeDepartment[]): Plan {
   const maxX = Math.max(CEO_W / 2, ...zones.map((z) => z.cx + z.w / 2))
   const minX = Math.min(-CEO_W / 2, ...zones.map((z) => z.cx - z.w / 2))
   const ceo = { x: maxX - CEO_W / 2, z: maxZ + 1.8 + CEO_D / 2 }
-  // La sala de descanso (TV, juegos y bar) ocupa el fondo, a la izquierda de la oficina del CEO: si no cabe, el piso crece.
+  // La discoteca y la sala de descanso (TV, juegos y bar) ocupan el fondo, a la izquierda de la oficina del CEO: si no cabe, el piso crece.
   const ceoLeft = ceo.x - CEO_W / 2 - 0.8
-  const floorMinX = Math.min(minX - 2.2, ceoLeft - LOUNGE_W - 1.2)
+  const floorMinX = Math.min(minX - 2.2, ceoLeft - LOUNGE_W - 1.2) - DISCO_W
   const floorMaxZ = Math.max(ceo.z + CEO_D / 2 + 1.6, maxZ + LOUNGE_D + 1.0)
   return {
     zones,
@@ -232,7 +235,7 @@ interface Move {
   from?: Pt
 }
 
-interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** De pie jugando ping-pong, no sentado. */ play?: boolean; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number }
+interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** De pie jugando ping-pong, no sentado. */ play?: boolean; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number; /** Lugares de la discoteca: solo se usan durante la fiesta. */ zone?: 'disco'; dj?: boolean; drink?: boolean }
 
 interface Actor {
   id: string
@@ -320,8 +323,11 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0xdfe9f2)
+    const bgDay = new THREE.Color(0xdfe9f2)
+    const bgNight = new THREE.Color(0x1d1736)
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 250)
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xcdd5e0, 0.8))
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xcdd5e0, 0.8)
+    scene.add(hemi)
     const sun = new THREE.DirectionalLight(0xfff4e0, 0.75)
     sun.position.set(-14, 26, -10)
     sun.castShadow = true
@@ -559,8 +565,13 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const loungeTickers: ((time: number) => void)[] = []
     // Los partidos de ping-pong duran un rato y luego descansan (30 s jugando de cada 70).
     let gameOn = false
+    // Fiesta: de 11 PM a 3 AM quien descansa se va a bailar a la discoteca. partyAmt sube y baja suave (0 a 1).
+    let partyOn = false
+    let partyAmt = 0
+    let nightAmt = 0
+    const usable = (sd: LoungeSeat) => (partyOn ? sd.zone === 'disco' : sd.zone !== 'disco')
     {
-      const X0 = floor.minX + 1.2
+      const X0 = floor.minX + 1.2 + DISCO_W
       const MZ = floor.maxZ // pared del fondo
       const tvX = X0 + 3.8
       const prop = (cx: number, cz: number, w: number, d: number) => propRects.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 })
@@ -827,12 +838,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         bg.fillStyle = '#b8863b'
         bg.fillRect(40, 100, 300, 8)
         bg.font = '600 38px system-ui, sans-serif'
-        const rows: [string, string][] = [['Mar y vie 7:00', 'Temas nuevos'], ['Lun y jue 10:00', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–7 AM', 'Todos descansan']]
+        const rows: [string, string][] = [['Mar y vie 7:00', 'Temas nuevos'], ['Lun y jue 10:00', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–3 AM', 'Fiesta en la disco'], ['3 AM–7 AM', 'Todos descansan']]
         rows.forEach(([x, y], i) => {
           bg.fillStyle = '#3b6cff'
-          bg.fillText(x, 40, 185 + i * 62)
+          bg.fillText(x, 40, 170 + i * 54)
           bg.fillStyle = '#2a2e38'
-          bg.fillText(y, 340, 185 + i * 62)
+          bg.fillText(y, 340, 170 + i * 54)
         })
       }
       const wb = new THREE.Group()
@@ -920,6 +931,134 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       // Dos lugares de pie, uno frente al otro, para jugar ping-pong
       seatList.push({ x: ppX, z: poolZ - 1.9, face: 0, play: true, approach: { x: ppX, z: poolZ - 2.9 } })
       seatList.push({ x: ppX, z: poolZ + 1.9, face: Math.PI, play: true, approach: { x: ppX, z: poolZ + 2.9 } })
+
+      // — Discoteca: pista con luces, bola disco, cabina del DJ, bocinas y un bar. Se enciende de 11 PM a 3 AM —
+      {
+        const DX0 = floor.minX + 1.0
+        const DW = DISCO_W - 1.6
+        const dcx = DX0 + DW / 2
+        const darkFloor = new THREE.Mesh(new THREE.PlaneGeometry(DW, 12.2), new THREE.MeshStandardMaterial({ color: 0x17112b, roughness: 0.5 }))
+        darkFloor.rotation.x = -Math.PI / 2
+        darkFloor.receiveShadow = true
+        put(darkFloor, dcx, 0.02, MZ - 6.5, root)
+        put(box(DW, 5.4, 0.14, 0x120d24), dcx, 2.7, MZ - 0.3, root)
+        // Pista: baldosas que cambian de color al ritmo
+        const tiles: { m: THREE.MeshStandardMaterial; c: number; r: number }[] = []
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 6; c++) {
+            const m = new THREE.MeshStandardMaterial({ color: 0x1b1530, emissive: 0x000000, roughness: 0.3 })
+            put(new THREE.Mesh(new THREE.BoxGeometry(1.29, 0.05, 1.29), m), dcx + (c - 2.5) * 1.35, 0.05, MZ - 6.0 + (r - 1.5) * 1.35, root)
+            tiles.push({ m, c, r })
+          }
+        }
+        // Bola disco con tres haces de luz que barren la pista
+        const ballY = 4.7
+        put(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 6), mat(0x9aa1ad)), dcx, ballY + 0.7, MZ - 6.0, root)
+        const ballMat = new THREE.MeshStandardMaterial({ color: 0xe8ecff, metalness: 1, roughness: 0.12, flatShading: true, emissive: 0x8f8fff, emissiveIntensity: 0 })
+        const ball = put(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), ballMat), dcx, ballY, MZ - 6.0, root)
+        const beams: { g: THREE.Group; mat: THREE.MeshBasicMaterial }[] = [0xff3df0, 0x3dd9ff, 0xffe14d].map((color) => {
+          const bm = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+          const g = new THREE.Group()
+          put(new THREE.Mesh(new THREE.ConeGeometry(1.1, 4.3, 18, 1, true), bm), 0, -2.15, 0, g)
+          put(g, dcx, ballY, MZ - 6.0, root)
+          return { g, mat: bm }
+        })
+        const lightA = new THREE.PointLight(0xff3df0, 0, 13, 2)
+        const lightB = new THREE.PointLight(0x3dd9ff, 0, 13, 2)
+        put(lightA, dcx - 2.6, 3.4, MZ - 5.0, root)
+        put(lightB, dcx + 2.6, 3.4, MZ - 7.5, root)
+        // Letrero de neón
+        const nv = document.createElement('canvas')
+        nv.width = 1024
+        nv.height = 256
+        const ng = nv.getContext('2d')
+        if (ng) {
+          ng.clearRect(0, 0, 1024, 256)
+          ng.textAlign = 'center'
+          ng.textBaseline = 'middle'
+          ng.font = '900 120px system-ui, sans-serif'
+          ng.shadowColor = '#ff3df0'
+          ng.shadowBlur = 28
+          ng.fillStyle = '#ffd6fb'
+          ng.fillText('DISCO MARIN', 512, 105)
+          ng.font = '800 54px system-ui, sans-serif'
+          ng.shadowColor = '#3dd9ff'
+          ng.fillStyle = '#d6f6ff'
+          ng.fillText('★  after office  ★', 512, 205)
+        }
+        const neonMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(nv), transparent: true, color: 0x555555 })
+        const neon = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 1.55), neonMat)
+        neon.rotation.y = Math.PI
+        put(neon, dcx, 4.05, MZ - 0.42, root)
+        // Cabina del DJ con tornamesas
+        const bz = MZ - 2.3
+        put(box(3.4, 1.05, 0.9, 0x241a3d), dcx, 0.52, bz, root)
+        put(box(3.3, 0.06, 0.05, 0xff3df0, { emissive: new THREE.Color(0xff3df0), emissiveIntensity: 0.8 }), dcx, 0.9, bz - 0.46, root)
+        ;[-0.85, 0.85].forEach((dx) => {
+          put(box(0.9, 0.08, 0.7, 0x1a1a22), dcx + dx, 1.09, bz, root)
+          put(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 20), mat(0x0c0c10)), dcx + dx, 1.15, bz, root)
+        })
+        put(box(0.7, 0.08, 0.5, 0x2b2b36), dcx, 1.09, bz, root)
+        put(box(0.5, 0.3, 0.04, 0x15151c), dcx, 1.3, bz + 0.18, root)
+        propRects.push({ x0: dcx - 1.7, x1: dcx + 1.7, z0: bz - 0.45, z1: bz + 0.45 })
+        // Bocinas que laten
+        const woofers: THREE.Mesh[] = []
+        ;[DX0 + 0.9, DX0 + DW - 0.9].forEach((sx) => {
+          put(box(0.95, 2.1, 0.8, 0x15121f), sx, 1.05, MZ - 1.4, root)
+          ;[0.55, 1.5].forEach((y) => {
+            const w = new THREE.Mesh(new THREE.CylinderGeometry(y > 1 ? 0.2 : 0.3, y > 1 ? 0.2 : 0.3, 0.06, 16), mat(0x2f2a44))
+            w.rotation.x = Math.PI / 2
+            put(w, sx, y, MZ - 1.82, root)
+            woofers.push(w)
+          })
+          propRects.push({ x0: sx - 0.48, x1: sx + 0.48, z0: MZ - 1.8, z1: MZ - 1.0 })
+        })
+        // Bar con botellas y copas de colores
+        const barZ = MZ - 11.3
+        put(box(5.6, 1.1, 0.8, 0x3a2a52), dcx, 0.55, barZ, root)
+        put(box(5.8, 0.08, 1.0, 0x6b4ca0), dcx, 1.12, barZ, root)
+        put(box(5.5, 0.06, 0.05, 0x3dd9ff, { emissive: new THREE.Color(0x3dd9ff), emissiveIntensity: 0.9 }), dcx, 0.2, barZ + 0.42, root)
+        put(box(5.2, 0.1, 0.4, 0x2a1f40), dcx, 2.0, barZ - 0.7, root)
+        const bottle = [0x3fbf6b, 0xe5484d, 0xf2b84b, 0x4f8cff, 0xb58cff, 0xffffff]
+        for (let i = 0; i < 12; i++) {
+          const bx = dcx - 2.5 + i * 0.45
+          put(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 10), mat(bottle[i % bottle.length], { transparent: true, opacity: 0.9 })), bx, 2.26, barZ - 0.7, root)
+          if (i % 2 === 0) put(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 10), mat(bottle[(i + 2) % bottle.length], { transparent: true, opacity: 0.85 })), bx + 0.2, 1.26, barZ + 0.05, root)
+        }
+        propRects.push({ x0: dcx - 2.9, x1: dcx + 2.9, z0: barZ - 0.6, z1: barZ + 0.6 })
+        // Asientos de la fiesta: el DJ, tres en el bar y doce bailando
+        seatList.push({ x: dcx, z: MZ - 1.2, face: Math.PI, dj: true, zone: 'disco', approach: { x: dcx + 2.2, z: MZ - 1.2 } })
+        ;[-1.6, 0, 1.6].forEach((dx) => seatList.push({ x: dcx + dx, z: barZ + 1.0, face: Math.PI, drink: true, zone: 'disco', approach: { x: dcx + dx, z: barZ + 1.9 } }))
+        for (let j = 0; j < 3; j++) {
+          for (let i = 0; i < 4; i++) {
+            const sx = dcx + (i - 1.5) * 1.9 + (j % 2 ? 0.4 : -0.4)
+            const sz = MZ - 6.0 + (j - 1) * 1.5
+            seatList.push({ x: sx, z: sz, face: (i + j) % 2 === 0 ? 0 : Math.PI, zone: 'disco', approach: { x: sx, z: sz - 0.9 } })
+          }
+        }
+        loungeTickers.push((time) => {
+          const a = partyAmt
+          tiles.forEach(({ m, c, r }) => {
+            const hue = (time * 0.22 + (c + r) * 0.11) % 1
+            m.color.setHSL(hue, 0.9, 0.12 + 0.38 * a)
+            m.emissive.setHSL(hue, 1, 0.5)
+            m.emissiveIntensity = a * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 4 + c * 0.9 + r * 1.3)))
+          })
+          ball.rotation.y = time * (0.4 + a * 1.4)
+          ballMat.emissiveIntensity = a * 0.55
+          beams.forEach((b, i) => {
+            b.g.rotation.z = Math.sin(time * 0.9 + i * 2.1) * 0.6
+            b.g.rotation.x = Math.cos(time * 0.7 + i * 1.3) * 0.5
+            b.mat.opacity = a * 0.17
+          })
+          lightA.intensity = a * 1.1
+          lightB.intensity = a * 1.1
+          const flick = Math.sin(time * 23) > 0.93 ? 0.7 : 1
+          neonMat.color.setScalar(0.33 + 0.67 * a * flick)
+          const pulse = 1 + a * 0.14 * Math.abs(Math.sin(time * 7.5))
+          woofers.forEach((w) => w.scale.set(pulse, 1, pulse))
+        })
+      }
       lounge = { seats: seatList }
     }
 
@@ -1105,6 +1244,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const seatPt = (o: Actor): Pt => ({ x: o.wrap.position.x, z: o.wrap.position.z + 0.95 })
     const exitPt = (o: Actor): Pt => ({ x: o.wrap.position.x, z: o.wrap.position.z + 2.1 })
     const ceoFront = (dx: number): Pt => ({ x: plan.ceo.x + dx, z: plan.ceo.z - 1.7 })
+    const restPose = (seat: LoungeSeat | null): PersonPose => (!seat ? 'lounge' : seat.dj ? 'dj' : seat.drink ? 'coffee' : seat.zone === 'disco' ? 'dance' : seat.play ? (gameOn ? 'play' : 'stand') : 'lounge')
     const startTrip = (o: Actor, kind: Move['kind'], dest: Pt, face: number, wait: number): boolean => {
       if (o.mv || o.ghost) return false
       if (actors.filter((a) => a.mv && a.mv.stage !== 'rest').length >= 2) return false // nunca más de dos a la vez
@@ -1116,12 +1256,13 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     // ── Descanso: quien no trabaja se va al área de descanso y vuelve a su escritorio cuando le toca ──
     const startRest = (o: Actor): boolean => {
       if (!lounge || o.mv || o.ghost) return false
-      const free = lounge.seats.map((sd, i) => (sd.by ? -1 : i)).filter((i) => i >= 0)
+      const free = lounge.seats.map((sd, i) => (sd.by || !usable(sd) ? -1 : i)).filter((i) => i >= 0)
       if (free.length === 0) return false
+      const djFree = partyOn ? free.find((i) => lounge!.seats[i].dj) : undefined
       // Si ya hay uno esperando en la mesa de ping-pong, el siguiente tiende a unirse para jugar.
       const playFree = free.filter((i) => lounge!.seats[i].play)
       const waiting = lounge.seats.filter((sd) => sd.play && sd.by).length === 1
-      const idx = playFree.length > 0 && (waiting ? Math.random() < 0.5 : Math.random() < 0.12) ? playFree[0] : free[Math.floor(Math.random() * free.length)]
+      const idx = djFree !== undefined ? djFree : playFree.length > 0 && (waiting ? Math.random() < 0.5 : Math.random() < 0.12) ? playFree[0] : free[Math.floor(Math.random() * free.length)]
       const seat = lounge.seats[idx]
       const path = nav.findPath(exitPt(o), seat.approach)
       if (!path) return false
@@ -1132,10 +1273,21 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     // Al abrir la pantalla nadie vuelve a caminar desde cero: quien está descansando aparece ya sentado en su lugar.
     const settleNow = (o: Actor): boolean => {
       if (!lounge || o.mv || o.ghost) return false
-      // Al cargar, los primeros en descansar aparecen jugando ping-pong (los dos lugares de pie van primero).
-      let idx = Math.random() < 0.4 ? lounge.seats.findIndex((sd) => sd.play && !sd.by) : -1
-      if (idx < 0) idx = lounge.seats.findIndex((sd) => !sd.play && !sd.by)
-      if (idx < 0) idx = lounge.seats.findIndex((sd) => !sd.by)
+      const ok = (sd: LoungeSeat) => !sd.by && usable(sd)
+      let idx = -1
+      if (partyOn) {
+        // De fiesta: el primero cae en la cabina del DJ y los demás se reparten al azar por la pista y el bar.
+        idx = lounge.seats.findIndex((sd) => sd.dj && ok(sd))
+        if (idx < 0) {
+          const pool = lounge.seats.map((sd, i) => (ok(sd) ? i : -1)).filter((i) => i >= 0)
+          if (pool.length) idx = pool[Math.floor(Math.random() * pool.length)]
+        }
+      } else {
+        // Al cargar, los primeros en descansar aparecen jugando ping-pong (los dos lugares de pie van primero).
+        idx = Math.random() < 0.4 ? lounge.seats.findIndex((sd) => sd.play && ok(sd)) : -1
+        if (idx < 0) idx = lounge.seats.findIndex((sd) => !sd.play && ok(sd))
+        if (idx < 0) idx = lounge.seats.findIndex((sd) => ok(sd))
+      }
       if (idx < 0) return false
       const seat = lounge.seats[idx]
       seat.by = o.id
@@ -1211,13 +1363,13 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         o.heading += angDiff(o.heading, seat.face) * Math.min(1, dt * 8)
         g.rotation.y = o.heading
         if (m.t >= 0.9) { m.stage = 'rest'; m.t = 0 }
-        return { pose: k < 0.6 ? 'stand' : seat.play ? 'play' : 'lounge', speed: 0 }
+        return { pose: k < 0.6 ? 'stand' : seat.zone ? restPose(seat) : seat.play ? 'play' : 'lounge', speed: 0 }
       }
       if (m.stage === 'rest') {
         o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
         g.rotation.y = o.heading
         const mySeat = lounge && m.seat !== undefined ? lounge.seats[m.seat] : null
-        return { pose: mySeat?.play ? (gameOn ? 'play' : 'stand') : 'lounge', speed: 0 }
+        return { pose: restPose(mySeat), speed: 0 }
       }
       if (m.stage === 'wait') {
         o.heading += angDiff(o.heading, m.face) * Math.min(1, dt * 6)
@@ -1262,6 +1414,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     let prevPending: number | null = null
     let nextCoffee = 0
     let nextShift = 0
+    let nextQuip = 0
     const shortText = (t: string, n = 38) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
     const onChange = (o: Actor, before: AgentStatus, now: AgentStatus, time: number) => {
       if (o.ghost) return
@@ -1291,6 +1444,14 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const dt = Math.min(0.1, Math.max(0.001, (t - last) / 1000))
       last = t
       const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
+      partyOn = isPartyTime(live.current.minutes)
+      const isNightNow = live.current.minutes >= 23 * 60 || live.current.minutes < 7 * 60
+      partyAmt += ((partyOn ? 1 : 0) - partyAmt) * Math.min(1, dt * 2)
+      nightAmt += ((isNightNow ? 1 : 0) - nightAmt) * Math.min(1, dt * 2)
+      // De noche la oficina se oscurece (y más aún en la fiesta).
+      ;(scene.background as THREE.Color).copy(bgDay).lerp(bgNight, nightAmt)
+      hemi.intensity = 0.8 - 0.45 * nightAmt
+      sun.intensity = 0.75 - 0.5 * nightAmt
       if (!placed) {
         placed = true
         actors.forEach((a) => { if (st(a.id) === 'sleep') settleNow(a) })
@@ -1325,7 +1486,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const away = !!o.mv && o.mv.stage !== 'stand'
         o.zz.visible = s === 'sleep' && !o.mv
         if (o.zl) {
-          const resting = o.mv?.stage === 'rest' && o.mv.kind === 'rest'
+          const resting = o.mv?.stage === 'rest' && o.mv.kind === 'rest' && !(lounge && o.mv.seat !== undefined && lounge.seats[o.mv.seat].zone === 'disco')
           o.zl.visible = resting
           if (resting) o.zl.position.set(o.person.group.position.x + 0.15, 1.75 + Math.sin(time * 2) * 0.06, o.person.group.position.z)
         }
@@ -1350,11 +1511,24 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (lounge && time > nextShift) {
         const walking = actors.filter((a) => a.mv && a.mv.stage !== 'rest').length
         if (walking < 4) {
-          const wake = actors.find((a) => a.mv?.kind === 'rest' && st(a.id) !== 'sleep' && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest'))
+          // Se levantan quienes vuelven a trabajar y quienes quedaron en el lado equivocado (empezó o terminó la fiesta).
+          const wake = actors.find((a) => a.mv?.kind === 'rest' && (st(a.id) !== 'sleep' || (a.mv.seat !== undefined && !usable(lounge!.seats[a.mv.seat]))) && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest'))
           if (wake) { wakeUp(wake); nextShift = time + 0.5 }
           else {
             const go = actors.find((a) => !a.ghost && !a.mv && st(a.id) === 'sleep')
             if (go && startRest(go)) nextShift = time + 0.7
+          }
+        }
+      }
+      // Fiesta: de vez en cuando alguien dice una tontería (el DJ, lo suyo).
+      if (lounge && partyOn) {
+        if (time > nextQuip) {
+          nextQuip = time + 4 + Math.random() * 5
+          const dancers = actors.filter((a) => a.mv?.kind === 'rest' && a.mv.stage === 'rest' && a.mv.seat !== undefined && lounge!.seats[a.mv.seat].zone === 'disco')
+          if (dancers.length) {
+            const who = dancers[Math.floor(Math.random() * dancers.length)]
+            const lines = lounge.seats[who.mv!.seat!].dj ? DJ_LINES : PARTY_LINES
+            bubble(who.id, lines[Math.floor(Math.random() * lines.length)], '#d946ef', time)
           }
         }
       }

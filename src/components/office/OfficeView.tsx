@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStatus, OfficeAgent, OfficeDepartment } from '@/lib/office'
 import { colombiaMinutes } from '@/lib/office'
+import { isPartyTime } from './party'
 
 // Three.js solo existe en el navegador: se carga aparte para no pesar en el resto de la app.
 const OfficeScene = dynamic(() => import('./OfficeScene').then((m) => m.OfficeScene), {
@@ -26,7 +27,7 @@ const ago = (iso: string | null, now: number) => {
   return `hace ${Math.round(min / 1440)} días`
 }
 
-/** Descanso: de 11 PM a 7 AM todos duermen (la vigilancia de apps también se pausa; ver src/lib/quiet-hours.ts). */
+/** Descanso: de 11 PM a 3 AM hay fiesta en la disco y de 3 a 7 AM todos duermen (la vigilancia de apps también se pausa; ver src/lib/quiet-hours.ts). */
 export const NIGHT_FROM = 23 * 60
 export const NIGHT_TO = 7 * 60
 const isNight = (minutes: number) => minutes >= NIGHT_FROM || minutes < NIGHT_TO
@@ -237,7 +238,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
               <span className="ml-auto text-[11px] font-normal text-zinc-500">{dept.name}</span>
             </h2>
             <p className="mb-2 text-xs text-zinc-400">{agent.role}</p>
-            <span className={`inline-flex rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-bold ${STATUS_CLS[status]}`}>{STATUS_LABEL[status]}</span>
+            <span className={`inline-flex rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-bold ${status === 'sleep' && isPartyTime(clockMin) ? 'text-fuchsia-300' : STATUS_CLS[status]}`}>{status === 'sleep' && isPartyTime(clockMin) ? '🪩 De fiesta en la disco' : STATUS_LABEL[status]}</span>
             {status === 'work' && agent.doing && <p className="mt-3 rounded-lg bg-zinc-800/70 p-2 text-xs text-zinc-300">{agent.doing}</p>}
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
               <dt className="text-zinc-500">Horario</dt><dd className="min-w-0 break-words text-zinc-200">{agent.schedule}</dd>
@@ -312,6 +313,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
         <span className="ml-auto flex flex-wrap gap-x-3 text-[11px] text-zinc-500">
           <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />trabajando</span>
           <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-zinc-500" />fuera de horario</span>
+          <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-fuchsia-400" />de fiesta (11 PM–3 AM)</span>
           <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-400" />necesita atención</span>
         </span>
       </div>
