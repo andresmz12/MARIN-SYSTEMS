@@ -1842,11 +1842,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         ...propRects.map((r) => ({ x0: r.x0 - 0.8, x1: r.x1 + 0.8, z0: r.z0 - 0.8, z1: r.z1 + 0.8 })),
       ]
       const MW = 8.2
-      const MD = 5.6
+      const MD = 6.6
       let best: { x: number; z: number; d: number } | null = null
       for (let gx = floor.minX + 2; gx < floor.maxX - 3; gx += 1) {
         for (let gz = floor.minZ + 3; gz < floor.maxZ - 3; gz += 1) {
-          const r: Rect = { x0: gx - MW / 2, x1: gx + MW / 2, z0: gz - MD / 2, z1: gz + MD / 2 }
+          // se deja libre también una franja de 2,2 frente a la puerta (lado del frente) para poder llegar a ella
+          const r: Rect = { x0: gx - MW / 2, x1: gx + MW / 2, z0: gz - MD / 2 - 2.2, z1: gz + MD / 2 }
           if (blockers.some((b) => r.x0 < b.x1 && r.x1 > b.x0 && r.z0 < b.z1 && r.z1 > b.z0)) continue
           const dist = Math.hypot(gx - fcx, gz - fcz)
           if (!best || dist < best.d) best = { x: gx, z: gz, d: dist }
@@ -1858,7 +1859,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const gm = new THREE.MeshStandardMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.3, depthWrite: false })
         const MH = 3.0
         const fcol = 0x2f3b5c
-        const doorW = 1.3
+        const doorW = 1.9
         // paredes de vidrio (la del frente deja una puerta) y marcos
         put(new THREE.Mesh(new THREE.BoxGeometry(MW, MH, 0.05), gm), mx, MH / 2, mz + MD / 2, root)
         put(new THREE.Mesh(new THREE.BoxGeometry(0.05, MH, MD), gm), mx - MW / 2, MH / 2, mz, root)
@@ -1874,15 +1875,16 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         // franja esmerilada a la altura de la vista
         put(box(MW, 0.35, 0.056, 0xffffff, { transparent: true, opacity: 0.35 }), mx, 1.3, mz + MD / 2, root)
         ;[-1, 1].forEach((sd) => put(box(seg, 0.35, 0.056, 0xffffff, { transparent: true, opacity: 0.35 }), mx + sd * (doorW / 2 + seg / 2), 1.3, mz - MD / 2, root))
-        // mesa grande, sillas y pantalla
-        put(box(4.2, 0.07, 1.5, 0xb88a5a), mx, 0.78, mz, root)
-        ;[-1.8, 1.8].forEach((dx) => put(box(0.12, 0.76, 1.1, 0x2a2e38), mx + dx, 0.38, mz, root))
+        // mesa grande, sillas y pantalla (la mesa va corrida hacia el fondo para dejar un pasillo ancho desde la puerta)
+        const tz = mz + 0.5
+        put(box(4.2, 0.07, 1.5, 0xb88a5a), mx, 0.78, tz, root)
+        ;[-1.8, 1.8].forEach((dx) => put(box(0.12, 0.76, 1.1, 0x2a2e38), mx + dx, 0.38, tz, root))
         for (let i = 0; i < 4; i++) {
           const cx = mx - 1.5 + i * 1.0
           ;[-1, 1].forEach((side) => {
-            put(box(0.5, 0.07, 0.5, 0x3b5b8c), cx, 0.5, mz + side * 1.1, root)
-            put(box(0.5, 0.5, 0.07, 0x3b5b8c), cx, 0.8, mz + side * 1.33, root)
-            put(box(0.06, 0.46, 0.06, 0x2a2e38), cx, 0.24, mz + side * 1.1, root)
+            put(box(0.5, 0.07, 0.5, 0x3b5b8c), cx, 0.5, tz + side * 1.1, root)
+            put(box(0.5, 0.5, 0.07, 0x3b5b8c), cx, 0.8, tz + side * 1.33, root)
+            put(box(0.06, 0.46, 0.06, 0x2a2e38), cx, 0.24, tz + side * 1.1, root)
           })
         }
         put(box(0.1, 1.5, 2.8, 0x15171c), mx + MW / 2 - 0.4, 1.7, mz, root) // pantalla de pared
@@ -1908,7 +1910,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         plantAt(mx - MW / 2 + 0.6, mz + MD / 2 - 0.6, 1.1)
         // obstáculos: mesa y sillas, y las paredes (la puerta queda libre)
         propRects.push(
-          { x0: mx - 2.3, x1: mx + 2.3, z0: mz - 1.7, z1: mz + 1.7 },
+          { x0: mx - 2.3, x1: mx + 2.3, z0: tz - 1.7, z1: tz + 1.7 },
           { x0: mx - MW / 2 - 0.1, x1: mx - MW / 2 + 0.1, z0: mz - MD / 2, z1: mz + MD / 2 },
           { x0: mx + MW / 2 - 0.1, x1: mx + MW / 2 + 0.1, z0: mz - MD / 2, z1: mz + MD / 2 },
           { x0: mx - MW / 2, x1: mx + MW / 2, z0: mz + MD / 2 - 0.1, z1: mz + MD / 2 + 0.1 },
