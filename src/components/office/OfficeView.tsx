@@ -59,6 +59,8 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [party, setParty] = useState(false)
   // Ocultar los nombres sobre cada persona (para grabar o presentar); se recuerda en este navegador.
   const [hideNames, setHideNames] = useState(false)
+  // Recorrido en primera persona: caminas por la oficina con W A S D
+  const [walk, setWalk] = useState(false)
   useEffect(() => { try { setHideNames(localStorage.getItem('office-hide-names') === '1') } catch { /* sin almacenamiento */ } }, [])
   const toggleNames = () => setHideNames((v) => { try { localStorage.setItem('office-hide-names', v ? '0' : '1') } catch { /* sin almacenamiento */ } return !v })
   const [full, setFull] = useState(false)
@@ -202,6 +204,8 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             minutes={clockMin}
             party={party}
             hideNames={hideNames}
+            walk={walk}
+            onExitWalk={() => setWalk(false)}
             ceo={ceoStats}
             onSelect={(id, d) => {
               setSelected(id)
@@ -319,6 +323,13 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             </label>
           </>
         )}
+        <button
+          onClick={() => { setWalk(!walk); setSelected(null) }}
+          title="Camina por la oficina como si fueras un agente (W A S D o flechas, y arrastra para mirar)"
+          className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${walk ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500'}`}
+        >
+          {walk ? '🚶 Salir del recorrido' : '🚶 Entrar a la oficina'}
+        </button>
         <button
           onClick={toggleNames}
           title={hideNames ? 'Mostrar los nombres sobre cada persona' : 'Ocultar los nombres sobre cada persona'}

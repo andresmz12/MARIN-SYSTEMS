@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import * as THREE from 'three'
 import type { AgentStatus, OfficeAgent, OfficeDepartment } from '@/lib/office'
 import { animatePerson, buildPerson, specFor, type Person, type PersonPose } from './person'
@@ -26,6 +26,9 @@ interface Props {
   party?: boolean
   /** Oculta los nombres sobre cada persona (para grabar o presentar). */
   hideNames?: boolean
+  /** Modo recorrido: cámara en primera persona (W A S D / flechas / joystick) para caminar por la oficina. */
+  walk?: boolean
+  onExitWalk?: () => void
   ceo: CeoStats
   onSelect: (id: string, departmentId: string | null) => void
   /** Cierra la tarjeta del agente elegido. */
@@ -302,14 +305,37 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, hideNames = false, ceo, onSelect, onClose }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, hideNames = false, walk = false, onExitWalk, ceo, onSelect, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const popRef = useRef<HTMLDivElement>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
-  const live = useRef({ statusOf, minutes, selectedId, focus, ceo, party })
-  live.current = { statusOf, minutes, selectedId, focus, ceo, party }
+  const live = useRef({ statusOf, minutes, selectedId, focus, ceo, party, walk, hideNames })
+  live.current = { statusOf, minutes, selectedId, focus, ceo, party, walk, hideNames }
+  const exitRef = useRef(onExitWalk)
+  exitRef.current = onExitWalk
+  // Recorrido: joystick en pantalla (celular) y texto de a quién estás mirando
+  const joyRef = useRef({ x: 0, y: 0 })
+  const padRef = useRef<HTMLDivElement>(null)
+  const knobRef = useRef<HTMLDivElement>(null)
+  const lookRef = useRef<HTMLDivElement>(null)
+  const moveJoy = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const pad = padRef.current
+    if (!pad) return
+    const r = pad.getBoundingClientRect()
+    const R = r.width / 2
+    let dx = e.clientX - (r.left + R)
+    let dy = e.clientY - (r.top + R)
+    const l = Math.hypot(dx, dy)
+    if (l > R) { dx = (dx / l) * R; dy = (dy / l) * R }
+    joyRef.current = { x: dx / R, y: -dy / R }
+    if (knobRef.current) knobRef.current.style.transform = `translate(${dx}px, ${dy}px)`
+  }
+  const stopJoy = () => {
+    joyRef.current = { x: 0, y: 0 }
+    if (knobRef.current) knobRef.current.style.transform = 'translate(0px, 0px)'
+  }
   const selectRef = useRef(onSelect)
   selectRef.current = onSelect
   const closeRef = useRef(onClose)
@@ -332,6 +358,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const bgDay = new THREE.Color(0xdfe9f2)
     const bgNight = new THREE.Color(0x1d1736)
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 250)
+    // Recorrido en primera persona: cámara a la altura de los ojos
+    const fpCam = new THREE.PerspectiveCamera(72, 1.6, 0.1, 300)
     const hemi = new THREE.HemisphereLight(0xffffff, 0xcdd5e0, 0.8)
     scene.add(hemi)
     const sun = new THREE.DirectionalLight(0xfff4e0, 0.75)
@@ -358,6 +386,22 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const WALL_H = 6.4
     put(box(fw, WALL_H, 0.2, wallColor), fcx, WALL_H / 2, floor.maxZ, root) // pared del fondo
     put(box(0.2, WALL_H, fd, wallColor), floor.maxX, WALL_H / 2, fcz, root) // pared derecha
+    // Solo en el recorrido: techo con luces y las dos paredes que de arriba se dejan abiertas
+    const walkGroup = new THREE.Group()
+    walkGroup.visible = false
+    root.add(walkGroup)
+    const ceilingMesh = new THREE.Mesh(new THREE.PlaneGeometry(fw, fd), new THREE.MeshBasicMaterial({ color: 0xd9d5cb }))
+    ceilingMesh.rotation.x = Math.PI / 2
+    put(ceilingMesh, fcx, WALL_H, fcz, walkGroup)
+    const panelGeo = new THREE.BoxGeometry(2.6, 0.06, 1.0)
+    const panelMat = new THREE.MeshBasicMaterial({ color: 0xfffbe8 })
+    for (let px0 = floor.minX + 3; px0 < floor.maxX - 1; px0 += 6) {
+      for (let pz0 = floor.minZ + 3; pz0 < floor.maxZ - 1; pz0 += 6) put(new THREE.Mesh(panelGeo, panelMat), px0, WALL_H - 0.05, pz0, walkGroup)
+    }
+    put(box(0.2, WALL_H, fd, wallColor), floor.minX, WALL_H / 2, fcz, walkGroup) // pared izquierda
+    put(box(fw, WALL_H, 0.2, wallColor), fcx, WALL_H / 2, floor.minZ, walkGroup) // pared del frente
+    put(box(0.2, 1.0, fd, 0xe7dccb), floor.minX + 0.14, 0.5, fcz, walkGroup)
+    put(box(fw, 1.0, 0.2, 0xe7dccb), fcx, 0.5, floor.minZ + 0.14, walkGroup)
     // Letrero con el nombre de la corporación, sobre los ventanales
     const signCv = document.createElement('canvas')
     signCv.width = 1400
@@ -574,6 +618,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     let partyOn = false
     let partyAmt = 0
     let partyCenter: Pt = { x: 0, z: 0 }
+    // Puerta de la disco: cerrada (no se puede pasar) mientras no hay fiesta
+    let discoDoor: Rect | null = null
     let nightAmt = 0
     const usable = (sd: LoungeSeat) => (partyOn ? sd.zone === 'disco' : sd.zone !== 'disco')
     {
@@ -1160,6 +1206,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         plaque.rotation.y = Math.PI
         put(plaque, dcx, 2.35, RZ0 - 0.13, F)
         D.visible = false
+        discoDoor = { x0: doorX0 - 0.2, x1: doorX1 + 0.2, z0: RZ0 - 0.7, z1: RZ0 + 0.7 }
 
         // Asientos de la fiesta: el DJ, seis en el bar, seis en los reservados (arriba) y dieciséis bailando
         seatList.push({ x: dcx, z: MZ - 1.2, y: 0.2, face: Math.PI, dj: true, zone: 'disco', approach: { x: dcx + 2.3, z: MZ - 1.2 } })
@@ -1280,6 +1327,26 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (z) return { tx: z.cx, tz: z.cz, span: Math.max(z.w, z.d) * 1.35 + 8 }
       return { tx: fcx, tz: fcz, span: (Math.max(fw, fd) + Math.min(fw, fd) * 0.5) * 0.98 }
     }
+    // ── Recorrido en primera persona ──
+    let walkOn = false
+    const me = { x: 0, z: 0, yaw: 0, pitch: 0, bob: 0, y: 1.65, placed: false }
+    const keys = new Set<string>()
+    const WALK_KEYS = ['w', 'a', 's', 'd', 'q', 'e', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']
+    const onKey = (e: KeyboardEvent, down: boolean) => {
+      if (!walkOn) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const k = e.key.toLowerCase()
+      if (k === 'escape') { if (down) exitRef.current?.(); return }
+      if (WALK_KEYS.includes(k)) { e.preventDefault(); if (down) keys.add(k); else keys.delete(k) }
+    }
+    const kd = (e: KeyboardEvent) => onKey(e, true)
+    const ku = (e: KeyboardEvent) => onKey(e, false)
+    const clearKeys = () => keys.clear()
+    window.addEventListener('keydown', kd)
+    window.addEventListener('keyup', ku)
+    window.addEventListener('blur', clearKeys)
+    const blockedWalk = (x: number, z: number) => !nav.isFree({ x, z }) || (partyAmt < 0.6 && discoDoor !== null && inRect({ x, z }, discoDoor))
     let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que las personas dan la cara
     let pitch = 0.6
     let zoom = 1
@@ -1299,6 +1366,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         return
       }
       if (!drag) return
+      if (walkOn) {
+        me.yaw -= (e.clientX - drag.x) * 0.005
+        me.pitch = Math.max(-1.2, Math.min(1.2, me.pitch - (e.clientY - drag.y) * 0.004))
+        drag = { x: e.clientX, y: e.clientY }
+        return
+      }
       yaw -= (e.clientX - drag.x) * 0.006
       pitch = Math.max(0.35, Math.min(1.1, pitch + (e.clientY - drag.y) * 0.004))
       drag = { x: e.clientX, y: e.clientY }
@@ -1322,8 +1395,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (best) selectRef.current(best.id, best.d)
       else closeRef.current() // tocar el piso vacío quita la selección (nombre, anillo y tarjeta)
     }
-    const onUp = (e: PointerEvent) => { pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
-    const onWheel = (e: WheelEvent) => { e.preventDefault(); zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
+    const onUp = (e: PointerEvent) => { if (!walkOn) pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); if (walkOn) return; zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
@@ -1336,6 +1409,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const h = host.clientHeight
       renderer.setSize(w, h, false)
       aspect = w / Math.max(1, h)
+      fpCam.aspect = aspect
+      fpCam.updateProjectionMatrix()
     }
     const ro = new ResizeObserver(resize)
     ro.observe(host)
@@ -1612,6 +1687,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     }
     let last = performance.now()
     let placed = false
+    let walkTick = 0
 
     let raf = 0
     const frame = (t: number) => {
@@ -1621,6 +1697,25 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       last = t
       const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
       partyOn = live.current.party || isPartyTime(live.current.minutes)
+      // Entrar o salir del recorrido
+      if (live.current.walk && !walkOn) {
+        walkOn = true
+        walkGroup.visible = true
+        keys.clear()
+        if (!me.placed) {
+          const sp = nav.nearestFreePt({ x: fcx, z: floor.minZ + 3.5 }) ?? { x: fcx, z: floor.minZ + 3.5 }
+          me.x = sp.x
+          me.z = sp.z
+          me.yaw = 0
+          me.pitch = -0.05
+          me.placed = true
+        }
+        Object.values(labelRefs.current).forEach((el) => { if (el) el.style.display = 'none' })
+      } else if (!live.current.walk && walkOn) {
+        walkOn = false
+        walkGroup.visible = false
+        keys.clear()
+      }
       const isNightNow = live.current.party || live.current.minutes >= 23 * 60 || live.current.minutes < 7 * 60
       partyAmt += ((partyOn ? 1 : 0) - partyAmt) * Math.min(1, dt * 2)
       nightAmt += ((isNightNow ? 1 : 0) - nightAmt) * Math.min(1, dt * 2)
@@ -1672,7 +1767,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const el = labelRefs.current[o.id]
         if (el) {
           const here = away && o.mv?.stage !== 'sit' ? o.person.group.position : null
-          pushLabel(el, here ? here.x : o.wrap.position.x, 2.3 + (here ? here.y : 0), here ? here.z : o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
+          if (!walkOn) pushLabel(el, here ? here.x : o.wrap.position.x, 2.3 + (here ? here.y : 0), here ? here.z : o.wrap.position.z + 0.95, sel === o.id ? 0 : s === 'alert' ? 1 : s === 'work' ? 2 : s === 'sleep' ? 3 : 4)
           el.dataset.status = s
           el.dataset.sel = sel === o.id ? '1' : '0'
           el.style.opacity = fcs === 'all' || fcs === o.deptId ? '' : '0.4'
@@ -1722,7 +1817,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         }
       }
       const ceoEl = labelRefs.current.ceo
-      if (ceoEl) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
+      if (ceoEl && !walkOn) { pushLabel(ceoEl, plan.ceo.x, PLATFORM_H + 2.4, plan.ceo.z + 1.5, 1); ceoEl.dataset.sel = sel === 'ceo' ? '1' : '0' }
       flushLabels()
       // Tarjeta del agente elegido: flota encima de su etiqueta, sin salirse del cuadro.
       const pop = popRef.current
@@ -1764,7 +1859,46 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         selRing.scale.setScalar(1 + Math.sin(time * 3) * 0.05)
       } else selRing.visible = false
 
-      renderer.render(scene, camera)
+      // Recorrido: caminar con teclado o joystick, chocar con muebles y paredes, y mirar con el mouse o el dedo
+      if (walkOn) {
+        const jy = joyRef.current
+        const run = keys.has('shift') ? 1.8 : 1
+        let fwd = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0) + jy.y
+        let str = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0) + jy.x
+        me.yaw += ((keys.has('arrowleft') || keys.has('q') ? 1 : 0) - (keys.has('arrowright') || keys.has('e') ? 1 : 0)) * 1.9 * dt
+        const len = Math.hypot(fwd, str)
+        if (len > 1) { fwd /= len; str /= len }
+        const sp = 3.4 * run * dt
+        const dx = (Math.sin(me.yaw) * fwd - Math.cos(me.yaw) * str) * sp
+        const dz = (Math.cos(me.yaw) * fwd + Math.sin(me.yaw) * str) * sp
+        if (dx && !blockedWalk(me.x + dx, me.z)) me.x += dx
+        if (dz && !blockedWalk(me.x, me.z + dz)) me.z += dz
+        const moving = Math.min(1, len)
+        me.bob += dt * 9 * run * moving
+        const onPlatform = inRect({ x: me.x, z: me.z }, platformRect)
+        const eye = 1.65 + (onPlatform ? PLATFORM_H : 0) + Math.sin(me.bob) * 0.035 * moving
+        me.y += (eye - me.y) * Math.min(1, dt * 10)
+        const cp = Math.cos(me.pitch)
+        fpCam.position.set(me.x, me.y, me.z)
+        fpCam.lookAt(me.x + Math.sin(me.yaw) * cp, me.y + Math.sin(me.pitch), me.z + Math.cos(me.yaw) * cp)
+        // A quién estás mirando (el nombre aparece en el centro de abajo)
+        walkTick++
+        if (walkTick % 6 === 0 && lookRef.current) {
+          fpCam.updateMatrixWorld()
+          ray.setFromCamera(new THREE.Vector2(0, 0), fpCam)
+          let best: { name: string; dist: number } | null = null
+          for (const o of actors) {
+            if (o.ghost) continue
+            const h = ray.intersectObject(o.person.group, true)[0]
+            if (h && h.distance < 7 && (!best || h.distance < best.dist)) best = { name: o.a.name, dist: h.distance }
+          }
+          const hc = ray.intersectObject(cg, true)[0]
+          if (hc && hc.distance < 8 && (!best || hc.distance < best.dist)) best = { name: 'Andrés Marín · CEO', dist: hc.distance }
+          lookRef.current.textContent = best && !live.current.hideNames ? best.name : ''
+          lookRef.current.style.opacity = best && !live.current.hideNames ? '1' : '0'
+        }
+      }
+      renderer.render(scene, walkOn ? fpCam : camera)
     }
     raf = requestAnimationFrame(frame)
 
@@ -1776,6 +1910,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onUp)
       canvas.removeEventListener('wheel', onWheel)
+      window.removeEventListener('keydown', kd)
+      window.removeEventListener('keyup', ku)
+      window.removeEventListener('blur', clearKeys)
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh
         mesh.geometry?.dispose?.()
@@ -1820,6 +1957,26 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
   return (
     <div ref={hostRef} className="relative h-full w-full overflow-hidden rounded-xl bg-[#dfe9f2]">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="Oficina con las áreas de cada departamento y la oficina de Andrés Marín" />
+      {walk && (
+        <div className="pointer-events-none absolute inset-0 select-none">
+          <div className="pointer-events-auto absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-lg bg-black/65 px-3 py-2 text-[11px] font-semibold text-white backdrop-blur">
+            <span>🚶 Recorrido · <b>W A S D</b> o flechas caminan · arrastra para mirar · <b>Shift</b> corre</span>
+            <button type="button" onClick={() => exitRef.current?.()} className="rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-zinc-900">Salir (Esc)</button>
+          </div>
+          <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 ring-1 ring-black/30" />
+          <div ref={lookRef} className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs font-bold text-white opacity-0 transition-opacity" />
+          <div
+            ref={padRef}
+            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); moveJoy(e) }}
+            onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) moveJoy(e) }}
+            onPointerUp={stopJoy}
+            onPointerCancel={stopJoy}
+            className="pointer-events-auto absolute bottom-5 left-5 h-28 w-28 touch-none rounded-full border border-white/40 bg-black/35 backdrop-blur"
+          >
+            <div ref={knobRef} className="absolute left-1/2 top-1/2 -ml-6 -mt-6 h-12 w-12 rounded-full bg-white/80 shadow" />
+          </div>
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-0">
         <div ref={bubbleRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
         {departments.flatMap((d) => d.agents.map((a) => (
@@ -1834,7 +1991,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
             {a.name}{a.status === 'ghost' ? ' · pronto' : ''}
           </button>
         )))}
-        {popContent && (
+        {popContent && !walk && (
           <div
             ref={popRef}
             className="pointer-events-auto absolute w-[260px] -translate-x-1/2 -translate-y-full rounded-xl border border-zinc-200 bg-white p-3 text-zinc-800 shadow-xl"

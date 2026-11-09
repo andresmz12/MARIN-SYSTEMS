@@ -33,6 +33,18 @@ export class NavGrid {
     return i < 0 || j < 0 || i >= this.nx || j >= this.nz || this.blocked[j * this.nx + i] === 1
   }
 
+  /** ¿Se puede estar parado en este punto? (para caminar libremente en primera persona) */
+  isFree(p: Pt): boolean {
+    const [i, j] = this.toCell(p.x, p.z)
+    return !this.isBlocked(i, j)
+  }
+
+  /** El punto libre más cercano, ya con coordenadas del mundo. */
+  nearestFreePt(p: Pt): Pt | null {
+    const f = this.nearestFree(p)
+    return f ? this.center(f[0], f[1]) : null
+  }
+
   /** Punto libre más cercano (por si el inicio o el destino cae justo sobre un mueble). */
   private nearestFree(p: Pt): [number, number] | null {
     const [ci, cj] = this.toCell(p.x, p.z)
