@@ -22,6 +22,8 @@ interface Props {
   statusOf: (agentId: string) => AgentStatus
   /** Hora del reloj (real o de la demostración), en minutos desde 00:00. */
   minutes: number
+  /** Fiesta a pedido (botón "Hora de fiesta"): la disco se abre y todos van a bailar a cualquier hora. */
+  party?: boolean
   ceo: CeoStats
   onSelect: (id: string, departmentId: string | null) => void
   /** Cierra la tarjeta del agente elegido. */
@@ -39,7 +41,7 @@ const PLATFORM_H = 0.35
 const LOUNGE_W = 17
 const LOUNGE_D = 12.6
 /** Ancho reservado para la discoteca, a la izquierda de la sala de descanso. */
-const DISCO_W = 11.5
+const DISCO_W = 17.5
 
 interface ZonePlan {
   dept: OfficeDepartment
@@ -235,7 +237,7 @@ interface Move {
   from?: Pt
 }
 
-interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** De pie jugando ping-pong, no sentado. */ play?: boolean; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number; /** Lugares de la discoteca: solo se usan durante la fiesta. */ zone?: 'disco'; dj?: boolean; drink?: boolean }
+interface LoungeSeat { x: number; z: number; face: number; approach: Pt; by?: string; /** De pie jugando ping-pong, no sentado. */ play?: boolean; /** Altura del asiento respecto a una silla normal (puf = más bajo). */ y?: number; /** Lugares de la discoteca: solo se usan durante la fiesta. */ zone?: 'disco'; dj?: boolean; drink?: boolean; sit?: boolean }
 
 interface Actor {
   id: string
@@ -296,14 +298,14 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
 }
 
 // ───────────────────────── Componente ─────────────────────────
-export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, ceo, onSelect, onClose }: Props) {
+export function OfficeScene({ departments, focus, selectedId, statusOf, minutes, party = false, ceo, onSelect, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const popRef = useRef<HTMLDivElement>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
-  const live = useRef({ statusOf, minutes, selectedId, focus, ceo })
-  live.current = { statusOf, minutes, selectedId, focus, ceo }
+  const live = useRef({ statusOf, minutes, selectedId, focus, ceo, party })
+  live.current = { statusOf, minutes, selectedId, focus, ceo, party }
   const selectRef = useRef(onSelect)
   selectRef.current = onSelect
   const closeRef = useRef(onClose)
@@ -455,7 +457,6 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     put(box(fw, 0.18, 0.12, 0xd9d2c3), fcx, 0.09, floor.maxZ - 0.15, root)
     put(box(0.12, 0.18, fd, 0xd9d2c3), floor.maxX - 0.15, 0.09, fcz, root)
     plant(floor.maxX - 0.9, floor.maxZ - 0.9, root, 1.5)
-    plant(floor.minX + 0.9, floor.maxZ - 0.9, root, 1.4)
 
     // Áreas: alfombra suave del color del departamento y mamparas de vidrio en los lados del fondo
     const partition = new THREE.MeshStandardMaterial({ color: 0xe6f3fb, transparent: true, opacity: 0.38, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide })
@@ -838,12 +839,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         bg.fillStyle = '#b8863b'
         bg.fillRect(40, 100, 300, 8)
         bg.font = '600 38px system-ui, sans-serif'
-        const rows: [string, string][] = [['Mar y vie 7:00', 'Temas nuevos'], ['Lun y jue 10:00', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–3 AM', 'Fiesta en la disco'], ['3 AM–7 AM', 'Todos descansan']]
+        const rows: [string, string][] = [['Mar y vie 7:00', 'Temas nuevos'], ['Lun y jue 10:00', 'Noticias del IRS'], ['Sáb 8:00', 'Métricas de la semana'], ['Sáb 9:00', 'Posts de la semana'], ['L–V tarde', 'Publicación'], ['11 PM–7 AM', 'Todos descansan']]
         rows.forEach(([x, y], i) => {
           bg.fillStyle = '#3b6cff'
-          bg.fillText(x, 40, 170 + i * 54)
+          bg.fillText(x, 40, 185 + i * 62)
           bg.fillStyle = '#2a2e38'
-          bg.fillText(y, 340, 170 + i * 54)
+          bg.fillText(y, 340, 185 + i * 62)
         })
       }
       const wb = new THREE.Group()
@@ -932,42 +933,65 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       seatList.push({ x: ppX, z: poolZ - 1.9, face: 0, play: true, approach: { x: ppX, z: poolZ - 2.9 } })
       seatList.push({ x: ppX, z: poolZ + 1.9, face: Math.PI, play: true, approach: { x: ppX, z: poolZ + 2.9 } })
 
-      // — Discoteca: pista con luces, bola disco, cabina del DJ, bocinas y un bar. Se enciende de 11 PM a 3 AM —
+      // — Discoteca secreta: de día es un cuarto cerrado (una "bodega"); con la fiesta se abre y se ve por dentro —
       {
         const DX0 = floor.minX + 1.0
         const DW = DISCO_W - 1.6
         const dcx = DX0 + DW / 2
-        const darkFloor = new THREE.Mesh(new THREE.PlaneGeometry(DW, 12.2), new THREE.MeshStandardMaterial({ color: 0x17112b, roughness: 0.5 }))
+        const RZ0 = MZ - 12.6
+        const RZ1 = MZ - 0.4
+        const RZC = (RZ0 + RZ1) / 2
+        const RLEN = RZ1 - RZ0
+        const RX1 = DX0 + DW
+        const WH = 3.8
+        const doorX0 = dcx - 0.9
+        const doorX1 = dcx + 0.9
+        const frameMat = 0x120d24
+        const D = new THREE.Group() // todo lo de adentro: solo se ve durante la fiesta
+        root.add(D)
+        const d = <T extends THREE.Object3D>(o: T, x: number, y: number, z: number) => put(o, x, y, z, D)
+        const glow = (c: number, i = 0.8) => ({ emissive: new THREE.Color(c), emissiveIntensity: i })
+
+        // Piso oscuro y pared del fondo
+        const darkFloor = new THREE.Mesh(new THREE.PlaneGeometry(DW, RLEN), new THREE.MeshStandardMaterial({ color: 0x17112b, roughness: 0.5 }))
         darkFloor.rotation.x = -Math.PI / 2
-        darkFloor.receiveShadow = true
-        put(darkFloor, dcx, 0.02, MZ - 6.5, root)
-        put(box(DW, 5.4, 0.14, 0x120d24), dcx, 2.7, MZ - 0.3, root)
-        // Pista: baldosas que cambian de color al ritmo
+        d(darkFloor, dcx, 0.02, RZC)
+        d(box(DW, 5.4, 0.14, 0x120d24), dcx, 2.7, MZ - 0.3)
+
+        // Pista: ocho por cuatro baldosas que cambian de color al ritmo
         const tiles: { m: THREE.MeshStandardMaterial; c: number; r: number }[] = []
         for (let r = 0; r < 4; r++) {
-          for (let c = 0; c < 6; c++) {
+          for (let c = 0; c < 8; c++) {
             const m = new THREE.MeshStandardMaterial({ color: 0x1b1530, emissive: 0x000000, roughness: 0.3 })
-            put(new THREE.Mesh(new THREE.BoxGeometry(1.29, 0.05, 1.29), m), dcx + (c - 2.5) * 1.35, 0.05, MZ - 6.0 + (r - 1.5) * 1.35, root)
+            d(new THREE.Mesh(new THREE.BoxGeometry(1.29, 0.05, 1.29), m), dcx + (c - 3.5) * 1.35, 0.05, MZ - 6.4 + (r - 1.5) * 1.35)
             tiles.push({ m, c, r })
           }
         }
-        // Bola disco con tres haces de luz que barren la pista
-        const ballY = 4.7
-        put(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 6), mat(0x9aa1ad)), dcx, ballY + 0.7, MZ - 6.0, root)
-        const ballMat = new THREE.MeshStandardMaterial({ color: 0xe8ecff, metalness: 1, roughness: 0.12, flatShading: true, emissive: 0x8f8fff, emissiveIntensity: 0 })
-        const ball = put(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), ballMat), dcx, ballY, MZ - 6.0, root)
-        const beams: { g: THREE.Group; mat: THREE.MeshBasicMaterial }[] = [0xff3df0, 0x3dd9ff, 0xffe14d].map((color) => {
-          const bm = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
-          const g = new THREE.Group()
-          put(new THREE.Mesh(new THREE.ConeGeometry(1.1, 4.3, 18, 1, true), bm), 0, -2.15, 0, g)
-          put(g, dcx, ballY, MZ - 6.0, root)
-          return { g, mat: bm }
-        })
-        const lightA = new THREE.PointLight(0xff3df0, 0, 13, 2)
-        const lightB = new THREE.PointLight(0x3dd9ff, 0, 13, 2)
-        put(lightA, dcx - 2.6, 3.4, MZ - 5.0, root)
-        put(lightB, dcx + 2.6, 3.4, MZ - 7.5, root)
-        // Letrero de neón
+
+        // Escenario del DJ con pantalla LED (barras de ecualizador) y letrero de neón
+        d(box(6.2, 0.2, 2.6, 0x1c1530), dcx, 0.1, MZ - 1.9)
+        d(box(6.2, 0.05, 0.05, 0xff3df0, glow(0xff3df0, 0.9)), dcx, 0.22, MZ - 3.22)
+        const ledCv = document.createElement('canvas')
+        ledCv.width = 512
+        ledCv.height = 192
+        const lg = ledCv.getContext('2d')
+        const ledTex = new THREE.CanvasTexture(ledCv)
+        let ledAt = -1
+        const drawLed = (time: number, a: number) => {
+          if (!lg) return
+          lg.fillStyle = '#0b0718'
+          lg.fillRect(0, 0, 512, 192)
+          for (let i = 0; i < 24; i++) {
+            const h = a * (24 + (0.5 + 0.5 * Math.sin(time * 6 + i * 0.9)) * (0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * 2.3 + i * 1.7))) * 140)
+            lg.fillStyle = `hsl(${(time * 60 + i * 14) % 360},95%,58%)`
+            lg.fillRect(i * 21 + 3, 186 - h, 16, h)
+          }
+          ledTex.needsUpdate = true
+        }
+        drawLed(0, 0)
+        const led = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 2.1), new THREE.MeshBasicMaterial({ map: ledTex }))
+        led.rotation.y = Math.PI
+        d(led, dcx, 2.6, MZ - 0.42)
         const nv = document.createElement('canvas')
         nv.width = 1024
         nv.height = 256
@@ -976,80 +1000,182 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           ng.clearRect(0, 0, 1024, 256)
           ng.textAlign = 'center'
           ng.textBaseline = 'middle'
-          ng.font = '900 120px system-ui, sans-serif'
+          ng.font = '900 230px system-ui, sans-serif'
           ng.shadowColor = '#ff3df0'
-          ng.shadowBlur = 28
+          ng.shadowBlur = 34
           ng.fillStyle = '#ffd6fb'
-          ng.fillText('DISCO MARIN', 512, 105)
-          ng.font = '800 54px system-ui, sans-serif'
-          ng.shadowColor = '#3dd9ff'
-          ng.fillStyle = '#d6f6ff'
-          ng.fillText('★  after office  ★', 512, 205)
+          ng.fillText('DISCO', 512, 128)
         }
         const neonMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(nv), transparent: true, color: 0x555555 })
-        const neon = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 1.55), neonMat)
+        const neon = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), neonMat)
         neon.rotation.y = Math.PI
-        put(neon, dcx, 4.05, MZ - 0.42, root)
-        // Cabina del DJ con tornamesas
-        const bz = MZ - 2.3
-        put(box(3.4, 1.05, 0.9, 0x241a3d), dcx, 0.52, bz, root)
-        put(box(3.3, 0.06, 0.05, 0xff3df0, { emissive: new THREE.Color(0xff3df0), emissiveIntensity: 0.8 }), dcx, 0.9, bz - 0.46, root)
-        ;[-0.85, 0.85].forEach((dx) => {
-          put(box(0.9, 0.08, 0.7, 0x1a1a22), dcx + dx, 1.09, bz, root)
-          put(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 20), mat(0x0c0c10)), dcx + dx, 1.15, bz, root)
+        d(neon, dcx, 4.5, MZ - 0.42)
+        const doorSign = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.42), neonMat)
+        doorSign.rotation.y = Math.PI
+        d(doorSign, dcx, 3.4, RZ0 - 0.14)
+        // Cabina del DJ (sobre el escenario) y bocinas que laten
+        const bz = MZ - 2.5
+        d(box(3.0, 1.0, 0.9, 0x241a3d), dcx, 0.7, bz)
+        d(box(2.9, 0.06, 0.05, 0xff3df0, glow(0xff3df0)), dcx, 0.9, bz - 0.46)
+        ;[-0.8, 0.8].forEach((dx) => {
+          d(box(0.9, 0.08, 0.7, 0x1a1a22), dcx + dx, 1.24, bz)
+          d(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 20), mat(0x0c0c10)), dcx + dx, 1.3, bz)
         })
-        put(box(0.7, 0.08, 0.5, 0x2b2b36), dcx, 1.09, bz, root)
-        put(box(0.5, 0.3, 0.04, 0x15151c), dcx, 1.3, bz + 0.18, root)
-        propRects.push({ x0: dcx - 1.7, x1: dcx + 1.7, z0: bz - 0.45, z1: bz + 0.45 })
-        // Bocinas que laten
+        d(box(0.7, 0.08, 0.5, 0x2b2b36), dcx, 1.24, bz)
+        propRects.push({ x0: dcx - 1.5, x1: dcx + 1.5, z0: bz - 0.45, z1: bz + 0.45 })
         const woofers: THREE.Mesh[] = []
-        ;[DX0 + 0.9, DX0 + DW - 0.9].forEach((sx) => {
-          put(box(0.95, 2.1, 0.8, 0x15121f), sx, 1.05, MZ - 1.4, root)
+        ;[dcx - 3.9, dcx + 3.9].forEach((sx) => {
+          d(box(0.95, 2.1, 0.8, 0x15121f), sx, 1.05, MZ - 1.4)
           ;[0.55, 1.5].forEach((y) => {
             const w = new THREE.Mesh(new THREE.CylinderGeometry(y > 1 ? 0.2 : 0.3, y > 1 ? 0.2 : 0.3, 0.06, 16), mat(0x2f2a44))
             w.rotation.x = Math.PI / 2
-            put(w, sx, y, MZ - 1.82, root)
+            d(w, sx, y, MZ - 1.82)
             woofers.push(w)
           })
           propRects.push({ x0: sx - 0.48, x1: sx + 0.48, z0: MZ - 1.8, z1: MZ - 1.0 })
         })
-        // Bar con botellas y copas de colores
-        const barZ = MZ - 11.3
-        put(box(5.6, 1.1, 0.8, 0x3a2a52), dcx, 0.55, barZ, root)
-        put(box(5.8, 0.08, 1.0, 0x6b4ca0), dcx, 1.12, barZ, root)
-        put(box(5.5, 0.06, 0.05, 0x3dd9ff, { emissive: new THREE.Color(0x3dd9ff), emissiveIntensity: 0.9 }), dcx, 0.2, barZ + 0.42, root)
-        put(box(5.2, 0.1, 0.4, 0x2a1f40), dcx, 2.0, barZ - 0.7, root)
+
+        // Bola disco con haces de luz sobre la pista
+        const bcz = MZ - 6.4
+        d(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 6), mat(0x9aa1ad)), dcx, 5.3, bcz)
+        const ballMat = new THREE.MeshStandardMaterial({ color: 0xe8ecff, metalness: 1, roughness: 0.12, flatShading: true, emissive: 0x8f8fff, emissiveIntensity: 0 })
+        const ball = d(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), ballMat), dcx, 4.6, bcz)
+        const beams: { g: THREE.Group; mat: THREE.MeshBasicMaterial }[] = [0xff3df0, 0x3dd9ff, 0xffe14d, 0x7cff6b].map((color) => {
+          const bm = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+          const g = new THREE.Group()
+          put(new THREE.Mesh(new THREE.ConeGeometry(1.1, 4.2, 18, 1, true), bm), 0, -2.1, 0, g)
+          d(g, dcx, 4.6, bcz)
+          return { g, mat: bm }
+        })
+        const lightA = new THREE.PointLight(0xff3df0, 0, 14, 2)
+        const lightB = new THREE.PointLight(0x3dd9ff, 0, 14, 2)
+        put(lightA, dcx - 3.5, 3.4, MZ - 5.0, root)
+        put(lightB, dcx + 3.5, 3.4, MZ - 7.5, root)
+
+        // Bar largo pegado a la pared derecha, con repisa de botellas y copas de colores
+        const barX = RX1 - 1.0
+        d(box(0.8, 1.1, 7.0, 0x3a2a52), barX, 0.55, MZ - 6.8)
+        d(box(1.0, 0.08, 7.3, 0x6b4ca0), barX, 1.12, MZ - 6.8)
+        d(box(0.05, 0.06, 6.8, 0x3dd9ff, glow(0x3dd9ff, 0.9)), barX - 0.42, 0.2, MZ - 6.8)
+        d(box(0.4, 0.1, 6.6, 0x2a1f40), RX1 - 0.4, 2.0, MZ - 6.8)
         const bottle = [0x3fbf6b, 0xe5484d, 0xf2b84b, 0x4f8cff, 0xb58cff, 0xffffff]
-        for (let i = 0; i < 12; i++) {
-          const bx = dcx - 2.5 + i * 0.45
-          put(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 10), mat(bottle[i % bottle.length], { transparent: true, opacity: 0.9 })), bx, 2.26, barZ - 0.7, root)
-          if (i % 2 === 0) put(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 10), mat(bottle[(i + 2) % bottle.length], { transparent: true, opacity: 0.85 })), bx + 0.2, 1.26, barZ + 0.05, root)
+        for (let i = 0; i < 16; i++) {
+          const bzz = MZ - 9.7 + i * 0.4
+          d(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 10), mat(bottle[i % bottle.length], { transparent: true, opacity: 0.9 })), RX1 - 0.4, 2.26, bzz)
+          if (i % 2 === 0) d(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 10), mat(bottle[(i + 2) % bottle.length], { transparent: true, opacity: 0.85 })), barX - 0.1, 1.26, bzz + 0.2)
         }
-        propRects.push({ x0: dcx - 2.9, x1: dcx + 2.9, z0: barZ - 0.6, z1: barZ + 0.6 })
-        // Asientos de la fiesta: el DJ, tres en el bar y doce bailando
-        seatList.push({ x: dcx, z: MZ - 1.2, face: Math.PI, dj: true, zone: 'disco', approach: { x: dcx + 2.2, z: MZ - 1.2 } })
-        ;[-1.6, 0, 1.6].forEach((dx) => seatList.push({ x: dcx + dx, z: barZ + 1.0, face: Math.PI, drink: true, zone: 'disco', approach: { x: dcx + dx, z: barZ + 1.9 } }))
-        for (let j = 0; j < 3; j++) {
+        propRects.push({ x0: barX - 0.55, x1: RX1, z0: MZ - 10.5, z1: MZ - 3.1 })
+
+        // Reservados (sofás con mesita) pegados a la pared izquierda
+        const boothZ = [MZ - 2.6, MZ - 6.3, MZ - 10.0]
+        boothZ.forEach((zc) => {
+          d(box(0.6, 1.0, 2.9, 0x3b1f5c), DX0 + 0.55, 0.5, zc)
+          d(box(1.0, 0.45, 2.9, 0x6a2d8f), DX0 + 1.25, 0.23, zc)
+          d(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.5, 20), mat(0x1a1233)), DX0 + 2.7, 0.25, zc)
+          d(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0x241a3d, emissive: 0x3dd9ff, emissiveIntensity: 0.5 })), DX0 + 2.7, 0.52, zc)
+          propRects.push({ x0: DX0 + 0.2, x1: DX0 + 1.8, z0: zc - 1.5, z1: zc + 1.5 }, { x0: DX0 + 2.15, x1: DX0 + 3.25, z0: zc - 0.55, z1: zc + 0.55 })
+          ;[-0.85, 0.85].forEach((dz) => seatList.push({ x: DX0 + 1.35, z: zc + dz, face: Math.PI / 2, sit: true, zone: 'disco', approach: { x: DX0 + 3.9, z: zc + dz } }))
+        })
+
+        // Paredes del cuarto: derecha opaca; izquierda y frente de vidrio ahumado (para ver la fiesta) con una sola puerta
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x2a1f4d, transparent: true, opacity: 0.2, roughness: 0.1, metalness: 0.3, depthWrite: false })
+        const trims: THREE.MeshStandardMaterial[] = []
+        const trim = (w: number, dd: number, x: number, z: number) => {
+          const m = new THREE.MeshStandardMaterial({ color: 0x241a3d, emissive: 0xff3df0, emissiveIntensity: 0.15 })
+          d(new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, dd), m), x, WH + 0.05, z)
+          trims.push(m)
+        }
+        d(box(0.16, 5.0, RLEN, 0x120d24), RX1 + 0.08, 2.5, RZC)
+        d(box(0.05, 0.12, RLEN, 0xff3df0, glow(0xff3df0, 0.6)), RX1 - 0.02, 3.4, RZC)
+        d(new THREE.Mesh(new THREE.BoxGeometry(0.06, WH, RLEN), glassMat), DX0, WH / 2, RZC)
+        d(box(0.16, 0.45, RLEN, frameMat), DX0, 0.22, RZC)
+        d(box(0.16, 0.2, RLEN, frameMat), DX0, WH - 0.1, RZC)
+        for (let i = 0; i <= 4; i++) d(box(0.16, WH, 0.16, frameMat), DX0, WH / 2, RZ0 + (i * RLEN) / 4)
+        trim(0.12, RLEN, DX0, RZC)
+        ;[[DX0, doorX0], [doorX1, RX1]].forEach(([x0, x1]) => {
+          d(new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, WH, 0.06), glassMat), (x0 + x1) / 2, WH / 2, RZ0)
+          d(box(x1 - x0, 0.45, 0.16, frameMat), (x0 + x1) / 2, 0.22, RZ0)
+          const n = Math.max(1, Math.round((x1 - x0) / 3.2))
+          for (let i = 1; i < n; i++) d(box(0.16, WH, 0.16, frameMat), x0 + (i * (x1 - x0)) / n, WH / 2, RZ0)
+        })
+        d(box(RX1 - DX0, 0.2, 0.16, frameMat), (DX0 + RX1) / 2, WH - 0.1, RZ0)
+        ;[doorX0, doorX1].forEach((x) => d(box(0.2, WH, 0.2, 0x3a2a52), x, WH / 2, RZ0))
+        trim(RX1 - DX0, 0.12, (DX0 + RX1) / 2, RZ0)
+        d(box(doorX1 - doorX0, 0.08, 0.1, 0xff3df0, glow(0xff3df0, 0.9)), dcx, 3.0, RZ0 - 0.1)
+        ;[0.25, 0.5, 0.75].forEach((f) => d(box(DW, 0.14, 0.14, frameMat), dcx, WH + 0.05, RZ0 + f * RLEN))
+        propRects.push(
+          { x0: DX0 - 0.1, x1: DX0 + 0.1, z0: RZ0, z1: RZ1 },
+          { x0: RX1, x1: RX1 + 0.2, z0: RZ0, z1: RZ1 },
+          { x0: DX0, x1: doorX0, z0: RZ0 - 0.1, z1: RZ0 + 0.1 },
+          { x0: doorX1, x1: RX1, z0: RZ0 - 0.1, z1: RZ0 + 0.1 },
+        )
+
+        // Fachada: de día el cuarto parece una bodega cerrada (paredes lisas, techo y puerta). Se desvanece al empezar la fiesta.
+        const F = new THREE.Group()
+        root.add(F)
+        const fMats: THREE.MeshStandardMaterial[] = []
+        const fm = (c: number) => {
+          const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, transparent: true })
+          fMats.push(m)
+          return m
+        }
+        const fb = (w: number, h: number, dd: number, m: THREE.MeshStandardMaterial, x: number, y: number, z: number) => put(new THREE.Mesh(new THREE.BoxGeometry(w, h, dd), m), x, y, z, F)
+        const wallM = fm(0xe9e4da)
+        fb(0.2, WH, RLEN, wallM, DX0, WH / 2, RZC)
+        fb(doorX0 - DX0, WH, 0.2, wallM, (DX0 + doorX0) / 2, WH / 2, RZ0)
+        fb(RX1 - doorX1, WH, 0.2, wallM, (doorX1 + RX1) / 2, WH / 2, RZ0)
+        fb(doorX1 - doorX0, 0.5, 0.2, wallM, dcx, WH - 0.25, RZ0)
+        fb(doorX1 - doorX0, WH - 0.5, 0.12, fm(0x8a5a38), dcx, (WH - 0.5) / 2, RZ0)
+        fb(DW + 0.3, 0.2, RLEN + 0.2, fm(0xd9d2c3), dcx, WH + 0.1, RZC)
+        const pv = document.createElement('canvas')
+        pv.width = 256
+        pv.height = 64
+        const pg = pv.getContext('2d')
+        if (pg) {
+          pg.fillStyle = '#f6efe0'
+          pg.fillRect(0, 0, 256, 64)
+          pg.fillStyle = '#5b4a35'
+          pg.font = '700 34px system-ui, sans-serif'
+          pg.textAlign = 'center'
+          pg.textBaseline = 'middle'
+          pg.fillText('ARCHIVO', 128, 34)
+        }
+        const plaqueMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(pv), transparent: true })
+        const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), plaqueMat)
+        plaque.rotation.y = Math.PI
+        put(plaque, dcx, 2.35, RZ0 - 0.13, F)
+        D.visible = false
+
+        // Asientos de la fiesta: el DJ, seis en el bar, seis en los reservados (arriba) y dieciséis bailando
+        seatList.push({ x: dcx, z: MZ - 1.2, y: 0.2, face: Math.PI, dj: true, zone: 'disco', approach: { x: dcx + 2.3, z: MZ - 1.2 } })
+        for (let k = 0; k < 6; k++) seatList.push({ x: barX - 1.1, z: MZ - 9.5 + k * 1.15, face: Math.PI / 2, drink: true, zone: 'disco', approach: { x: barX - 2.1, z: MZ - 9.5 + k * 1.15 } })
+        for (let j = 0; j < 4; j++) {
           for (let i = 0; i < 4; i++) {
-            const sx = dcx + (i - 1.5) * 1.9 + (j % 2 ? 0.4 : -0.4)
-            const sz = MZ - 6.0 + (j - 1) * 1.5
+            const sx = dcx + (i - 1.5) * 1.9 + (j % 2 ? 0.45 : -0.45)
+            const sz = MZ - 6.4 + (j - 1.5) * 1.2
             seatList.push({ x: sx, z: sz, face: (i + j) % 2 === 0 ? 0 : Math.PI, zone: 'disco', approach: { x: sx, z: sz - 0.9 } })
           }
         }
         loungeTickers.push((time) => {
           const a = partyAmt
+          D.visible = a > 0.02
+          F.visible = a < 0.98
+          fMats.forEach((m) => { m.opacity = 1 - a })
+          plaqueMat.opacity = 1 - a
+          if (a > 0.05 && time - ledAt > 0.1) { ledAt = time; drawLed(time, a) }
           tiles.forEach(({ m, c, r }) => {
             const hue = (time * 0.22 + (c + r) * 0.11) % 1
             m.color.setHSL(hue, 0.9, 0.12 + 0.38 * a)
             m.emissive.setHSL(hue, 1, 0.5)
             m.emissiveIntensity = a * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 4 + c * 0.9 + r * 1.3)))
           })
+          trims.forEach((m) => { m.emissive.setHSL((time * 0.15) % 1, 1, 0.5); m.emissiveIntensity = 0.15 + a * 0.85 })
           ball.rotation.y = time * (0.4 + a * 1.4)
           ballMat.emissiveIntensity = a * 0.55
           beams.forEach((b, i) => {
-            b.g.rotation.z = Math.sin(time * 0.9 + i * 2.1) * 0.6
-            b.g.rotation.x = Math.cos(time * 0.7 + i * 1.3) * 0.5
-            b.mat.opacity = a * 0.17
+            b.g.rotation.z = Math.sin(time * 0.9 + i * 1.7) * 0.7
+            b.g.rotation.x = Math.cos(time * 0.7 + i * 1.3) * 0.6
+            b.mat.opacity = a * 0.16
           })
           lightA.intensity = a * 1.1
           lightB.intensity = a * 1.1
@@ -1244,7 +1370,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const seatPt = (o: Actor): Pt => ({ x: o.wrap.position.x, z: o.wrap.position.z + 0.95 })
     const exitPt = (o: Actor): Pt => ({ x: o.wrap.position.x, z: o.wrap.position.z + 2.1 })
     const ceoFront = (dx: number): Pt => ({ x: plan.ceo.x + dx, z: plan.ceo.z - 1.7 })
-    const restPose = (seat: LoungeSeat | null): PersonPose => (!seat ? 'lounge' : seat.dj ? 'dj' : seat.drink ? 'coffee' : seat.zone === 'disco' ? 'dance' : seat.play ? (gameOn ? 'play' : 'stand') : 'lounge')
+    const restPose = (seat: LoungeSeat | null): PersonPose => (!seat ? 'lounge' : seat.dj ? 'dj' : seat.drink ? 'coffee' : seat.sit ? 'lounge' : seat.zone === 'disco' ? 'dance' : seat.play ? (gameOn ? 'play' : 'stand') : 'lounge')
     const startTrip = (o: Actor, kind: Move['kind'], dest: Pt, face: number, wait: number): boolean => {
       if (o.mv || o.ghost) return false
       if (actors.filter((a) => a.mv && a.mv.stage !== 'rest').length >= 2) return false // nunca más de dos a la vez
@@ -1417,7 +1543,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     let nextQuip = 0
     const shortText = (t: string, n = 38) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
     const onChange = (o: Actor, before: AgentStatus, now: AgentStatus, time: number) => {
-      if (o.ghost) return
+      if (o.ghost || partyOn) return
       if (now === 'alert') {
         bubble(o.id, '¡Algo falló!', '#e5484d', time)
         startTrip(o, 'help', ceoFront(-1.4 + (o.id.length % 3) * 1.4), 0, 4)
@@ -1444,8 +1570,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       const dt = Math.min(0.1, Math.max(0.001, (t - last) / 1000))
       last = t
       const { statusOf: st, selectedId: sel, focus: fcs, ceo: cs } = live.current
-      partyOn = isPartyTime(live.current.minutes)
-      const isNightNow = live.current.minutes >= 23 * 60 || live.current.minutes < 7 * 60
+      partyOn = live.current.party || isPartyTime(live.current.minutes)
+      const isNightNow = live.current.party || live.current.minutes >= 23 * 60 || live.current.minutes < 7 * 60
       partyAmt += ((partyOn ? 1 : 0) - partyAmt) * Math.min(1, dt * 2)
       nightAmt += ((isNightNow ? 1 : 0) - nightAmt) * Math.min(1, dt * 2)
       // De noche la oficina se oscurece (y más aún en la fiesta).
@@ -1510,13 +1636,13 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       // Se hace de a poco (uno cada ~0,7 s y máximo 4 caminando) para que se vea natural.
       if (lounge && time > nextShift) {
         const walking = actors.filter((a) => a.mv && a.mv.stage !== 'rest').length
-        if (walking < 4) {
+        if (walking < (partyOn ? 8 : 4)) {
           // Se levantan quienes vuelven a trabajar y quienes quedaron en el lado equivocado (empezó o terminó la fiesta).
           const wake = actors.find((a) => a.mv?.kind === 'rest' && (st(a.id) !== 'sleep' || (a.mv.seat !== undefined && !usable(lounge!.seats[a.mv.seat]))) && (a.mv.stage === 'out' || a.mv.stage === 'settle' || a.mv.stage === 'rest'))
-          if (wake) { wakeUp(wake); nextShift = time + 0.5 }
+          if (wake) { wakeUp(wake); nextShift = time + (partyOn ? 0.3 : 0.5) }
           else {
             const go = actors.find((a) => !a.ghost && !a.mv && st(a.id) === 'sleep')
-            if (go && startRest(go)) nextShift = time + 0.7
+            if (go && startRest(go)) nextShift = time + (partyOn ? 0.3 : 0.7)
           }
         }
       }

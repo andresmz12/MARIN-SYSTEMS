@@ -55,6 +55,8 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [focus, setFocus] = useState<string>('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
+  // "Hora de fiesta": abre la disco y manda a todos a bailar a cualquier hora (para grabar videos).
+  const [party, setParty] = useState(false)
   const [full, setFull] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   // Pantalla completa real si el navegador deja (iPhone no); si no, el panel igual cubre toda la ventana.
@@ -131,10 +133,11 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
     const a = everyone.find((x) => x.a.id === id)?.a
     if (!a) return 'sleep'
     if (a.status === 'ghost') return 'ghost'
+    if (party) return 'sleep'
     if (a.status === 'alert') return 'alert'
     if (!demo) return isNight(real.minutes) ? 'sleep' : a.status
     return scheduledNow(a, demoDay, demoMin) && !isNight(demoMin) ? 'work' : 'sleep'
-  }, [everyone, demo, demoDay, demoMin, real.minutes])
+  }, [everyone, demo, demoDay, demoMin, real.minutes, party])
 
   if (!departments) {
     return <div className="h-[60vh] animate-pulse rounded-xl bg-zinc-800/60">{error && <p className="p-4 text-sm text-red-300">{error}</p>}</div>
@@ -193,6 +196,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             onClose={() => setSelected(null)}
             statusOf={statusOf}
             minutes={clockMin}
+            party={party}
             ceo={ceoStats}
             onSelect={(id, d) => {
               setSelected(id)
@@ -238,7 +242,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
               <span className="ml-auto text-[11px] font-normal text-zinc-500">{dept.name}</span>
             </h2>
             <p className="mb-2 text-xs text-zinc-400">{agent.role}</p>
-            <span className={`inline-flex rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-bold ${status === 'sleep' && isPartyTime(clockMin) ? 'text-fuchsia-300' : STATUS_CLS[status]}`}>{status === 'sleep' && isPartyTime(clockMin) ? '🪩 De fiesta en la disco' : STATUS_LABEL[status]}</span>
+            <span className={`inline-flex rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-bold ${status === 'sleep' && (party || isPartyTime(clockMin)) ? 'text-fuchsia-300' : STATUS_CLS[status]}`}>{status === 'sleep' && (party || isPartyTime(clockMin)) ? '🪩 De fiesta en la disco' : STATUS_LABEL[status]}</span>
             {status === 'work' && agent.doing && <p className="mt-3 rounded-lg bg-zinc-800/70 p-2 text-xs text-zinc-300">{agent.doing}</p>}
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
               <dt className="text-zinc-500">Horario</dt><dd className="min-w-0 break-words text-zinc-200">{agent.schedule}</dd>
@@ -310,10 +314,17 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
             </label>
           </>
         )}
+        <button
+          onClick={() => setParty(!party)}
+          title={party ? 'Terminar la fiesta' : 'Abre la disco y manda a todos a bailar (para grabar videos)'}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${party ? 'border-fuchsia-500/60 bg-fuchsia-500/15 text-fuchsia-200' : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'}`}
+        >
+          {party ? '⏹ Terminar la fiesta' : '🪩 Hora de fiesta'}
+        </button>
         <span className="ml-auto flex flex-wrap gap-x-3 text-[11px] text-zinc-500">
           <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />trabajando</span>
           <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-zinc-500" />fuera de horario</span>
-          <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-fuchsia-400" />de fiesta (11 PM–3 AM)</span>
+          {(party || isPartyTime(clockMin)) && <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-fuchsia-400" />de fiesta</span>}
           <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-400" />necesita atención</span>
         </span>
       </div>
