@@ -20,3 +20,13 @@ export const PARTY_LINES = [
   'Mis crons bailan mejor que yo',
 ]
 export const DJ_LINES = ['🎧 DJ Cron en la casa', '🎶 Este remix va en producción', '🔊 ¡Súbele al volumen!']
+
+/** Los pasados de copas (siempre en broma). */
+export const TIPSY_LINES = [
+  'Hip… ¿quién movió el piso? 🥴',
+  'Yo manejo… digo, el cron',
+  'Una más y me voy… (mentira)',
+  '¿Dónde dejé mi vaso? 🍹',
+  'Los quiero a todos, servidores incluidos 🥹',
+  'Jajaja… ¿de qué nos reíamos?',
+]

@@ -4,7 +4,7 @@ import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react
 import * as THREE from 'three'
 import type { AgentStatus, OfficeAgent, OfficeDepartment } from '@/lib/office'
 import { animatePerson, buildPerson, specFor, type Person, type PersonPose } from './person'
-import { DJ_LINES, PARTY_LINES, isPartyTime } from './party'
+import { DJ_LINES, PARTY_LINES, TIPSY_LINES, isPartyTime } from './party'
 import { NavGrid, inRect, type Pt, type Rect } from './navigation'
 
 export interface CeoStats {
@@ -625,6 +625,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     let partyCenter: Pt = { x: 0, z: 0 }
     // Puerta de la disco: cerrada (no se puede pasar) mientras no hay fiesta
     let discoDoor: Rect | null = null
+    // Confeti: lo llena la disco; se dispara al empezar la fiesta, a medianoche y de vez en cuando
+    let confettiBurst: () => void = () => {}
     let nightAmt = 0
     const usable = (sd: LoungeSeat) => (partyOn ? sd.zone === 'disco' : sd.zone !== 'disco')
     {
@@ -1108,6 +1110,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           d(g, px, 4.6, bcz)
           return { g, mat: bm }
         })
+        const lightC = new THREE.PointLight(0xffb86b, 0, 11, 2) // luz cálida sobre el bar (para que no se vea oscuro)
         const lightA = new THREE.PointLight(0xff3df0, 0, 14, 2)
         const lightB = new THREE.PointLight(0x3dd9ff, 0, 14, 2)
         put(lightA, px - 4.5, 3.4, pz + 1.5, root)
@@ -1115,6 +1118,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
 
         // Bar largo pegado a la pared derecha, con repisa de botellas y copas de colores
         const barX = RX1 - 1.0
+        put(lightC, barX - 2.0, 2.7, MZ - 8.7, root)
         const barZ0 = RZ0 + 2.4
         const barZ1 = MZ - 3.3
         const barL = barZ1 - barZ0
@@ -1220,7 +1224,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         // Asientos de la fiesta: el DJ, seis en el bar, seis en los reservados (arriba) y dieciséis bailando
         seatList.push({ x: dcx, z: MZ - 1.2, y: 0.2, face: Math.PI, dj: true, zone: 'disco', approach: { x: dcx + 2.3, z: MZ - 1.2 } })
         const nBar = Math.floor((barL - 0.6) / 1.15)
-        for (let k = 0; k < nBar; k++) seatList.push({ x: barX - 1.1, z: barZ0 + 0.6 + k * 1.15, face: Math.PI / 2, drink: true, zone: 'disco', approach: { x: barX - 2.1, z: barZ0 + 0.6 + k * 1.15 } })
+        for (let k = 0; k < nBar; k++) seatList.push({ x: barX - 1.1, z: barZ0 + 0.6 + k * 1.15, face: k % 2 === 0 ? Math.PI / 2 : -Math.PI / 2, drink: true, zone: 'disco', approach: { x: barX - 2.1, z: barZ0 + 0.6 + k * 1.15 } })
         // Bailarines: una cuadrícula holgada sobre toda la pista (siempre hay lugar de sobra para todos los agentes)
         const nCol = Math.max(4, Math.floor((TC * 1.35) / 1.5))
         const nRow = Math.max(3, Math.floor((TR * 1.35) / 1.3))
@@ -1232,6 +1236,60 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           }
         }
         partyCenter = { x: px, z: pz }
+        // Humo de pista: manchas suaves que flotan y cambian de color
+        const smokeCv = document.createElement('canvas')
+        smokeCv.width = 128
+        smokeCv.height = 128
+        const sgx = smokeCv.getContext('2d')
+        if (sgx) {
+          const gr = sgx.createRadialGradient(64, 64, 4, 64, 64, 62)
+          gr.addColorStop(0, 'rgba(255,255,255,0.9)')
+          gr.addColorStop(1, 'rgba(255,255,255,0)')
+          sgx.fillStyle = gr
+          sgx.fillRect(0, 0, 128, 128)
+        }
+        const smokeTex = new THREE.CanvasTexture(smokeCv)
+        const smoke = Array.from({ length: 14 }, (_, i) => {
+          const m = new THREE.SpriteMaterial({ map: smokeTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff })
+          const sp = new THREE.Sprite(m)
+          sp.scale.setScalar(3.4 + (i % 3))
+          const bx0 = px + (((i * 37) % 100) / 100 - 0.5) * TC * 1.35
+          const bz0 = pz + (((i * 61) % 100) / 100 - 0.5) * TR * 1.35
+          d(sp, bx0, 0.55 + (i % 4) * 0.25, bz0)
+          return { sp, m, bx0, bz0, ph: i * 1.7 }
+        })
+        // Confeti
+        const NC = 520
+        const cPos = new Float32Array(NC * 3)
+        const cCol = new Float32Array(NC * 3)
+        const cVel = new Float32Array(NC * 2)
+        const cGeo = new THREE.BufferGeometry()
+        cGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3))
+        cGeo.setAttribute('color', new THREE.BufferAttribute(cCol, 3))
+        const cMat = new THREE.PointsMaterial({ size: 6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 1, depthWrite: false })
+        const confetti = new THREE.Points(cGeo, cMat)
+        confetti.frustumCulled = false
+        confetti.visible = false
+        D.add(confetti)
+        const tc = new THREE.Color()
+        let cAge = 99
+        let lastT = 0
+        for (let i = 0; i < NC; i++) { cPos[i * 3 + 1] = -5; cVel[i * 2] = 0.9 + Math.random() * 1.3; cVel[i * 2 + 1] = Math.random() * 6.28 }
+        confettiBurst = () => {
+          for (let i = 0; i < NC; i++) {
+            cPos[i * 3] = px + (Math.random() - 0.5) * TC * 1.35
+            cPos[i * 3 + 1] = 4.2 + Math.random() * 1.6
+            cPos[i * 3 + 2] = pz + (Math.random() - 0.5) * TR * 1.35
+            tc.setHSL(Math.random(), 1, 0.6)
+            cCol[i * 3] = tc.r
+            cCol[i * 3 + 1] = tc.g
+            cCol[i * 3 + 2] = tc.b
+          }
+          ;(cGeo.attributes.color as THREE.BufferAttribute).needsUpdate = true
+          cAge = 0
+          confetti.visible = true
+          cMat.opacity = 1
+        }
         loungeTickers.push((time) => {
           const a = partyAmt
           D.visible = a > 0.02
@@ -1255,6 +1313,28 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           })
           lightA.intensity = a * 1.1
           lightB.intensity = a * 1.1
+          lightC.intensity = a * 0.9
+          const dtc = Math.min(0.1, Math.max(0, time - lastT))
+          lastT = time
+          smoke.forEach((m, i) => {
+            m.sp.position.x = m.bx0 + Math.sin(time * 0.25 + m.ph) * 1.2
+            m.sp.position.z = m.bz0 + Math.cos(time * 0.2 + m.ph) * 1.0
+            m.m.opacity = a * 0.16
+            m.m.color.setHSL((time * 0.05 + i * 0.07) % 1, 0.9, 0.55)
+          })
+          if (cAge < 16) {
+            cAge += dtc
+            for (let i = 0; i < NC; i++) {
+              const y = cPos[i * 3 + 1]
+              if (y > 0.07) {
+                cPos[i * 3 + 1] = Math.max(0.07, y - cVel[i * 2] * dtc)
+                cPos[i * 3] += Math.sin(time * 2 + cVel[i * 2 + 1]) * 0.5 * dtc
+              }
+            }
+            ;(cGeo.attributes.position as THREE.BufferAttribute).needsUpdate = true
+            cMat.opacity = cAge > 12 ? Math.max(0, 1 - (cAge - 12) / 4) : 1
+            if (cAge >= 16) confetti.visible = false
+          }
           const flick = Math.sin(time * 23) > 0.93 ? 0.7 : 1
           neonMat.color.setScalar(0.33 + 0.67 * a * flick)
           const pulse = 1 + a * 0.14 * Math.abs(Math.sin(time * 7.5))
@@ -1365,7 +1445,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     window.addEventListener('keydown', kd)
     window.addEventListener('keyup', ku)
     window.addEventListener('blur', clearKeys)
-    const blockedWalk = (x: number, z: number) => !nav.isFree({ x, z }) || (partyAmt < 0.6 && discoDoor !== null && inRect({ x, z }, discoDoor))
+    let others: Pt[] = [] // dónde están los demás (para no atravesarlos)
+    const blockedWalk = (x: number, z: number) => !nav.isFree({ x, z }) || others.some((q) => { const dd = Math.hypot(x - q.x, z - q.z); return dd < 0.62 && dd < Math.hypot(me.x - q.x, me.z - q.z) }) || (partyAmt < 0.6 && discoDoor !== null && inRect({ x, z }, discoDoor))
     let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que las personas dan la cara
     let pitch = 0.6
     let zoom = 1
@@ -1712,6 +1793,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     }
     let last = performance.now()
     let placed = false
+    let prevPartyOn = false
+    let prevMin: number | null = null
+    let nextBurst = 0
     let walkTick = 0
 
     let raf = 0
@@ -1752,6 +1836,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       if (nowFp && !fpOn) Object.values(labelRefs.current).forEach((el) => { if (el) el.style.display = 'none' })
       fpOn = nowFp
       walkGroup.visible = fpOn
+      // Confeti: al empezar la fiesta, al pasar de 11 PM a las 12 y cada rato
+      if (partyOn && !prevPartyOn) confettiBurst()
+      if (partyOn && prevMin !== null && prevMin - live.current.minutes > 1000) confettiBurst() // cruzó la medianoche
+      if (partyOn) { if (time > nextBurst) { if (nextBurst > 0) confettiBurst(); nextBurst = time + 75 } } else nextBurst = 0
+      prevPartyOn = partyOn
+      prevMin = live.current.minutes
       const isNightNow = live.current.party || live.current.minutes >= 23 * 60 || live.current.minutes < 7 * 60
       partyAmt += ((partyOn ? 1 : 0) - partyAmt) * Math.min(1, dt * 2)
       nightAmt += ((isNightNow ? 1 : 0) - nightAmt) * Math.min(1, dt * 2)
@@ -1838,7 +1928,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           const dancers = actors.filter((a) => a.mv?.kind === 'rest' && a.mv.stage === 'rest' && a.mv.seat !== undefined && lounge!.seats[a.mv.seat].zone === 'disco')
           if (dancers.length) {
             const who = dancers[Math.floor(Math.random() * dancers.length)]
-            const lines = lounge.seats[who.mv!.seat!].dj ? DJ_LINES : PARTY_LINES
+            const lines = lounge.seats[who.mv!.seat!].dj ? DJ_LINES : who.person.seed % 6 === 1 ? TIPSY_LINES : PARTY_LINES
             bubble(who.id, lines[Math.floor(Math.random() * lines.length)], '#d946ef', time)
           }
         }
@@ -1898,6 +1988,12 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       // Recorrido: caminar con teclado o joystick, chocar con muebles y paredes, y mirar con el mouse o el dedo
       if (walkOn) {
         const jy = joyRef.current
+        others = []
+        for (const o of actors) {
+          if (o.ghost || (!o.mv && o.person.group.parent === o.seat)) continue // los sentados en su escritorio ya están tras el mueble
+          o.person.group.getWorldPosition(tHead)
+          others.push({ x: tHead.x, z: tHead.z })
+        }
         const run = keys.has('shift') ? 1.8 : 1
         let fwd = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0) + jy.y
         let str = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0) + jy.x

@@ -105,17 +105,23 @@ function part(geo: THREE.BufferGeometry, color: number, rough = 0.85, cloth = fa
 const bx = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d)
 const at = <T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T => { o.position.set(x, y, z); return o }
 
+const cyl = (rt: number, rb: number, h: number) => new THREE.CylinderGeometry(rt, rb, h, 12)
+const ball = (r: number) => new THREE.SphereGeometry(r, 12, 10)
+
 function buildArm(side: 1 | -1, sleeve: number, skin: number, suited = false): Arm {
   const shoulder = new THREE.Group()
   shoulder.position.set(side * 0.24, 0.46, 0)
-  shoulder.add(at(part(bx(0.1, 0.3, 0.1), sleeve, 0.85, suited), 0, -0.15, 0))
+  shoulder.add(at(part(ball(0.058), sleeve, 0.85, suited), 0, 0, 0))
+  shoulder.add(at(part(cyl(0.052, 0.046, 0.3), sleeve, 0.85, suited), 0, -0.15, 0))
   const elbow = new THREE.Group()
   elbow.position.y = -0.3
   shoulder.add(elbow)
+  elbow.add(at(part(ball(0.047), suited ? sleeve : skin, 0.85, suited), 0, 0, 0))
   // De traje, la manga del saco llega hasta la muñeca y asoma el puño blanco de la camisa.
-  elbow.add(at(part(bx(0.085, 0.27, 0.085), suited ? sleeve : skin, 0.85, suited), 0, -0.135, 0))
-  if (suited) elbow.add(at(part(bx(0.092, 0.03, 0.092), 0xf6f6f8), 0, -0.265, 0))
-  const hand = at(part(bx(0.095, 0.1, 0.07), skin), 0, -0.31, 0)
+  elbow.add(at(part(cyl(0.044, 0.037, 0.27), suited ? sleeve : skin, 0.85, suited), 0, -0.135, 0))
+  if (suited) elbow.add(at(part(cyl(0.046, 0.046, 0.03), 0xf6f6f8), 0, -0.265, 0))
+  const hand = at(part(ball(0.05), skin), 0, -0.31, 0)
+  hand.scale.set(1, 1.15, 0.85)
   elbow.add(hand)
   return { shoulder, elbow, hand }
 }
@@ -123,15 +129,17 @@ function buildArm(side: 1 | -1, sleeve: number, skin: number, suited = false): A
 function buildLeg(side: 1 | -1, pants: number, suited = false): Leg {
   const hip = new THREE.Group()
   hip.position.set(side * 0.1, 0, 0)
-  hip.add(at(part(bx(0.16, 0.46, 0.16), pants, 0.85, suited), 0, -0.23, 0))
+  hip.add(at(part(ball(0.085), pants, 0.85, suited), 0, 0, 0))
+  hip.add(at(part(cyl(0.088, 0.075, 0.46), pants, 0.85, suited), 0, -0.23, 0))
   const knee = new THREE.Group()
   knee.position.y = -0.46
   hip.add(knee)
-  knee.add(at(part(bx(0.14, 0.46, 0.14), pants, 0.85, suited), 0, -0.23, 0))
-  // Zapato de vestir (lustroso) y calcetín oscuro
-  if (suited) knee.add(at(part(bx(0.12, 0.04, 0.12), 0x15161b), 0, -0.47, 0))
-  const shoe = part(bx(0.14, 0.08, 0.26), suited ? 0x0f1014 : 0x14151b, suited ? 0.3 : 0.85)
-  knee.add(at(shoe, 0, -0.5, 0.06))
+  knee.add(at(part(ball(0.075), pants, 0.85, suited), 0, 0, 0))
+  knee.add(at(part(cyl(0.074, 0.057, 0.46), pants, 0.85, suited), 0, -0.23, 0))
+  // Zapato redondeado (lustroso si es de vestir)
+  const shoe = part(ball(1), suited ? 0x0f1014 : 0x14151b, suited ? 0.3 : 0.85)
+  shoe.scale.set(0.075, 0.045, 0.14)
+  knee.add(at(shoe, 0, -0.485, 0.06))
   return { hip, knee }
 }
 
@@ -144,7 +152,9 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   const hips = new THREE.Group()
   hips.position.y = SIT_Y
   g.add(hips)
-  hips.add(part(bx(0.4, 0.18, 0.26), spec.pants, 0.85, !!suit))
+  const pelvis = part(cyl(0.2, 0.19, 0.18), spec.pants, 0.85, !!suit)
+  pelvis.scale.set(1, 1, 0.66)
+  hips.add(pelvis)
   const legL = buildLeg(1, spec.pants, !!suit)
   const legR = buildLeg(-1, spec.pants, !!suit)
   hips.add(legL.hip, legR.hip)
@@ -154,7 +164,9 @@ export function buildPerson(spec: PersonSpec, seed = 1): Person {
   hips.add(torso)
   const woman = spec.hairStyle === 'long' || spec.hairStyle === 'bun'
   if (!suit) {
-    torso.add(at(part(bx(0.42, 0.52, 0.25), top), 0, 0.26, 0))
+    const chest = at(part(cyl(0.215, 0.185, 0.52), top), 0, 0.26, 0)
+    chest.scale.set(1, 1, 0.62)
+    torso.add(chest)
   } else {
     const jacket = suit.jacket
     const dark = new THREE.Color(jacket).multiplyScalar(0.78).getHex()
@@ -259,6 +271,9 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
   const T: Target = { torsoX: 0.06, torsoY: 0, headX: 0.1, headY: 0, lS: -0.6, lE: -0.85, rS: -0.6, rE: -0.85, rZ: 0, rEz: 0, lHand: 0, rHand: 0 }
   const breath = Math.sin(t * 1.6 + s) * 0.012
   let showCup = false
+  let bounce = 1
+  // Unos pocos "pasados de copas" (en broma): se tambalean y bailan con el vaso en la mano.
+  const tipsy = s % 6 === 1
   let showPaper = false
 
   if (pose === 'type') {
@@ -314,18 +329,37 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.rS = -1.05 + sw * 0.45; T.rE = -0.9 - Math.max(0, sw) * 0.5
     T.lS = -0.5; T.lE = -0.7
   } else if (pose === 'dance') {
-    // De fiesta: brazos arriba alternando, cadera de lado a lado y cabeza al ritmo (un poquito pasado de copas).
+    // De fiesta: cada rato cambia de baile (brazos arriba, señalando, meciéndose o saltando).
     const beat = t * 6 + s
+    const style = Math.floor(t * 0.14 + s * 0.37) % 4
     T.torsoX = 0.04 + Math.sin(beat * 0.5) * 0.1
     T.torsoY = Math.sin(t * 2.4 + s) * 0.45
     T.headX = 0.05 + Math.abs(Math.sin(beat)) * 0.18
     T.headY = Math.sin(t * 1.7 + s * 2) * 0.4
-    const wild = s % 3 === 0
-    T.lS = (wild ? -2.5 : -1.6) + Math.sin(beat) * 0.55
-    T.rS = (wild ? -2.5 : -1.2) + Math.sin(beat + Math.PI) * 0.55
-    T.lE = -0.5 - Math.max(0, Math.sin(beat)) * 0.5
-    T.rE = -0.5 - Math.max(0, -Math.sin(beat)) * 0.5
-    T.rZ = Math.sin(beat * 0.5) * 0.35
+    if (style === 0) {
+      const wild = s % 3 === 0
+      T.lS = (wild ? -2.5 : -1.6) + Math.sin(beat) * 0.55
+      T.rS = (wild ? -2.5 : -1.2) + Math.sin(beat + Math.PI) * 0.55
+      T.lE = -0.5 - Math.max(0, Math.sin(beat)) * 0.5
+      T.rE = -0.5 - Math.max(0, -Math.sin(beat)) * 0.5
+      T.rZ = Math.sin(beat * 0.5) * 0.35
+    } else if (style === 1) {
+      // El señalado de discoteca: un brazo arriba apuntando, la otra mano en la cadera.
+      T.rS = -2.55 + Math.sin(beat) * 0.2; T.rE = -0.1; T.rZ = -0.35
+      T.lS = -0.2; T.lE = -1.6
+      T.torsoY = Math.sin(t * 1.6 + s) * 0.6
+    } else if (style === 2) {
+      // Meciéndose: brazos sueltos a los lados y mucho giro de cintura.
+      T.lS = -0.5 + Math.sin(beat * 0.5) * 0.5; T.lE = -0.5
+      T.rS = -0.5 - Math.sin(beat * 0.5) * 0.5; T.rE = -0.5
+      T.torsoY = Math.sin(t * 2.2 + s) * 0.7
+      T.headX = 0.1
+    } else {
+      // Saltando con los dos brazos arriba, al doble de velocidad.
+      T.lS = -2.6 + Math.sin(beat * 2) * 0.35; T.rS = -2.6 - Math.sin(beat * 2) * 0.35
+      T.lE = -0.3; T.rE = -0.3
+      bounce = 1.9
+    }
   } else if (pose === 'dj') {
     // En la cabina: las manos sobre los tornamesas y la cabeza al ritmo.
     const beat = t * 5 + s
@@ -350,11 +384,14 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
     T.lS = -0.45; T.rS = -0.45; T.lE = -0.6; T.rE = -0.6
   }
 
+  if (tipsy && pose === 'dance') showCup = true
   p.cup.visible = showCup
   p.paper.visible = showPaper
 
   p.torso.rotation.x = lerp(p.torso.rotation.x, T.torsoX, k)
   p.torso.rotation.y = lerp(p.torso.rotation.y, T.torsoY, k)
+  p.torso.rotation.z = lerp(p.torso.rotation.z, tipsy && (pose === 'dance' || pose === 'coffee') ? Math.sin(t * 1.3 + s) * 0.2 : 0, k)
+  p.head.rotation.z = lerp(p.head.rotation.z, tipsy && pose === 'dance' ? Math.sin(t * 1.1 + s * 2) * 0.3 : 0, k)
   p.head.rotation.x = lerp(p.head.rotation.x, T.headX, k)
   p.head.rotation.y = lerp(p.head.rotation.y, T.headY, k)
   p.armL.shoulder.rotation.x = lerp(p.armL.shoulder.rotation.x, T.lS, k)
@@ -377,9 +414,9 @@ export function animatePerson(p: Person, pose: PersonPose, t: number, dt = 0.016
   p.hips.position.y = lerp(SIT_Y, STAND_Y, st) + Math.abs(Math.sin(p.phase)) * 0.04 * walkSpeed
   if (pose === 'dance') {
     // Rebote al ritmo: sube y baja con las rodillas.
-    const bounce = Math.sin(t * 6 + s)
-    p.hips.position.y += Math.abs(bounce) * 0.07
-    p.legL.knee.rotation.x += Math.max(0, bounce) * 0.45
-    p.legR.knee.rotation.x += Math.max(0, -bounce) * 0.45
+    const bn = Math.sin(t * (bounce > 1 ? 9 : 6) + s)
+    p.hips.position.y += Math.abs(bn) * 0.07 * bounce
+    p.legL.knee.rotation.x += Math.max(0, bn) * 0.45 * bounce
+    p.legR.knee.rotation.x += Math.max(0, -bn) * 0.45 * bounce
   }
 }
