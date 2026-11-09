@@ -294,7 +294,7 @@ function buildDesk(a: OfficeAgent, x: number, z: number, deptId: string, accent:
   seat.position.set(0, 0, 0.95)
   seat.rotation.y = Math.PI // mira hacia el monitor
   desk.add(seat)
-  const person = buildPerson(specFor(a.id, hex(a.color), ghost), (a.id.length * 7) % 13)
+  const person = buildPerson(specFor(a.id, hex(a.color), ghost, a.name), (a.id.length * 7) % 13)
   person.group.scale.multiplyScalar(1.15)
   seat.add(person.group)
 
@@ -601,7 +601,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     ceoSeat.position.set(0, PLATFORM_H, 1.5)
     ceoSeat.rotation.y = Math.PI
     cg.add(ceoSeat)
-    const ceoPerson = buildPerson({ skin: 0xd9a77f, hair: 0x2a1d14, hairStyle: 'short', shirt: 0xf4f4f6, pants: 0x1f2433, suit: { jacket: 0x273553, tie: 0xb8863b }, scale: 1.02, ghost: false }, 3)
+    const ceoPerson = buildPerson({ skin: 0xd9a77f, hair: 0x2a1d14, hairStyle: 'short', beard: 'stubble', shirt: 0xf4f4f6, pants: 0x1f2433, suit: { jacket: 0x273553, tie: 0xb8863b }, scale: 1.02, ghost: false }, 3)
     ceoPerson.group.scale.multiplyScalar(1.15)
     ceoSeat.add(ceoPerson.group)
     put(box(1.6, 0.42, 0.7, 0x51657f), 3.0, PLATFORM_H + 0.21, -1.6, cg) // sofá
@@ -1117,7 +1117,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         put(lightB, px + 4.5, 3.4, pz - 1.5, root)
 
         // Bar largo pegado a la pared derecha, con repisa de botellas y copas de colores
-        const barX = RX1 - 1.0
+        const barX = RX1 - 1.9 // detrás de la barra queda un pasillo para los bartenders
         put(lightC, barX - 2.0, 2.7, MZ - 8.7, root)
         const barZ0 = RZ0 + 2.4
         const barZ1 = MZ - 3.3
@@ -1134,6 +1134,19 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           if (i % 2 === 0) d(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 10), mat(bottle[(i + 2) % bottle.length], { transparent: true, opacity: 0.85 })), barX - 0.1, 1.26, bzz + 0.2)
         }
         propRects.push({ x0: barX - 0.55, x1: RX1, z0: barZ0 - 0.1, z1: barZ1 + 0.1 })
+        // Dos bartenders detrás de la barra, mirando hacia la pista, sirviendo tragos
+        const bartenders = [
+          { id: 'bartender-a', name: 'Camila', z: barC - barL * 0.26, hair: 'ponytail' as const },
+          { id: 'bartender-b', name: 'Mateo', z: barC + barL * 0.26, hair: 'short' as const },
+        ].map((b, i) => {
+          const base = specFor(b.id, 0x17171c, false, b.name)
+          const person = buildPerson({ ...base, hairStyle: b.hair, outfit: i === 0 ? 'blouse' : 'shirt', shirt: 0xf6f6f6, pants: 0x17171c, apron: true, beard: i === 0 ? 'none' : 'full', badge: 0xff3df0 }, 5 + i * 3)
+          person.group.scale.multiplyScalar(1.1)
+          person.group.position.set(RX1 - 1.05, 0, b.z)
+          person.group.rotation.y = -Math.PI / 2
+          D.add(person.group)
+          return person
+        })
 
         // Reservados (sofás con mesita) pegados a la pared izquierda
         const boothZ: number[] = []
@@ -1316,6 +1329,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           lightC.intensity = a * 0.9
           const dtc = Math.min(0.1, Math.max(0, time - lastT))
           lastT = time
+          bartenders.forEach((bp, i) => animatePerson(bp, 'bartend', time + i * 2.3, dtc, 0))
           smoke.forEach((m, i) => {
             m.sp.position.x = m.bx0 + Math.sin(time * 0.25 + m.ph) * 1.2
             m.sp.position.z = m.bz0 + Math.cos(time * 0.2 + m.ph) * 1.0
@@ -1608,7 +1622,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       return playFree.length > 0 && (waiting ? Math.random() < 0.5 : Math.random() < 0.12) ? playFree[0] : free[Math.floor(Math.random() * free.length)]
     }
     const startRest = (o: Actor): boolean => {
-      if (!lounge || o.mv || o.ghost) return false
+      if (!lounge || o.mv || (o.ghost && !partyOn)) return false
       const idx = pickSeat()
       if (idx === undefined) return false
       const seat = lounge.seats[idx]
@@ -1634,7 +1648,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     }
     // Al abrir la pantalla nadie vuelve a caminar desde cero: quien está descansando aparece ya sentado en su lugar.
     const settleNow = (o: Actor): boolean => {
-      if (!lounge || o.mv || o.ghost) return false
+      if (!lounge || o.mv || (o.ghost && !partyOn)) return false
       const ok = (sd: LoungeSeat) => !sd.by && usable(sd)
       let idx = -1
       if (partyOn) {
@@ -1916,7 +1930,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
           else if (wrong && redirect(wrong)) nextShift = time + (partyOn ? 0.3 : 0.5)
           else {
             // El primero que no pueda ir (sin lugar o sin camino) no bloquea a los demás.
-            const go = actors.filter((a) => !a.ghost && !a.mv && st(a.id) === 'sleep').find((a) => startRest(a))
+            const go = actors.filter((a) => (!a.ghost || partyOn) && !a.mv && st(a.id) === 'sleep').find((a) => startRest(a))
             nextShift = time + (go ? (partyOn ? 0.3 : 0.7) : 1.5)
           }
         }
@@ -1990,7 +2004,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const jy = joyRef.current
         others = []
         for (const o of actors) {
-          if (o.ghost || (!o.mv && o.person.group.parent === o.seat)) continue // los sentados en su escritorio ya están tras el mueble
+          if (!o.mv && o.person.group.parent === o.seat) continue // los sentados en su escritorio ya están tras el mueble
           o.person.group.getWorldPosition(tHead)
           others.push({ x: tHead.x, z: tHead.z })
         }

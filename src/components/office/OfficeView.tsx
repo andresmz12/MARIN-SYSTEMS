@@ -149,7 +149,9 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const statusOf = useCallback((id: string): AgentStatus => {
     const a = everyone.find((x) => x.a.id === id)?.a
     if (!a) return 'sleep'
-    if (a.status === 'ghost') return 'ghost'
+    // De fiesta van todos, también los puestos libres
+    const partyNow = party || (demo ? isPartyTime(demoMin) : isPartyTime(real.minutes))
+    if (a.status === 'ghost') return partyNow ? 'sleep' : 'ghost'
     if (party) return 'sleep'
     if (a.status === 'alert') return 'alert'
     if (!demo) return isNight(real.minutes) ? 'sleep' : a.status
