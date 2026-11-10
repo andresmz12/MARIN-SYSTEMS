@@ -42,6 +42,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null)
   // Reordenar láminas del carrusel: cuál se está arrastrando
   const [dragSlide, setDragSlide] = useState<{ id: string; from: number } | null>(null)
+  // Ordenar escribiendo el número de cada lámina (1, 2, 3…)
+  const [numbering, setNumbering] = useState<{ id: string; vals: string[] } | null>(null)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
   const companyId = company.id
@@ -415,37 +417,89 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   }
 
   /** Miniaturas del carrusel: se reordenan arrastrando o con las flechas. */
-  const slideStrip = (post: GeneratedPost, busy: boolean) => (
-<div className="space-y-1">
-                        <p className="text-[11px] text-zinc-500">Arrastra una lámina para cambiarla de lugar, o usa las flechas ◀ ▶. El orden se guarda solo.</p>
-                        <div className={`flex gap-2 overflow-x-auto pb-1 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
-                          {post.slideImageUrls!.map((u, i) => {
-                            const last = post.slideImageUrls!.length - 1
-                            return (
-                              <div
-                                key={u}
-                                draggable
-                                onDragStart={() => setDragSlide({ id: post.id, from: i })}
-                                onDragEnd={() => setDragSlide(null)}
-                                onDragOver={(e) => { if (dragSlide?.id === post.id) e.preventDefault() }}
-                                onDrop={(e) => { e.preventDefault(); if (dragSlide?.id === post.id) { const f = dragSlide.from; setDragSlide(null); void moveSlide(post, f, i) } }}
-                                className={`shrink-0 space-y-1 ${dragSlide?.id === post.id && dragSlide.from === i ? 'opacity-40' : ''}`}
-                              >
-                                <div className="relative cursor-grab active:cursor-grabbing">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={localImagePath(u)} alt={`Lámina ${i + 1}`} draggable={false} className="h-24 rounded-md border border-zinc-700 object-cover" style={{ aspectRatio: post.imageWidth && post.imageHeight ? `${post.imageWidth} / ${post.imageHeight}` : '4 / 5' }} />
-                                  <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 text-[10px] font-bold text-white">{i + 1}</span>
-                                </div>
-                                <div className="flex justify-center gap-1">
-                                  <button disabled={i === 0} onClick={() => moveSlide(post, i, i - 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la izquierda">◀</button>
-                                  <button disabled={i === last} onClick={() => moveSlide(post, i, i + 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la derecha">▶</button>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-  )
+  const slideStrip = (post: GeneratedPost, busy: boolean) => {
+    const n = post.slideImageUrls?.length ?? 0
+    const num = numbering?.id === post.id ? numbering : null
+    // Con números: cada lámina lleva el que se le escribió; se valida que estén todos, sin repetir y entre 1 y n.
+    const vals = num ? num.vals : []
+    const parsed = vals.map((v) => (v.trim() === '' ? NaN : Number(v)))
+    const missing = parsed.map((v, i) => (Number.isInteger(v) && v >= 1 && v <= n ? -1 : i + 1)).filter((x) => x > 0)
+    const seen = new Map<number, number>()
+    parsed.forEach((v) => { if (Number.isInteger(v)) seen.set(v, (seen.get(v) ?? 0) + 1) })
+    const repeated = Array.from(seen.entries()).filter(([, c]) => c > 1).map(([v]) => v).sort((x, y) => x - y)
+    const valid = !!num && missing.length === 0 && repeated.length === 0
+    return (
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="flex-1 text-[11px] text-zinc-500">
+            {num ? 'Escribe en cada lámina el número que debe tener (1 = portada). Enter pasa a la siguiente.' : 'Arrastra una lámina, usa las flechas ◀ ▶, o ordénalas escribiendo números. El orden se guarda solo.'}
+          </p>
+          {!num && n > 1 && (
+            <button onClick={() => setNumbering({ id: post.id, vals: Array(n).fill('') })} className="rounded-md border border-indigo-500/40 px-2 py-0.5 text-[11px] text-indigo-200 hover:bg-indigo-500/10">🔢 Ordenar con números</button>
+          )}
+        </div>
+        <div className={`flex gap-2 overflow-x-auto pb-1 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+          {post.slideImageUrls!.map((u, i) => {
+            const last = n - 1
+            const bad = !!num && (missing.includes(i + 1) && vals[i]?.trim() !== '' ? true : repeated.includes(parsed[i]))
+            return (
+              <div
+                key={u}
+                draggable={!num}
+                onDragStart={() => setDragSlide({ id: post.id, from: i })}
+                onDragEnd={() => setDragSlide(null)}
+                onDragOver={(e) => { if (!num && dragSlide?.id === post.id) e.preventDefault() }}
+                onDrop={(e) => { e.preventDefault(); if (!num && dragSlide?.id === post.id) { const f = dragSlide.from; setDragSlide(null); void moveSlide(post, f, i) } }}
+                className={`shrink-0 space-y-1 ${dragSlide?.id === post.id && dragSlide.from === i ? 'opacity-40' : ''}`}
+              >
+                <div className={`relative ${num ? '' : 'cursor-grab active:cursor-grabbing'}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={localImagePath(u)} alt={`Lámina ${i + 1}`} draggable={false} className="h-24 rounded-md border border-zinc-700 object-cover" style={{ aspectRatio: post.imageWidth && post.imageHeight ? `${post.imageWidth} / ${post.imageHeight}` : '4 / 5' }} />
+                  {!num && <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 text-[10px] font-bold text-white">{i + 1}</span>}
+                </div>
+                {num ? (
+                  <input
+                    id={`slide-num-${post.id}-${i}`}
+                    inputMode="numeric"
+                    maxLength={2}
+                    autoFocus={i === 0}
+                    value={vals[i] ?? ''}
+                    placeholder="#"
+                    onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setNumbering((c) => (c ? { ...c, vals: c.vals.map((x, j) => (j === i ? v : x)) } : c)) }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (document.getElementById(`slide-num-${post.id}-${i + 1}`) as HTMLInputElement | null)?.focus() } }}
+                    className={`block w-full rounded-md border bg-zinc-900 px-1 py-1 text-center text-sm font-bold text-zinc-100 ${bad ? 'border-red-500/70' : 'border-zinc-600'}`}
+                    aria-label={`Número de la lámina ${i + 1}`}
+                  />
+                ) : (
+                  <div className="flex justify-center gap-1">
+                    <button disabled={i === 0} onClick={() => moveSlide(post, i, i - 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la izquierda">◀</button>
+                    <button disabled={i === last} onClick={() => moveSlide(post, i, i + 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la derecha">▶</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {num && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              disabled={!valid || busy}
+              onClick={() => applyOrder(post, parsed.map((v, i) => [v, i] as const).sort((x, y) => x[0] - y[0]).map(([, i]) => i))}
+              className="rounded-md border border-emerald-500/40 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+            >
+              Aplicar orden
+            </button>
+            <button onClick={() => setNumbering(null)} className="text-xs text-zinc-400 hover:text-zinc-200">Cancelar</button>
+            <span className="text-[11px] text-amber-300">
+              {repeated.length > 0 ? `Repetido: ${repeated.join(', ')}. ` : ''}
+              {missing.length > 0 && missing.length < n ? `Falta el número de la lámina ${missing.join(', ')}.` : ''}
+              {valid ? '✓ Todo listo: pulsa Aplicar orden.' : ''}
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   /** Botón para subir (o cambiar) todas las láminas juntas. */
   const slideUpload = (post: GeneratedPost, busy: boolean) => (
@@ -472,6 +526,11 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     if (from === to || from < 0 || to < 0 || from >= n || to >= n) return
     const order = Array.from({ length: n }, (_, i) => i)
     order.splice(to, 0, order.splice(from, 1)[0])
+    await applyOrder(post, order)
+  }
+
+  /** Guarda un orden completo: order[k] es la posición ACTUAL de la lámina que debe quedar en el lugar k. */
+  async function applyOrder(post: GeneratedPost, order: number[]) {
     setBusyId(post.id)
     try {
       const res = await fetch(`/api/ceo/content/${post.id}/slides`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order }) })
@@ -480,6 +539,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         throw new Error(err.error ?? 'No se pudo cambiar el orden')
       }
       showToast('Orden guardado', 'success')
+      setNumbering(null)
       await load()
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'No se pudo cambiar el orden', 'error')
