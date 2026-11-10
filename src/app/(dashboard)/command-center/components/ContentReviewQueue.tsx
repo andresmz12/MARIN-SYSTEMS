@@ -1121,7 +1121,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
               )}
               <FactCheckPanel key={`${post.id}-${post.factCheckedAt ?? ''}`} post={post} onDone={load} />
               <div className="rounded-lg border border-dashed border-zinc-700 p-2.5 space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen · {IMAGE_SPECS[specPlatform]?.width}×{IMAGE_SPECS[specPlatform]?.height} ({IMAGE_SPECS[specPlatform]?.ratio}){post.groupId ? ' · la misma imagen para todas las redes' : ''}</p>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">🖼️ Imagen · {(post.slideImageUrls?.length ?? 0) > 1 && post.imageWidth && post.imageHeight ? `${post.imageWidth}×${post.imageHeight} (${post.imageWidth > post.imageHeight ? '16:9 horizontal' : '4:5 vertical'})` : `${IMAGE_SPECS[specPlatform]?.width}×${IMAGE_SPECS[specPlatform]?.height} (${IMAGE_SPECS[specPlatform]?.ratio})`}{post.groupId ? ' · la misma imagen para todas las redes' : ''}</p>
                 {post.imageUrl ? (
                   <div className="flex items-start gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

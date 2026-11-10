@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import sharp from 'sharp'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { GROUP_IMAGE_PLATFORM, IMAGE_SPECS, MAX_SLIDES, planFit } from '@/lib/image-prompt'
+import { GROUP_IMAGE_PLATFORM, IMAGE_SPECS, MAX_CROP_LOSS, MAX_SLIDES } from '@/lib/image-prompt'
 import { fitToSpec } from '@/lib/image-fit'
 
 export const maxDuration = 120
@@ -31,24 +31,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (files.length < 2) return NextResponse.json({ error: 'Un carrusel necesita al menos 2 imágenes' }, { status: 400 })
     if (files.length > MAX_SLIDES) return NextResponse.json({ error: `Instagram permite máximo ${MAX_SLIDES} láminas` }, { status: 400 })
 
-    const spec = IMAGE_SPECS[GROUP_IMAGE_PLATFORM]
-    const buffers: Buffer[] = []
-    const wholeFit: number[] = [] // láminas que no eran verticales: se colocaron enteras con fondo difuminado
+    // Se leen todas las láminas. El formato del carrusel lo marca la PRIMERA (Instagram recorta todas a su proporción):
+    // vertical 4:5 (1080×1350) o, si viene de Gemini / Google Presentaciones, horizontal 16:9 (1080×608).
+    // Instagram acepta carruseles entre 1,91:1 y 4:5, así que el 16:9 se publica entero, sin cortar nada.
+    const loaded: { data: Buffer; width: number; height: number }[] = []
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       if (!ALLOWED.includes(file.type)) return NextResponse.json({ error: `La lámina ${i + 1} (${file.name}) no es PNG, JPG o WebP` }, { status: 400 })
       if (file.size > MAX_BYTES) return NextResponse.json({ error: `La lámina ${i + 1} (${file.name}) pesa más de 8 MB` }, { status: 400 })
       const img = await sharp(Buffer.from(await file.arrayBuffer())).rotate().toBuffer({ resolveWithObject: true })
-      const plan = planFit(GROUP_IMAGE_PLATFORM, img.info.width, img.info.height)
-      if (plan.action === 'mismatch') {
-        // Una lámina horizontal (por ejemplo una presentación 16:9) no se corta: va entera en el centro y arriba y abajo
-        // se rellenan con la misma imagen difuminada, igual que una imagen suelta.
-        buffers.push((await fitToSpec(img.data, spec, plan.loss, 'complete')).data)
+      loaded.push({ data: img.data, width: img.info.width, height: img.info.height })
+    }
+    const landscape = loaded[0].width / loaded[0].height >= 1.4
+    const spec = landscape ? { width: 1080, height: 608 } : IMAGE_SPECS[GROUP_IMAGE_PLATFORM]
+    const target = spec.width / spec.height
+    const buffers: Buffer[] = []
+    const wholeFit: number[] = [] // láminas con otra proporción: se colocaron enteras con fondo difuminado
+    for (let i = 0; i < loaded.length; i++) {
+      const { data, width, height } = loaded[i]
+      const ratio = width / height
+      const loss = ratio > target ? 1 - target / ratio : 1 - ratio / target
+      if (Math.abs(ratio - target) / target > 0.02 && loss > MAX_CROP_LOSS) {
+        // No se corta (perdería contenido): va entera en el centro y se rellena con la misma imagen difuminada.
+        buffers.push((await fitToSpec(data, spec, loss, 'complete')).data)
         wholeFit.push(i + 1)
         continue
       }
       buffers.push(
-        await sharp(img.data)
+        await sharp(data)
           .resize({ width: spec.width, height: spec.height, fit: 'cover', position: 'centre' })
           .flatten({ background: '#ffffff' })
           .jpeg({ quality: 90 })
@@ -82,9 +92,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
       if (t.id === post.id) updated = row
     }
-    const notice = wholeFit.length
-      ? `La${wholeFit.length > 1 ? 's láminas' : ' lámina'} ${wholeFit.join(', ')} no ${wholeFit.length > 1 ? 'eran verticales' : 'era vertical'} (4:5): se ${wholeFit.length > 1 ? 'colocaron enteras' : 'colocó entera'} con fondo difuminado, sin cortar nada. Para que se vea más grande, pide a Gemini páginas verticales 4:5 (1080×1350).`
-      : ''
+    const parts: string[] = []
+    if (landscape) parts.push('Carrusel horizontal 16:9 (como lo hacen Gemini y Google Presentaciones): Instagram lo muestra entero, un poco más bajo que uno vertical.')
+    if (wholeFit.length) parts.push(`${wholeFit.length > 1 ? 'Las láminas' : 'La lámina'} ${wholeFit.join(', ')} ${wholeFit.length > 1 ? 'tenían otra proporción' : 'tenía otra proporción'}: se ${wholeFit.length > 1 ? 'colocaron enteras' : 'colocó entera'} con fondo difuminado, sin cortar nada.`)
+    const notice = parts.join(' ')
     return NextResponse.json(updated, notice ? { headers: { 'X-Slides-Notice': encodeURIComponent(notice) } } : undefined)
   } catch (err) {
     console.error('[slides]', err)
