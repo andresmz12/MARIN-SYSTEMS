@@ -414,6 +414,58 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
     }
   }
 
+  /** Miniaturas del carrusel: se reordenan arrastrando o con las flechas. */
+  const slideStrip = (post: GeneratedPost, busy: boolean) => (
+<div className="space-y-1">
+                        <p className="text-[11px] text-zinc-500">Arrastra una lámina para cambiarla de lugar, o usa las flechas ◀ ▶. El orden se guarda solo.</p>
+                        <div className={`flex gap-2 overflow-x-auto pb-1 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+                          {post.slideImageUrls!.map((u, i) => {
+                            const last = post.slideImageUrls!.length - 1
+                            return (
+                              <div
+                                key={u}
+                                draggable
+                                onDragStart={() => setDragSlide({ id: post.id, from: i })}
+                                onDragEnd={() => setDragSlide(null)}
+                                onDragOver={(e) => { if (dragSlide?.id === post.id) e.preventDefault() }}
+                                onDrop={(e) => { e.preventDefault(); if (dragSlide?.id === post.id) { const f = dragSlide.from; setDragSlide(null); void moveSlide(post, f, i) } }}
+                                className={`shrink-0 space-y-1 ${dragSlide?.id === post.id && dragSlide.from === i ? 'opacity-40' : ''}`}
+                              >
+                                <div className="relative cursor-grab active:cursor-grabbing">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={localImagePath(u)} alt={`Lámina ${i + 1}`} draggable={false} className="h-24 rounded-md border border-zinc-700 object-cover" style={{ aspectRatio: post.imageWidth && post.imageHeight ? `${post.imageWidth} / ${post.imageHeight}` : '4 / 5' }} />
+                                  <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 text-[10px] font-bold text-white">{i + 1}</span>
+                                </div>
+                                <div className="flex justify-center gap-1">
+                                  <button disabled={i === 0} onClick={() => moveSlide(post, i, i - 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la izquierda">◀</button>
+                                  <button disabled={i === last} onClick={() => moveSlide(post, i, i + 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la derecha">▶</button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+  )
+
+  /** Botón para subir (o cambiar) todas las láminas juntas. */
+  const slideUpload = (post: GeneratedPost, busy: boolean) => (
+<label className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 cursor-pointer">
+                        {busy ? 'Subiendo…' : (post.slideImageUrls?.length ?? 0) > 1 ? 'Cambiar láminas' : 'Subir todas las láminas'}
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={busy}
+                          onChange={(e) => {
+                            const fs = Array.from(e.target.files ?? [])
+                            if (fs.length) uploadSlides(post.id, fs)
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+  )
+
   /** Mueve una lámina del carrusel de una posición a otra y guarda el orden (en todas las redes del contenido). */
   async function moveSlide(post: GeneratedPost, from: number, to: number) {
     const n = post.slideImageUrls?.length ?? 0
@@ -437,6 +489,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
   }
 
   async function removeCarousel(id: string, keepText: boolean) {
+    if (!keepText && !window.confirm('¿Quitar el carrusel? Se borran las láminas subidas y el texto de cada lámina.')) return
     if ((posts.find((p) => p.id === id)?.slideImageUrls?.length ?? 0) > 1) {
       const res = await fetch(`/api/ceo/content/${id}/slides`, { method: 'DELETE' })
       if (!res.ok) { showToast('No se pudo quitar el carrusel', 'error'); return }
@@ -1260,6 +1313,16 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                 {slidesOf(post).length === 0 ? (
                   <>
                     <p className="text-[11px] text-zinc-500">Convierte este post en varias láminas deslizables. Instagram las guarda y comparte más que una sola imagen.</p>
+                    {(post.slideImageUrls?.length ?? 0) > 1 && (
+                      <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+                        <p className="text-[11px] text-amber-200/90">Este contenido ya tiene {post.slideImageUrls!.length} láminas subidas (sin el texto del plan). Puedes ordenarlas aquí.</p>
+                        {slideStrip(post, busy)}
+                        <div className="flex flex-wrap gap-2">
+                          {slideUpload(post, busy)}
+                          <button onClick={() => removeCarousel(post.id, false)} className="text-xs text-red-300 hover:text-red-200">Quitar carrusel</button>
+                        </div>
+                      </div>
+                    )}
                     <button
                       disabled={busy}
                       onClick={() => planCarousel(post.id)}
@@ -1303,37 +1366,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                       <summary className="cursor-pointer text-zinc-300">Ver el prompt para Gemini</summary>
                       <pre className="mt-1.5 whitespace-pre-wrap rounded-md bg-zinc-950/60 border border-zinc-800 p-2 text-[11px] text-zinc-400">{carouselPromptFor(post)}</pre>
                     </details>
-                    {(post.slideImageUrls?.length ?? 0) > 1 && (
-                      <div className="space-y-1">
-                        <p className="text-[11px] text-zinc-500">Arrastra una lámina para cambiarla de lugar, o usa las flechas ◀ ▶. El orden se guarda solo.</p>
-                        <div className={`flex gap-2 overflow-x-auto pb-1 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
-                          {post.slideImageUrls!.map((u, i) => {
-                            const last = post.slideImageUrls!.length - 1
-                            return (
-                              <div
-                                key={u}
-                                draggable
-                                onDragStart={() => setDragSlide({ id: post.id, from: i })}
-                                onDragEnd={() => setDragSlide(null)}
-                                onDragOver={(e) => { if (dragSlide?.id === post.id) e.preventDefault() }}
-                                onDrop={(e) => { e.preventDefault(); if (dragSlide?.id === post.id) { const f = dragSlide.from; setDragSlide(null); void moveSlide(post, f, i) } }}
-                                className={`shrink-0 space-y-1 ${dragSlide?.id === post.id && dragSlide.from === i ? 'opacity-40' : ''}`}
-                              >
-                                <div className="relative cursor-grab active:cursor-grabbing">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={localImagePath(u)} alt={`Lámina ${i + 1}`} draggable={false} className="h-24 rounded-md border border-zinc-700 object-cover" style={{ aspectRatio: post.imageWidth && post.imageHeight ? `${post.imageWidth} / ${post.imageHeight}` : '4 / 5' }} />
-                                  <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 text-[10px] font-bold text-white">{i + 1}</span>
-                                </div>
-                                <div className="flex justify-center gap-1">
-                                  <button disabled={i === 0} onClick={() => moveSlide(post, i, i - 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la izquierda">◀</button>
-                                  <button disabled={i === last} onClick={() => moveSlide(post, i, i + 1)} className="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-30" title="Mover a la derecha">▶</button>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {(post.slideImageUrls?.length ?? 0) > 1 && slideStrip(post, busy)}
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => copyText(carouselPromptFor(post), 'Prompt del carrusel copiado: pégalo en Gemini')}
@@ -1341,21 +1374,7 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
                       >
                         Copiar slides para Gemini
                       </button>
-                      <label className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 cursor-pointer">
-                        {busy ? 'Subiendo…' : (post.slideImageUrls?.length ?? 0) > 1 ? 'Cambiar láminas' : 'Subir todas las láminas'}
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/png,image/jpeg,image/webp"
-                          className="hidden"
-                          disabled={busy}
-                          onChange={(e) => {
-                            const fs = Array.from(e.target.files ?? [])
-                            if (fs.length) uploadSlides(post.id, fs)
-                            e.target.value = ''
-                          }}
-                        />
-                      </label>
+                      {slideUpload(post, busy)}
                       <button onClick={() => removeCarousel(post.id, false)} className="text-xs text-red-300 hover:text-red-200">Quitar carrusel</button>
                     </div>
                   </>
