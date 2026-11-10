@@ -4,6 +4,7 @@ import sharp from 'sharp'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { GROUP_IMAGE_PLATFORM, IMAGE_SPECS, MAX_SLIDES, planFit } from '@/lib/image-prompt'
+import { fitToSpec } from '@/lib/image-fit'
 
 export const maxDuration = 120
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const spec = IMAGE_SPECS[GROUP_IMAGE_PLATFORM]
     const buffers: Buffer[] = []
+    const wholeFit: number[] = [] // láminas que no eran verticales: se colocaron enteras con fondo difuminado
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       if (!ALLOWED.includes(file.type)) return NextResponse.json({ error: `La lámina ${i + 1} (${file.name}) no es PNG, JPG o WebP` }, { status: 400 })
@@ -39,9 +41,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const img = await sharp(Buffer.from(await file.arrayBuffer())).rotate().toBuffer({ resolveWithObject: true })
       const plan = planFit(GROUP_IMAGE_PLATFORM, img.info.width, img.info.height)
       if (plan.action === 'mismatch') {
-        return NextResponse.json({
-          error: `La lámina ${i + 1} (${file.name}) mide ${img.info.width}×${img.info.height}: no es vertical 4:5 y habría que recortar demasiado. Pide a Gemini páginas verticales 4:5 (1080×1350) y vuelve a exportar.`,
-        }, { status: 400 })
+        // Una lámina horizontal (por ejemplo una presentación 16:9) no se corta: va entera en el centro y arriba y abajo
+        // se rellenan con la misma imagen difuminada, igual que una imagen suelta.
+        buffers.push((await fitToSpec(img.data, spec, plan.loss, 'complete')).data)
+        wholeFit.push(i + 1)
+        continue
       }
       buffers.push(
         await sharp(img.data)
@@ -78,7 +82,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
       if (t.id === post.id) updated = row
     }
-    return NextResponse.json(updated)
+    const notice = wholeFit.length
+      ? `La${wholeFit.length > 1 ? 's láminas' : ' lámina'} ${wholeFit.join(', ')} no ${wholeFit.length > 1 ? 'eran verticales' : 'era vertical'} (4:5): se ${wholeFit.length > 1 ? 'colocaron enteras' : 'colocó entera'} con fondo difuminado, sin cortar nada. Para que se vea más grande, pide a Gemini páginas verticales 4:5 (1080×1350).`
+      : ''
+    return NextResponse.json(updated, notice ? { headers: { 'X-Slides-Notice': encodeURIComponent(notice) } } : undefined)
   } catch (err) {
     console.error('[slides]', err)
     return NextResponse.json({ error: 'No se pudieron procesar las láminas' }, { status: 500 })

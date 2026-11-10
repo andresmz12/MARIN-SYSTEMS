@@ -402,7 +402,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         const err = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(err.error ?? 'Error')
       }
-      showToast(`Carrusel subido: ${files.length} láminas`, 'success')
+      const notice = res.headers.get('X-Slides-Notice')
+      showToast(notice ? `Carrusel subido (${files.length} láminas). ${decodeURIComponent(notice)}` : `Carrusel subido: ${files.length} láminas`, 'success')
       await load()
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'No se pudieron subir las láminas', 'error')
