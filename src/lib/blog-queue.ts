@@ -93,6 +93,6 @@ export async function sendNextArticle(companyId: string, key?: string): Promise<
   } catch (err) {
     return { ok: false, title: first.title, sent, error: err instanceof BlogApiError ? err.message : 'No se pudo enviar al blog.' }
   }
-  await logActivity('luis', 'blog', `Envió el borrador «${first.title.slice(0, 70)}» (${sent.map((s) => s.locale.toUpperCase()).join(' y ')}) al blog de ${company.name}`, { companyId })
+  await logActivity('luis', 'blog', `Envió el borrador «${first.title.slice(0, 70)}» (${sent.map((s) => String(s.locale ?? '').toUpperCase()).join(' y ')}) al blog de ${company.name}`, { companyId })
   return { ok: true, sent, title: first.title }
 }

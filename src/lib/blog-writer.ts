@@ -153,7 +153,7 @@ export async function writeBlogArticle(opts: { companyId: string; topic?: string
       else warnings.push('La versión en inglés salió incompleta: solo se envió la de español.')
       if (!usable) warnings.push('No hubo notas con fuente: el artículo no lleva cifras ni sección de fuentes. Revísalo con cuidado.')
       if (queued) await prisma.blogTopic.update({ where: { id: queued.id }, data: { status: 'used', usedAt: new Date(), articleSlug: created[0]?.slug } })
-      await logActivity('luis', 'blog', `Envió el borrador «${esDraft.title.slice(0, 70)}» (${created.map((c) => c.locale.toUpperCase()).join(' y ')}) al blog`, { companyId: company.id })
+      await logActivity('luis', 'blog', `Envió el borrador «${esDraft.title.slice(0, 70)}» (${created.map((c) => String(c.locale ?? '').toUpperCase()).join(' y ')}) al blog`, { companyId: company.id })
       return { ok: true, topic, created, warnings }
     } catch (err) {
       if (err instanceof BlogApiError) return { ok: false, error: err.message }

@@ -68,7 +68,17 @@ export async function listBlogPosts(target: BlogTarget, locale: 'es' | 'en'): Pr
 export async function createBlogDraft(target: BlogTarget, input: BlogPostInput): Promise<BlogPostCreated> {
   const payload: Record<string, unknown> = { ...input, status: 'draft' }
   for (const k of Object.keys(payload)) if (payload[k] === undefined || payload[k] === '') delete payload[k]
-  return (await call(target, '/api/blog/posts', { method: 'POST', body: JSON.stringify(payload) })) as BlogPostCreated
+  const raw = (await call(target, '/api/blog/posts', { method: 'POST', body: JSON.stringify(payload) })) as Record<string, unknown> | null
+  // Algunos blogs no devuelven todos los campos (por ejemplo `locale`): se completan con lo que se envió, para no fallar después de crear el borrador.
+  const r = (raw && typeof raw.post === 'object' && raw.post ? raw.post : raw ?? {}) as Partial<BlogPostCreated>
+  return {
+    id: String(r.id ?? ''),
+    locale: String(r.locale ?? input.locale),
+    slug: String(r.slug ?? input.slug ?? ''),
+    title: String(r.title ?? input.title),
+    status: String(r.status ?? 'draft'),
+    url: String(r.url ?? (raw as { permalink?: unknown } | null)?.permalink ?? ''),
+  }
 }
 
 /** Envía el borrador reintentando con otro slug si ya existe (409). */
