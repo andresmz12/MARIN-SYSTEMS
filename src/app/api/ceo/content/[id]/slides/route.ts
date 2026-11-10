@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import sharp from 'sharp'
+import type { GeneratedPost } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { GROUP_IMAGE_PLATFORM, IMAGE_SPECS, MAX_CROP_LOSS, MAX_SLIDES } from '@/lib/image-prompt'
@@ -13,6 +14,37 @@ const ALLOWED = ['image/png', 'image/jpeg', 'image/webp']
 
 function base(): string {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'https://marin-systems-production.up.railway.app').replace(/\/$/, '')
+}
+
+
+/** Guarda el carrusel (en el orden dado) en TODAS las redes del mismo contenido: cada post guarda su copia y sus enlaces. */
+async function saveCarousel(post: GeneratedPost, userId: string, buffers: Buffer[], width: number, height: number) {
+  const targets = post.groupId
+    ? await prisma.generatedPost.findMany({ where: { groupId: post.groupId, userId, status: { notIn: ['published', 'publishing'] } }, select: { id: true } })
+    : [{ id: post.id }]
+  if (!targets.some((t) => t.id === post.id)) targets.push({ id: post.id })
+
+  let updated = null
+  for (const t of targets) {
+    await prisma.postSlideImage.deleteMany({ where: { postId: t.id } })
+    const cover = await prisma.postImage.upsert({
+      where: { postId: t.id },
+      update: { data: buffers[0], mime: 'image/jpeg' },
+      create: { postId: t.id, data: buffers[0], mime: 'image/jpeg' },
+    })
+    const urls = [`${base()}/api/public/post-image/${cover.token}`]
+    for (let i = 1; i < buffers.length; i++) {
+      const sl = await prisma.postSlideImage.create({ data: { postId: t.id, position: i, data: buffers[i], mime: 'image/jpeg' } })
+      urls.push(`${base()}/api/public/slide-image/${sl.token}`)
+    }
+    const row = await prisma.generatedPost.update({
+      where: { id: t.id },
+      data: { imageUrl: urls[0], slideImageUrls: urls, imageWidth: width, imageHeight: height },
+      include: { company: true },
+    })
+    if (t.id === post.id) updated = row
+  }
+  return updated
 }
 
 // Sube TODAS las láminas del carrusel de una vez (en el orden del nombre de archivo: 1, 2, 3…).
@@ -66,32 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       )
     }
 
-    // Todas las redes del grupo comparten el carrusel (cada post guarda su copia y sus enlaces).
-    const targets = post.groupId
-      ? await prisma.generatedPost.findMany({ where: { groupId: post.groupId, userId: session.user.id, status: { notIn: ['published', 'publishing'] } }, select: { id: true } })
-      : [{ id: post.id }]
-    if (!targets.some((t) => t.id === post.id)) targets.push({ id: post.id })
-
-    let updated = null
-    for (const t of targets) {
-      await prisma.postSlideImage.deleteMany({ where: { postId: t.id } })
-      const cover = await prisma.postImage.upsert({
-        where: { postId: t.id },
-        update: { data: buffers[0], mime: 'image/jpeg' },
-        create: { postId: t.id, data: buffers[0], mime: 'image/jpeg' },
-      })
-      const urls = [`${base()}/api/public/post-image/${cover.token}`]
-      for (let i = 1; i < buffers.length; i++) {
-        const s = await prisma.postSlideImage.create({ data: { postId: t.id, position: i, data: buffers[i], mime: 'image/jpeg' } })
-        urls.push(`${base()}/api/public/slide-image/${s.token}`)
-      }
-      const row = await prisma.generatedPost.update({
-        where: { id: t.id },
-        data: { imageUrl: urls[0], slideImageUrls: urls, imageWidth: spec.width, imageHeight: spec.height },
-        include: { company: true },
-      })
-      if (t.id === post.id) updated = row
-    }
+    const updated = await saveCarousel(post, session.user.id, buffers, spec.width, spec.height)
     const parts: string[] = []
     if (landscape) parts.push('Carrusel horizontal 16:9 (como lo hacen Gemini y Google Presentaciones): Instagram lo muestra entero, un poco más bajo que uno vertical.')
     if (wholeFit.length) parts.push(`${wholeFit.length > 1 ? 'Las láminas' : 'La lámina'} ${wholeFit.join(', ')} ${wholeFit.length > 1 ? 'tenían otra proporción' : 'tenía otra proporción'}: se ${wholeFit.length > 1 ? 'colocaron enteras' : 'colocó entera'} con fondo difuminado, sin cortar nada.`)
@@ -100,6 +107,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   } catch (err) {
     console.error('[slides]', err)
     return NextResponse.json({ error: 'No se pudieron procesar las láminas' }, { status: 500 })
+  }
+}
+
+// Cambia el orden de las láminas: recibe { order: [2, 0, 1, …] } con la posición actual de cada lámina en el orden nuevo.
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const post = await prisma.generatedPost.findFirst({ where: { id: params.id, userId: session.user.id } })
+    if (!post) return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 })
+    if (post.status === 'published' || post.status === 'publishing') return NextResponse.json({ error: 'Ese carrusel ya se publicó: no se puede reordenar' }, { status: 400 })
+
+    const body = (await req.json().catch(() => ({}))) as { order?: unknown }
+    const cover = await prisma.postImage.findUnique({ where: { postId: post.id } })
+    const slides = await prisma.postSlideImage.findMany({ where: { postId: post.id }, orderBy: { position: 'asc' } })
+    if (!cover || slides.length === 0) return NextResponse.json({ error: 'Este contenido no tiene un carrusel' }, { status: 400 })
+    const all = [Buffer.from(cover.data), ...slides.map((x) => Buffer.from(x.data))]
+
+    const order = body.order
+    const valid = Array.isArray(order) && order.length === all.length && order.every((n) => Number.isInteger(n) && n >= 0 && n < all.length) && new Set(order as number[]).size === all.length
+    if (!valid) return NextResponse.json({ error: 'El orden no es válido' }, { status: 400 })
+
+    const buffers = (order as number[]).map((i) => all[i])
+    const updated = await saveCarousel(post, session.user.id, buffers, post.imageWidth ?? IMAGE_SPECS[GROUP_IMAGE_PLATFORM].width, post.imageHeight ?? IMAGE_SPECS[GROUP_IMAGE_PLATFORM].height)
+    return NextResponse.json(updated)
+  } catch (err) {
+    console.error('[slides]', err)
+    return NextResponse.json({ error: 'No se pudo cambiar el orden' }, { status: 500 })
   }
 }
 
