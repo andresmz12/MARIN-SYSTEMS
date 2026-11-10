@@ -1621,36 +1621,82 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
         </div>
       )}
 
-      {published.length > 0 && (
-        <div className="space-y-1.5">
-          <h3 className="text-sm font-semibold text-zinc-300">Publicados esta semana</h3>
-          {published.map((post) => (
-            <div key={post.id} className="space-y-1">
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="flex-1 truncate">{PLATFORM_CONFIG[post.platform]?.emoji} {post.topic}</span>
-                {post.externalUrl && (
-                  <a href={post.externalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Ver post ↗</a>
-                )}
-                {blogDest.length > 0 && (
-                  <select
-                    defaultValue=""
-                    onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void sendToBlog(post.id, v) }}
-                    className="bg-zinc-800 border border-zinc-700 rounded-md px-1.5 py-0.5 text-[11px] text-zinc-300"
-                    title="Manda este post como borrador al blog de otra empresa"
-                  >
-                    <option value="">📰 Enviar al blog…</option>
-                    {blogDest.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                )}
-                <button onClick={() => reopenPost(post)} className="text-amber-200/90 hover:text-amber-100" title="Volver a Por aprobar para cambiar texto, imagen o carrusel">✏️ Editar</button>
-                <button onClick={() => deletePost(post)} className="text-red-300/80 hover:text-red-200" title="Eliminar este post">🗑️ Eliminar</button>
+      {published.length > 0 && (() => {
+        // Un mismo contenido que salió en varias redes se muestra como UNA fila (con sus redes juntas) y bajo el día en que salió.
+        const ORDER = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok']
+        const whenOf = (p: GeneratedPost) => p.publishedAt ?? p.scheduledDate ?? ''
+        const dayOf = (iso: string) => (iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) : 'sin-fecha')
+        const groups = new Map<string, GeneratedPost[]>()
+        published.forEach((p) => {
+          // Sin grupo (tandas viejas): se juntan los que tienen el mismo tema y salieron el mismo día.
+          const k = p.groupId ?? `${p.topic}|${dayOf(whenOf(p))}`
+          groups.set(k, [...(groups.get(k) ?? []), p])
+        })
+        const rows = Array.from(groups.entries()).map(([key, members]) => {
+          const sorted = [...members].sort((x, y) => ORDER.indexOf(x.platform) - ORDER.indexOf(y.platform))
+          const when = sorted.map(whenOf).filter(Boolean).sort().slice(-1)[0] ?? ''
+          return { key, members: sorted, when, first: sorted[0] }
+        }).sort((x, y) => (y.when || '').localeCompare(x.when || ''))
+        const days = Array.from(new Set(rows.map((r) => dayOf(r.when))))
+        const dayText = (k: string) => {
+          if (k === 'sin-fecha') return 'Sin fecha'
+          const t = new Date(`${k}T12:00:00Z`).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+          return t.charAt(0).toUpperCase() + t.slice(1)
+        }
+        const timeText = (iso: string) => (iso ? new Date(iso).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }) : '')
+        return (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-zinc-300">Publicados esta semana <span className="font-normal text-zinc-500">· {rows.length}</span></h3>
+            {days.map((d) => (
+              <div key={d} className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">📅 {dayText(d)}</p>
+                {rows.filter((r) => dayOf(r.when) === d).map((row) => (
+                  <div key={row.key} className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                      <span className="min-w-[200px] flex-1 text-sm font-medium text-zinc-200">{row.first.topic}</span>
+                      {row.when && <span className="text-zinc-500">🕒 {timeText(row.when)}</span>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                      {row.members.map((m) => {
+                        const cfg = PLATFORM_CONFIG[m.platform]
+                        const chip = `inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${cfg?.cls ?? 'border-zinc-700 text-zinc-300'}`
+                        return m.externalUrl ? (
+                          <a key={m.id} href={m.externalUrl} target="_blank" rel="noopener noreferrer" className={`${chip} hover:brightness-125`} title="Ver el post publicado">{cfg?.emoji} {cfg?.label ?? m.platform} ↗</a>
+                        ) : (
+                          <span key={m.id} className={chip}>{cfg?.emoji} {cfg?.label ?? m.platform}</span>
+                        )
+                      })}
+                      <span className="flex-1" />
+                      {blogDest.length > 0 && (
+                        <select
+                          defaultValue=""
+                          onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void sendToBlog(row.first.id, v) }}
+                          className="bg-zinc-800 border border-zinc-700 rounded-md px-1.5 py-0.5 text-[11px] text-zinc-300"
+                          title="Manda este contenido como borrador al blog de otra empresa"
+                        >
+                          <option value="">📰 Enviar al blog…</option>
+                          {blogDest.map((dd) => <option key={dd.id} value={dd.id}>{dd.name}</option>)}
+                        </select>
+                      )}
+                      <button onClick={() => reopenPost(row.first)} className="text-amber-200/90 hover:text-amber-100" title="Volver a Por aprobar para cambiar texto, imagen o carrusel (todas sus redes)">✏️ Editar</button>
+                      <button onClick={() => deletePost(row.first)} className="text-red-300/80 hover:text-red-200" title="Eliminar este contenido en todas las redes">🗑️ Eliminar</button>
+                    </div>
+                    <div className="flex flex-wrap gap-x-5 gap-y-1">
+                      {row.members.map((m) => (
+                        <div key={`${m.id}-${m.metric?.source ?? ''}`} className="flex items-start gap-1.5">
+                          <span className="text-[11px]" title={PLATFORM_CONFIG[m.platform]?.label}>{PLATFORM_CONFIG[m.platform]?.emoji}</span>
+                          <MetricsForm post={m} onSaved={load} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <MetricsForm key={`${post.id}-${post.metric?.source ?? ''}`} post={post} onSaved={load} />
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )
+      })()}
     </div>
   )
 }
