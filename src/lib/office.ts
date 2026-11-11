@@ -29,7 +29,7 @@ export interface OfficeAgent {
 export interface OfficeDepartment {
   id: string
   name: string
-  kind: 'monitoring' | 'marketing' | 'direction'
+  kind: 'monitoring' | 'marketing' | 'direction' | 'blogs'
   accent: string
   agents: OfficeAgent[]
   stats: { label: string; value: number }[]
@@ -146,20 +146,6 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       prisma.agentReport.findFirst({ where: { companyId: c.id, kind: 'topics' }, orderBy: { createdAt: 'desc' } }),
       prisma.brandProfile.findUnique({ where: { companyId: c.id }, select: { autoEnabled: true, newsEnabled: true } }),
     ])
-    // Luis, el agente del blog de ESTA empresa: conexión, cola y último envío
-    const [blogProfile, blogReady, blogSent, lastBlogSent, lastMirror] = await Promise.all([
-      prisma.brandProfile.findUnique({ where: { companyId: c.id }, select: { blogEnabled: true, blogApiUrl: true, blogMirrorFrom: true } }),
-      prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'ready' } }).then((g) => g.length),
-      prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'sent' } }).then((g) => g.length),
-      prisma.blogArticle.findFirst({ where: { companyId: c.id, status: 'sent' }, orderBy: { sentAt: 'desc' }, select: { title: true, sentAt: true } }),
-      prisma.blogMirror.findFirst({ where: { targetCompanyId: c.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
-    ])
-    const blogConnected = !!resolveBlogTarget({ name: c.name }, { blogApiUrl: blogProfile?.blogApiUrl })
-    const blogActive = blogConnected && !!(blogProfile?.blogEnabled || blogProfile?.blogMirrorFrom)
-    const blogLast = [lastBlogSent?.sentAt, lastMirror?.createdAt].filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null
-    const blogCron = lastRun('blog-article')
-    const blogStatus: AgentStatus = !blogActive ? 'sleep' : blogCron && !blogCron.ok && blogCron.finishedAt && blogCron.startedAt.getTime() > (blogLast?.getTime() ?? 0) ? 'alert' : blogLast && now.getTime() - blogLast.getTime() < RECENT_MS ? 'work' : 'sleep'
-    const slotsBlog: ScheduleSlot[] = [{ day: 2, from: 9 * 60, to: 10 * 60 }]
     const on = !!(profile?.autoEnabled || profile?.newsEnabled)
     const off = on ? '' : ' (piloto automático apagado)'
     const research = statusOf(['topic-research'])
@@ -183,17 +169,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       { id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
         lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
       ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
-      {
-        id: `${c.id}-blog`, name: 'Luis', role: 'Redactor del blog', color: COLORS.blog, status: blogStatus,
-        schedule: blogProfile?.blogEnabled ? 'Martes · 9:00 AM (un artículo por semana, como borrador)' : blogProfile?.blogMirrorFrom ? 'Cada vez que se publica un post en redes' : 'Sin configurar',
-        model: 'Sonnet',
-        lastReport: !blogConnected
-          ? 'Sin blog conectado: en Command Center → Equipo → Blog de esta empresa, guarda la dirección y la clave en Railway.'
-          : short(`${blogReady} ${blogReady === 1 ? 'artículo listo' : 'artículos listos'} en la cola · ${blogSent} enviados${lastBlogSent ? ` · último: «${lastBlogSent.title}»` : ''}${blogProfile?.blogMirrorFrom ? ' · copia lo que se publica en redes' : ''}.`),
-        lastAt: blogLast?.toISOString() ?? null,
-        nextRun: blogProfile?.blogEnabled ? nextRunText(slotsBlog, now) : null,
-        slots: blogProfile?.blogEnabled ? slotsBlog : [], href: '/command-center', doing: 'Mandando un artículo al blog…',
-      },
+      ghost(`${c.id}-community`, personName(ci, 5), 'Comunidad: responde comentarios (próximamente)', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
     ]
     departments.push({
       id: `mkt-${c.id}`,
@@ -203,6 +179,57 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       agents,
       stats: [{ label: 'por aprobar', value: pending }, { label: 'programados', value: queued }, { label: 'publicados (7 días)', value: published }],
       note: pending ? `${pending} post${pending === 1 ? '' : 's'} esperando tu aprobación. Nada sale sin que lo revises.` : 'Nada pendiente por aprobar.',
+    })
+  }
+
+  // ── Creación de blogs: un agente por empresa (Luis para Reports Systems), cada uno con su blog, su cola y su estado ──
+  if (companies.length > 0) {
+    const legacyName = (process.env.BLOG_COMPANY_NAME || 'Reports Systems').toLowerCase()
+    const ordered = [...companies].sort((a, b) => Number(b.name.toLowerCase().includes(legacyName)) - Number(a.name.toLowerCase().includes(legacyName)))
+    const BLOG_NAMES = ['Luis', 'Valeria', 'Santiago', 'Daniela', 'Mateo']
+    const slotsBlog: ScheduleSlot[] = [{ day: 2, from: 9 * 60, to: 10 * 60 }]
+    const blogCron = lastRun('blog-article')
+    const blogAgents: OfficeAgent[] = []
+    let readyTotal = 0
+    let sentTotal = 0
+    let connectedTotal = 0
+    for (let i = 0; i < ordered.length; i++) {
+      const c = ordered[i]
+      const [blogProfile, blogReady, blogSent, lastBlogSent, lastMirror] = await Promise.all([
+        prisma.brandProfile.findUnique({ where: { companyId: c.id }, select: { blogEnabled: true, blogApiUrl: true, blogMirrorFrom: true } }),
+        prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'ready' } }).then((g) => g.length),
+        prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'sent' } }).then((g) => g.length),
+        prisma.blogArticle.findFirst({ where: { companyId: c.id, status: 'sent' }, orderBy: { sentAt: 'desc' }, select: { title: true, sentAt: true } }),
+        prisma.blogMirror.findFirst({ where: { targetCompanyId: c.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+      ])
+      const connected = !!resolveBlogTarget({ name: c.name }, { blogApiUrl: blogProfile?.blogApiUrl })
+      const active = connected && !!(blogProfile?.blogEnabled || blogProfile?.blogMirrorFrom)
+      const last = [lastBlogSent?.sentAt, lastMirror?.createdAt].filter((d): d is Date => !!d).sort((x, y) => y.getTime() - x.getTime())[0] ?? null
+      const status: AgentStatus = !active ? 'sleep' : blogCron && !blogCron.ok && blogCron.finishedAt && blogCron.startedAt.getTime() > (last?.getTime() ?? 0) ? 'alert' : last && now.getTime() - last.getTime() < RECENT_MS ? 'work' : 'sleep'
+      readyTotal += blogReady
+      sentTotal += blogSent
+      if (connected) connectedTotal++
+      blogAgents.push({
+        id: `blog-${c.id}`, name: BLOG_NAMES[i % BLOG_NAMES.length], role: `Blog de ${c.name}`, color: COLORS.blog, status,
+        schedule: blogProfile?.blogEnabled ? 'Martes · 9:00 AM (un artículo por semana, como borrador)' : blogProfile?.blogMirrorFrom ? 'Cada vez que se publica un post en redes' : 'Sin configurar',
+        model: 'Sonnet',
+        lastReport: !connected
+          ? `Sin blog conectado: abre "Abrir su trabajo", guarda la dirección del blog de ${c.name} y la clave en Railway.`
+          : short(`${blogReady} ${blogReady === 1 ? 'artículo listo' : 'artículos listos'} en la cola · ${blogSent} enviados${lastBlogSent ? ` · último: «${lastBlogSent.title}»` : ''}${blogProfile?.blogMirrorFrom ? ' · copia lo que se publica en redes' : ''}.`),
+        lastAt: last?.toISOString() ?? null,
+        nextRun: blogProfile?.blogEnabled ? nextRunText(slotsBlog, now) : null,
+        slots: blogProfile?.blogEnabled ? slotsBlog : [],
+        href: `/command-center?tab=team&company=${c.id}`, doing: 'Mandando un artículo al blog…',
+      })
+    }
+    departments.push({
+      id: 'blogs',
+      name: 'Creación de blogs',
+      kind: 'blogs',
+      accent: '#ff9f6b',
+      agents: blogAgents,
+      stats: [{ label: 'artículos en cola', value: readyTotal }, { label: 'enviados', value: sentTotal }, { label: 'blogs conectados', value: connectedTotal }],
+      note: connectedTotal === 0 ? 'Ningún blog está conectado todavía: toca a un agente y pulsa "Abrir su trabajo".' : 'Cada agente cuida el blog de una empresa. Todo llega como borrador; tú lo revisas y lo publicas.',
     })
   }
 

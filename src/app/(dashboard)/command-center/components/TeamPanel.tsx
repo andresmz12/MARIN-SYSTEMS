@@ -46,9 +46,9 @@ function Box({ title, hint, children }: { title: string; hint?: string; children
   )
 }
 
-export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
+export function TeamPanel({ companies, initialCompanyId }: { companies: CEOCompany[]; initialCompanyId?: string }) {
   const { showToast } = useToast()
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? '')
+  const [companyId, setCompanyId] = useState(initialCompanyId && companies.some((c) => c.id === initialCompanyId) ? initialCompanyId : companies[0]?.id ?? '')
   const [team, setTeam] = useState<Team | null>(null)
   const [error, setError] = useState(false)
   const [lesson, setLesson] = useState('')

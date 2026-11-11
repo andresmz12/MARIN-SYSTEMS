@@ -196,7 +196,7 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
       <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3" role="tablist" aria-label="Enfocar un departamento">
         {[{ id: 'all', label: '🏢 Todo el piso', n: 0, pending: 0 }, ...departments.map((d) => ({
           id: d.id,
-          label: `${d.kind === 'monitoring' ? '🛰️' : d.kind === 'direction' ? '🧭' : '📣'} ${d.name}`,
+          label: `${d.kind === 'monitoring' ? '🛰️' : d.kind === 'direction' ? '🧭' : d.kind === 'blogs' ? '✍️' : '📣'} ${d.name}`,
           n: alerts(d),
           pending: d.kind === 'marketing' ? d.stats[0]?.value ?? 0 : 0,
         })), { id: 'ceo', label: '👤 Andrés Marín', n: 0, pending: 0 }].map((t) => {

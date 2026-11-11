@@ -22,6 +22,12 @@ export default function CommandCenterPage() {
   const [companies, setCompanies] = useState<CEOCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<string>(HOME)
+  // Enlace directo desde la oficina de agentes: /command-center?tab=team&company=<id> abre Equipo en esa empresa.
+  const [teamCompany, setTeamCompany] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('tab') === 'team') { setTab(TEAM); setTeamCompany(q.get('company') ?? undefined) }
+  }, [])
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -114,7 +120,7 @@ export default function CommandCenterPage() {
       </div>
 
       {showTeam ? (
-        <TeamPanel companies={active} />
+        <TeamPanel companies={active} initialCompanyId={teamCompany} />
       ) : showHome ? (
         <HomePanel onGoCompany={(id) => setTab(active.find((c) => c.id === id)?.id ?? active[0].id)} />
       ) : showCalendar && active.length > 0 ? (
