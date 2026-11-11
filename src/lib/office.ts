@@ -24,6 +24,8 @@ export interface OfficeAgent {
   href?: string
   /** Lo que muestra mientras trabaja. */
   doing: string
+  /** Se puede ejecutar a mano desde la oficina (botón "Ejecutar ahora"). */
+  canRun?: boolean
 }
 
 export interface OfficeDepartment {
@@ -91,6 +93,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       : 'Todavía no hay chequeos.'
     return {
       id: `app-${a.id}`,
+      canRun: true,
       name: a.agentName,
       role: a.role ?? `Vigila ${a.name}`,
       color: a.color,
@@ -160,13 +163,13 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     const slotsAnalyst: ScheduleSlot[] = [{ day: 6, from: 8 * 60, to: 9 * 60 }]
 
     const agents: OfficeAgent[] = [
-      { id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Martes y viernes · 7:00 AM', model: 'Haiku + búsqueda web',
+      { canRun: true, id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Martes y viernes · 7:00 AM', model: 'Haiku + búsqueda web',
         lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando temas y noticias de la semana…' },
-      { id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias lunes y jueves, 10:00 AM', model: 'Sonnet',
+      { canRun: true, id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias lunes y jueves, 10:00 AM', model: 'Sonnet',
         lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
-      { id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
+      { canRun: true, id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
         lastReport: fc?.summary ? short(fc.summary) : 'Todavía no ha verificado posts.', lastAt: lastChecked?.factCheckedAt?.toISOString() ?? null, nextRun: nextRunText(slotsChecker, now), slots: slotsChecker, href: '/command-center', doing: 'Comparando montos y fechas con IRS.gov…' },
-      { id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
+      { canRun: true, id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
         lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
       ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
       ghost(`${c.id}-community`, personName(ci, 5), 'Comunidad: responde comentarios (próximamente)', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
@@ -210,7 +213,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       sentTotal += blogSent
       if (connected) connectedTotal++
       blogAgents.push({
-        id: `blog-${c.id}`, name: BLOG_NAMES[i % BLOG_NAMES.length], role: `Blog de ${c.name}`, color: COLORS.blog, status,
+        canRun: true, id: `blog-${c.id}`, name: BLOG_NAMES[i % BLOG_NAMES.length], role: `Blog de ${c.name}`, color: COLORS.blog, status,
         schedule: blogProfile?.blogEnabled ? 'Martes · 9:00 AM (un artículo por semana, como borrador)' : blogProfile?.blogMirrorFrom ? 'Cada vez que se publica un post en redes' : 'Sin configurar',
         model: 'Sonnet',
         lastReport: !connected

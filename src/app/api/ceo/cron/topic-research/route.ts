@@ -22,8 +22,10 @@ async function handler(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
 
   try {
+    // Desde la oficina se puede correr solo para una empresa ({ companyId }); el cron de siempre corre para todas.
+    const only = ((await req.clone().json().catch(() => ({}))) as { companyId?: string }).companyId
     const profiles = await prisma.brandProfile.findMany({
-      where: { autoEnabled: true },
+      where: { autoEnabled: true, ...(only ? { companyId: only } : {}) },
       include: { company: { select: { id: true, name: true } } },
     })
     const summary: { company: string; created: number; skipped?: string; error?: string }[] = []

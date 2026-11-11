@@ -98,6 +98,8 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const [demoMin, setDemoMin] = useState(7 * 60)
   const [nowTs, setNowTs] = useState(() => Date.now())
   const fetchedAt = useRef(Date.now())
+  // "Ejecutar ahora": lanza el trabajo del agente elegido y muestra qué pasó en su tarjeta
+  const [run, setRun] = useState<{ id: string; state: 'busy' | 'started' | 'running' | 'done' | 'idle' | 'error'; message: string; since: number; baseline: string | null } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -151,6 +153,31 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
   const current = picked ?? fallback ?? null
   const agent = current?.a ?? null
   const dept = current?.d ?? null
+
+  const runAgent = async (a: OfficeAgent) => {
+    if (!a.id.startsWith('app-') && !window.confirm(`¿Ejecutar ahora a ${a.name} (${a.role})? Usa IA y cuesta unos centavos.`)) return
+    setRun({ id: a.id, state: 'busy', message: 'Lanzando…', since: Date.now(), baseline: a.lastAt })
+    try {
+      const res = await fetch('/api/agents/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: a.id }) })
+      const d = (await res.json().catch(() => ({}))) as { state?: 'started' | 'running' | 'done' | 'idle' | 'error'; message?: string }
+      setRun({ id: a.id, state: d.state ?? 'error', message: d.message ?? 'No se pudo ejecutar.', since: Date.now(), baseline: a.lastAt })
+      if (d.state === 'done') void load()
+    } catch {
+      setRun({ id: a.id, state: 'error', message: 'No se pudo conectar. Intenta de nuevo.', since: Date.now(), baseline: a.lastAt })
+    }
+  }
+  // Mientras trabaja, se revisa cada 8 s si ya terminó (cambia su última actividad); a los 8 minutos se deja de esperar.
+  useEffect(() => {
+    if (!run || run.state !== 'started') return
+    const t = setInterval(() => {
+      void load()
+      if (Date.now() - run.since > 8 * 60_000) setRun((r) => (r && r.id === run.id && r.state === 'started' ? { ...r, state: 'idle', message: 'Sigue trabajando por detrás: mira la bandeja o recarga en unos minutos.' } : r))
+    }, 8000)
+    return () => clearInterval(t)
+  }, [run, load])
+  useEffect(() => {
+    if (run?.state === 'started' && agent && agent.id === run.id && agent.lastAt && agent.lastAt !== run.baseline) setRun({ ...run, state: 'done', message: `Terminó. ${agent.lastReport}` })
+  }, [run, agent])
 
   const real = colombiaMinutes(new Date(nowTs))
   const clockDay = demo ? demoDay : real.day
@@ -291,6 +318,33 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
               <br />
               {agent.lastReport}
             </div>
+            {status !== 'ghost' && (
+              <div className="mt-3 space-y-1.5">
+                <div className="flex flex-wrap gap-2">
+                  {agent.canRun && (
+                    <button
+                      disabled={run?.id === agent.id && (run.state === 'busy' || run.state === 'started')}
+                      onClick={() => runAgent(agent)}
+                      className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      {run?.id === agent.id && (run.state === 'busy' || run.state === 'started') ? '⏳ Trabajando…' : '▶ Ejecutar ahora'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setWalk(false); setSelected(null); setFollowId(agent.id) }}
+                    className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-200 hover:bg-sky-500/20"
+                    title="Mira la oficina desde el puesto de este agente"
+                  >
+                    🎥 Verlo desde su puesto
+                  </button>
+                </div>
+                {run?.id === agent.id && (
+                  <p className={`text-xs leading-relaxed ${run.state === 'error' ? 'text-red-300' : run.state === 'done' ? 'text-emerald-300' : run.state === 'idle' ? 'text-amber-300' : 'text-zinc-300'}`}>
+                    {run.state === 'done' ? '✅ ' : run.state === 'error' ? '⚠️ ' : run.state === 'idle' ? 'ℹ️ ' : '⏳ '}{run.message}
+                  </p>
+                )}
+              </div>
+            )}
             {agent.href && status !== 'ghost' && (
               <Link href={agent.href} className="mt-3 inline-block rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:border-indigo-400">
                 Abrir su trabajo →

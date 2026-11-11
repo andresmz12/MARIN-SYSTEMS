@@ -22,8 +22,9 @@ async function handler(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurado' }, { status: 500 })
 
   try {
+    const only = ((await req.clone().json().catch(() => ({}))) as { companyId?: string }).companyId
     const profiles = await prisma.brandProfile.findMany({
-      where: { OR: [{ autoEnabled: true }, { newsEnabled: true }] },
+      where: { AND: [{ OR: [{ autoEnabled: true }, { newsEnabled: true }] }, ...(only ? [{ companyId: only }] : [])] },
       include: { company: { select: { id: true, name: true } } },
     })
     const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000)
