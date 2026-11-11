@@ -61,23 +61,23 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   const [script, setScript] = useState<Script | null>(null)
   const [deadlines, setDeadlines] = useState<Team['deadlines']>(null)
   const [limitInput, setLimitInput] = useState('')
-  const [blog, setBlog] = useState<{ configured: boolean; url: string; company: string } | null>(null)
+  const [blog, setBlog] = useState<{ configured: boolean; enabled?: boolean; url: string; company: string } | null>(null)
   const [blogTopic, setBlogTopic] = useState('')
   const [blogRun, setBlogRun] = useState<BlogRun | null>(null)
-  const [bp, setBp] = useState<{ exists: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string; ctaEn: string; aiWrite: boolean } | null>(null)
+  const [bp, setBp] = useState<{ exists: boolean; legacy?: boolean; website: string; tone: string; audience: string; topics: string; rules: string; cta: string; ctaEn: string; aiWrite: boolean } | null>(null)
   const [bpOpen, setBpOpen] = useState(false)
   const [queue, setQueue] = useState<{ key: string; position: number; title: string; es: boolean; en: boolean; status: string; isLegal: boolean; words: number; urls: string[]; preview: string }[]>([])
   const [importText, setImportText] = useState('')
   const [importRes, setImportRes] = useState<{ saved: number; errors: string[]; warnings: string[] } | null>(null)
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const loadQueue = useCallback(() => { fetch('/api/ceo/team/blog-articles').then((r) => (r.ok ? r.json() : null)).then((d: { items?: typeof queue } | null) => setQueue(d?.items ?? [])).catch(() => {}) }, [])
+  const loadQueue = useCallback(() => { fetch(`/api/ceo/team/blog-articles?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { items?: typeof queue } | null) => setQueue(d?.items ?? [])).catch(() => {}) }, [companyId])
   useEffect(() => { loadQueue() }, [loadQueue])
   const [dest, setDest] = useState<{ id: string; name: string; blogApiUrl: string; envVar: string; hasKey: boolean; mirrorFrom: string; weekly: boolean; sent: number }[]>([])
   const [destEdit, setDestEdit] = useState<Record<string, { url?: string; from?: string }>>({})
   const loadDest = useCallback(() => { fetch('/api/ceo/team/blog-destinations').then((r) => (r.ok ? r.json() : null)).then((d: { companies?: typeof dest } | null) => setDest(d?.companies ?? [])).catch(() => {}) }, [])
   useEffect(() => { loadDest() }, [loadDest])
-  const [bt, setBt] = useState<{ ready: boolean; total: number; pending: number; used: number; skipped: number; next: { id: string; title: string; category: string; kind: string }[]; needsInput: { id: string; title: string }[]; recent?: { title: string }[] } | null>(null)
-  const loadTopics = useCallback(() => { fetch('/api/ceo/team/blog-topics').then((r) => (r.ok ? r.json() : null)).then((d) => setBt(d)).catch(() => {}) }, [])
+  const [bt, setBt] = useState<{ ready: boolean; bank?: boolean; total: number; pending: number; used: number; skipped: number; next: { id: string; title: string; category: string; kind: string }[]; needsInput: { id: string; title: string }[]; recent?: { title: string }[] } | null>(null)
+  const loadTopics = useCallback(() => { fetch(`/api/ceo/team/blog-topics?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d) => setBt(d)).catch(() => {}) }, [companyId])
   useEffect(() => { loadTopics() }, [loadTopics])
   const [character, setCharacter] = useState('')
   const [charSaved, setCharSaved] = useState('')
@@ -95,9 +95,11 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
   }, [companyId])
   useEffect(() => { load() }, [load])
   useEffect(() => {
-    fetch('/api/ceo/team/blog-profile').then((r) => (r.ok ? r.json() : null)).then((d: { exists: boolean; website: string; tone: string; audience: string; topics: string[]; rules: string; cta: string; ctaEn?: string; aiWrite?: boolean } | null) => { if (d) setBp({ ...d, ctaEn: d.ctaEn ?? '', aiWrite: !!d.aiWrite, topics: d.topics.join('\n') }) }).catch(() => {})
-  }, [])
-  useEffect(() => { fetch('/api/ceo/team/luis').then((r) => (r.ok ? r.json() : null)).then((d: { companies?: { name: string; configured: boolean }[] } | null) => setBlog(d ? { configured: !!d.companies?.some((c) => c.configured), url: '', company: d.companies?.[0]?.name ?? 'Reports Systems' } : null)).catch(() => {}) }, [])
+    setBp(null)
+    setBpOpen(false)
+    fetch(`/api/ceo/team/blog-profile?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { exists: boolean; legacy?: boolean; website: string; tone: string; audience: string; topics: string[]; rules: string; cta: string; ctaEn?: string; aiWrite?: boolean } | null) => { if (d) { setBp({ ...d, ctaEn: d.ctaEn ?? '', aiWrite: !!d.aiWrite, topics: d.topics.join('\n') }); setBpOpen(!d.exists) } }).catch(() => {})
+  }, [companyId])
+  useEffect(() => { fetch(`/api/ceo/team/luis?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { companies?: { name: string; configured: boolean }[] } | null) => setBlog(d ? { configured: !!d.companies?.some((c) => c.configured), enabled: (d.companies?.length ?? 0) > 0, url: '', company: companies.find((c) => c.id === companyId)?.name ?? '' } : null)).catch(() => {}) }, [companyId, companies])
   useEffect(() => {
     if (!companyId) return
     fetch(`/api/ceo/team/character?companyId=${companyId}`).then((r) => (r.ok ? r.json() : null)).then((d: { text?: string } | null) => { setCharacter(d?.text ?? ''); setCharSaved(d?.text ?? '') }).catch(() => {})
@@ -320,9 +322,11 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
         </Box>
       </div>
 
-      <Box title="🔁 Blogs de destino: mandar lo mismo que publicamos" hint="Para el blog de otra app: lo que se publica en redes de una empresa se manda tal cual, como BORRADOR, al blog de otra (sin IA, sin crear nada nuevo). Tú lo revisas y lo publicas en ese blog.">
+      <Box title={`📝 Luis · Blog de ${blog?.company || companies.find((c) => c.id === companyId)?.name || 'la empresa'}`} hint="Todo el blog de esta empresa en un solo lugar: conexión, perfil, artículos y envío. Todo llega como BORRADOR; tú lo revisas y lo publicas desde tu panel del blog.">
+        <div className="space-y-1">
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500">1 · Conexión del blog</p>
         <ul className="space-y-3">
-          {dest.map((c) => {
+          {dest.filter((c) => c.id === companyId).map((c) => {
             const e = destEdit[c.id] ?? {}
             const url = e.url ?? c.blogApiUrl
             const from = e.from ?? c.mirrorFrom
@@ -348,18 +352,15 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
             )
           })}
         </ul>
-      </Box>
-
-      <Box title="📝 Luis: artículos del blog" hint={`Escribe un artículo nuevo en español e inglés y lo manda al blog de ${blog?.company ?? 'Reports Systems'} como BORRADOR. Tú lo revisas y lo publicas desde tu panel del blog. Solo, escribe uno cada martes.`}>
-        {blog && !blog.configured && (
-          <p className="text-xs text-amber-300">Falta conectar el blog: en Railway agrega la variable <b>BLOG_API_KEY</b> con una clave de “solo borradores” (Generales → Blog → Crear clave en tu panel de Reports Systems).</p>
-        )}
+        </div>
+        <p className="text-[11px] uppercase tracking-wide text-zinc-500">2 · Perfil y reglas de Luis</p>
         {bp && (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2">
             <button onClick={() => setBpOpen((v) => !v)} className="text-xs text-zinc-300 underline">{bp.exists ? '⚙️ Perfil del blog (ya guardado)' : '⚙️ Crear el perfil del blog (falta guardarlo)'} {bpOpen ? '▲' : '▼'}</button>
             {bpOpen && (
               <div className="space-y-2">
-                {([['website', 'Web (https://…)', 1], ['tone', 'Tono', 2], ['audience', 'Público', 2], ['topics', 'Temas del blog (uno por línea)', 7], ['rules', 'Reglas para Luis (una por línea)', 5], ['cta', 'Llamado a la acción al final (incluye el enlace o número de WhatsApp)', 2], ['ctaEn', 'Llamado a la acción en inglés (opcional; si lo dejas vacío se arma solo)', 2]] as const).map(([k, label, rows]) => (
+                {bp.legacy === false && bp.exists && <p className="text-xs text-zinc-500">Luis usa el <b>tono, el público y los temas</b> del perfil de marca de esta empresa (los de sus redes); aquí solo se ajusta lo del blog.</p>}
+                {([['website', 'Web (https://…)', 1], ['tone', 'Tono', 2], ['audience', 'Público', 2], ['topics', 'Temas del blog (uno por línea)', 7], ['rules', 'Reglas para Luis (una por línea)', 5], ['cta', 'Llamado a la acción al final (incluye el enlace o número de WhatsApp)', 2], ['ctaEn', 'Llamado a la acción en inglés (opcional; si lo dejas vacío se arma solo)', 2]] as const).filter(([k]) => bp.legacy !== false || !bp.exists || !['tone', 'audience', 'topics'].includes(k)).map(([k, label, rows]) => (
                   <label key={k} className="block text-xs text-zinc-400">{label}
                     <textarea value={bp[k]} onChange={(e) => setBp({ ...bp, [k]: e.target.value })} rows={rows} className="mt-1 w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100" />
                   </label>
@@ -371,19 +372,20 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
                 </label>
                 <button
                   disabled={busy === 'bp'}
-                  onClick={async () => { if (await call('/api/ceo/team/blog-profile', { method: 'PUT', body: JSON.stringify({ website: bp.website, tone: bp.tone, audience: bp.audience, topics: bp.topics.split('\n'), rules: bp.rules, cta: bp.cta, ctaEn: bp.ctaEn, aiWrite: bp.aiWrite }) }, 'bp')) { setBp({ ...bp, exists: true }); showToast('Perfil del blog guardado', 'success') } }}
+                  onClick={async () => { if (await call('/api/ceo/team/blog-profile', { method: 'PUT', body: JSON.stringify({ companyId, website: bp.website, tone: bp.tone, audience: bp.audience, topics: bp.topics.split('\n'), rules: bp.rules, cta: bp.cta, ctaEn: bp.ctaEn, aiWrite: bp.aiWrite }) }, 'bp')) { setBp({ ...bp, exists: true }); showToast('Perfil del blog guardado', 'success') } }}
                   className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
                 >Guardar perfil</button>
               </div>
             )}
           </div>
         )}
+        {bt?.bank !== false && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2">
           <p className="text-xs text-zinc-300">📚 Banco de temas {bt?.ready && bt.total > 0 ? <span className="text-zinc-500">· {bt.pending} por escribir · {bt.used} escritos{bt.skipped ? ` · ${bt.skipped} saltados` : ''}</span> : null}</p>
           {bt && bt.total === 0 && (
             <button
               disabled={busy === 'topics' || !bt.ready}
-              onClick={async () => { const d = (await call('/api/ceo/team/blog-topics', { method: 'POST' }, 'topics')) as { added?: number } | null; if (d) { showToast(`${d.added} temas cargados`, 'success'); loadTopics() } }}
+              onClick={async () => { const d = (await call('/api/ceo/team/blog-topics', { method: 'POST', body: JSON.stringify({ companyId }) }, 'topics')) as { added?: number } | null; if (d) { showToast(`${d.added} temas cargados`, 'success'); loadTopics() } }}
               className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
             >Cargar mis temas (78)</button>
           )}
@@ -394,7 +396,7 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
               <ol className="list-decimal pl-5 space-y-0.5 text-xs text-zinc-300">
                 {bt.next.map((t) => (
                   <li key={t.id}>{t.title}{t.kind === 'legal' ? <span className="text-amber-300"> · tema legal: llevará la nota de confirmar con un abogado</span> : null}
-                    <button onClick={async () => { if (await call('/api/ceo/team/blog-topics', { method: 'PATCH', body: JSON.stringify({ id: t.id, status: 'skipped' }) }, 'skip')) loadTopics() }} className="ml-2 text-zinc-500 hover:text-zinc-300 underline">saltar</button>
+                    <button onClick={async () => { if (await call('/api/ceo/team/blog-topics', { method: 'PATCH', body: JSON.stringify({ id: t.id, status: 'skipped', companyId }) }, 'skip')) loadTopics() }} className="ml-2 text-zinc-500 hover:text-zinc-300 underline">saltar</button>
                   </li>
                 ))}
               </ol>
@@ -404,12 +406,13 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
             <p className="text-[11px] text-zinc-500">Necesitan tus datos reales (casos, testimonios o novedades), Luis no los escribe solo: {bt.needsInput.map((t) => `«${t.title}»`).join(', ')}. Para escribirlos, pon el tema y los hechos en el cuadro de abajo.</p>
           )}
         </div>
+        )}
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2">
           <p className="text-xs text-zinc-300">📥 Artículos listos <span className="text-zinc-500">· los escribes tú con otra IA y salen solos, uno por semana, como borrador</span></p>
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={4} placeholder={'Pega aquí uno o varios artículos con este formato:\n@@@ARTICULO\nidioma: es\nclave: cuadrar-la-caja\ntitulo: …\ndescripcion: …\n---\n(contenido en Markdown)\n@@@FIN'} className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 font-mono" />
           <button
             disabled={importText.trim().length < 50 || busy === 'import'}
-            onClick={async () => { const d = (await call('/api/ceo/team/blog-articles', { method: 'POST', body: JSON.stringify({ text: importText }) }, 'import')) as { saved: number; errors: string[]; warnings: string[] } | null; if (d) { setImportRes(d); if (d.saved > 0 && d.errors.length === 0) setImportText(''); loadQueue(); loadTopics() } }}
+            onClick={async () => { const d = (await call('/api/ceo/team/blog-articles', { method: 'POST', body: JSON.stringify({ text: importText, companyId }) }, 'import')) as { saved: number; errors: string[]; warnings: string[] } | null; if (d) { setImportRes(d); if (d.saved > 0 && d.errors.length === 0) setImportText(''); loadQueue(); loadTopics() } }}
             className="text-xs text-indigo-200 border border-indigo-500/40 rounded-md px-2 py-1 hover:bg-indigo-500/10 disabled:opacity-40"
           >{busy === 'import' ? 'Revisando…' : 'Subir a la cola'}</button>
           {importRes && (
@@ -429,10 +432,10 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
                     <button onClick={() => setOpenKey(openKey === q.key ? null : q.key)} className="text-zinc-400 underline">{openKey === q.key ? 'ocultar' : 'ver'}</button>
-                    {q.status !== 'sent' && <button disabled={busy === `send-${q.key}`} onClick={async () => { const d = (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'send' }) }, `send-${q.key}`)) as { ok?: boolean } | null; if (d?.ok) { showToast('Enviado al blog como borrador', 'success'); loadQueue() } }} className="text-indigo-300 underline disabled:opacity-40">{busy === `send-${q.key}` ? 'enviando…' : 'enviar ahora'}</button>}
-                    {q.status === 'ready' && <button onClick={async () => { if (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'skip' }) }, 'q')) loadQueue() }} className="text-zinc-500 hover:text-zinc-300 underline">pausar</button>}
-                    {q.status === 'skipped' && <button onClick={async () => { if (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'ready' }) }, 'q')) loadQueue() }} className="text-zinc-400 underline">reactivar</button>}
-                    {q.status !== 'sent' && <button onClick={async () => { if (window.confirm('¿Quitar este artículo de la cola?') && await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'delete' }) }, 'q')) loadQueue() }} className="text-red-300/80 underline">quitar</button>}
+                    {q.status !== 'sent' && <button disabled={busy === `send-${q.key}`} onClick={async () => { const d = (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'send', companyId }) }, `send-${q.key}`)) as { ok?: boolean } | null; if (d?.ok) { showToast('Enviado al blog como borrador', 'success'); loadQueue() } }} className="text-indigo-300 underline disabled:opacity-40">{busy === `send-${q.key}` ? 'enviando…' : 'enviar ahora'}</button>}
+                    {q.status === 'ready' && <button onClick={async () => { if (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'skip', companyId }) }, 'q')) loadQueue() }} className="text-zinc-500 hover:text-zinc-300 underline">pausar</button>}
+                    {q.status === 'skipped' && <button onClick={async () => { if (await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'ready', companyId }) }, 'q')) loadQueue() }} className="text-zinc-400 underline">reactivar</button>}
+                    {q.status !== 'sent' && <button onClick={async () => { if (window.confirm('¿Quitar este artículo de la cola?') && await call('/api/ceo/team/blog-articles', { method: 'PATCH', body: JSON.stringify({ key: q.key, action: 'delete', companyId }) }, 'q')) loadQueue() }} className="text-red-300/80 underline">quitar</button>}
                     {q.urls.map((u) => <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="text-indigo-300 underline">abrir en el blog ↗</a>)}
                   </div>
                   {openKey === q.key && <pre className="whitespace-pre-wrap rounded bg-zinc-950 border border-zinc-800 p-2 text-[11px] text-zinc-400">{q.preview}…</pre>}
@@ -441,10 +444,11 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
             </ul>
           )}
         </div>
-        <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis toma el siguiente de tu banco de temas" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
+        <p className="text-[11px] uppercase tracking-wide text-zinc-500">5 · Escribir un artículo ahora</p>
+        <input value={blogTopic} onChange={(e) => setBlogTopic(e.target.value)} maxLength={200} placeholder="Tema (opcional). Si lo dejas vacío, Luis toma el siguiente tema pendiente" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
         <button
           disabled={!blog?.configured || busy === 'luis'}
-          onClick={async () => { const d = (await call('/api/ceo/team/luis', { method: 'POST', body: JSON.stringify({ topic: blogTopic }) }, 'luis')) as BlogRun | null; if (d) { setBlogRun(d); await load() } }}
+          onClick={async () => { const d = (await call('/api/ceo/team/luis', { method: 'POST', body: JSON.stringify({ topic: blogTopic, companyId }) }, 'luis')) as BlogRun | null; if (d) { setBlogRun(d); await load() } }}
           className="px-3 py-1.5 rounded-lg text-sm text-indigo-200 border border-indigo-500/40 hover:bg-indigo-500/10 disabled:opacity-40"
         >{busy === 'luis' ? 'Escribiendo… (1 a 3 min)' : 'Escribir un artículo ahora'}</button>
         {blogRun?.ok && (

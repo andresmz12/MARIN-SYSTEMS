@@ -57,6 +57,14 @@ De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía aviso
 - Variables en Railway: `HEALTH_EMAIL_EVERY_MIN` (por defecto `60`; `0` lo apaga) y `ALERT_EMAIL_TO` (a dónde llega).
 - De 11 PM a 7 AM no se revisa ni se envía nada.
 
+## Luis: el agente del blog de cada empresa
+
+Cada empresa (Reports Systems, ISM Consulting Services…) tiene **su propio Luis**: un escritorio en su departamento de la oficina (en lugar del puesto vacío de "comunidad") que muestra si el blog está conectado, cuántos artículos hay en cola, cuántos se enviaron, el último enviado, y se pone en rojo si la tarea semanal falla.
+
+Todo el blog de una empresa está en **Command Center → Equipo → (elige la empresa) → "📝 Luis · Blog de …"**, en este orden: 1) conexión (dirección, clave en Railway y de qué empresa copia lo que se publica), 2) perfil y reglas, 3) banco de temas (solo Reports Systems), 4) artículos listos (cola), 5) escribir uno ahora.
+En empresas que no son la del blog (ISM), Luis usa el tono, el público y los temas del perfil de marca de las redes; el formulario solo guarda lo del blog.
+La clave de cada blog va en Railway como `BLOG_API_KEY_<NOMBRE_DE_LA_EMPRESA>` (ISM: `BLOG_API_KEY_ISM_CONSULTING_SERVICES`).
+
 ## Luis: blog de Reports Systems
 
 - Escribe **un artículo por semana** (martes 9 AM COL) en **español e inglés** y lo manda al blog como **borrador**; nunca publica. El dueño lo revisa y lo publica en Generales → Blog.

@@ -1,6 +1,7 @@
 // Modelo de la oficina: departamentos con sus agentes y el estado real de cada uno.
 // Tipos y reglas puras aquí; la consulta a la base de datos vive en buildOffice().
 import { prisma } from '@/lib/prisma'
+import { resolveBlogTarget } from '@/lib/blog-api'
 
 export type AgentStatus = 'work' | 'sleep' | 'alert' | 'ghost'
 
@@ -35,7 +36,7 @@ export interface OfficeDepartment {
   note: string
 }
 
-const COLORS = { research: '#4fb6d9', writer: '#b58cff', checker: '#f2b84b', analyst: '#f0645c', ghost: '#6b7592' }
+const COLORS = { research: '#4fb6d9', writer: '#b58cff', checker: '#f2b84b', analyst: '#f0645c', blog: '#ff9f6b', ghost: '#6b7592' }
 // Una corrida que terminó hace poco se muestra como "trabajando": son tareas de segundos o minutos.
 const RECENT_MS = 20 * 60 * 1000
 const BOGOTA_OFFSET_MIN = -5 * 60
@@ -120,7 +121,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
   // ── Marketing: un departamento por empresa activa ──
   const companies = await prisma.cEOCompany.findMany({ where: { userId, isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true, color: true } })
   const runs = await prisma.cronRun.findMany({
-    where: { job: { in: ['topic-research', 'auto-content', 'news-watch', 'metrics-report'] }, startedAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) } },
+    where: { job: { in: ['topic-research', 'auto-content', 'news-watch', 'metrics-report', 'blog-article'] }, startedAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) } },
     orderBy: { startedAt: 'desc' },
     take: 200,
   })
@@ -145,6 +146,20 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       prisma.agentReport.findFirst({ where: { companyId: c.id, kind: 'topics' }, orderBy: { createdAt: 'desc' } }),
       prisma.brandProfile.findUnique({ where: { companyId: c.id }, select: { autoEnabled: true, newsEnabled: true } }),
     ])
+    // Luis, el agente del blog de ESTA empresa: conexión, cola y último envío
+    const [blogProfile, blogReady, blogSent, lastBlogSent, lastMirror] = await Promise.all([
+      prisma.brandProfile.findUnique({ where: { companyId: c.id }, select: { blogEnabled: true, blogApiUrl: true, blogMirrorFrom: true } }),
+      prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'ready' } }).then((g) => g.length),
+      prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'sent' } }).then((g) => g.length),
+      prisma.blogArticle.findFirst({ where: { companyId: c.id, status: 'sent' }, orderBy: { sentAt: 'desc' }, select: { title: true, sentAt: true } }),
+      prisma.blogMirror.findFirst({ where: { targetCompanyId: c.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    ])
+    const blogConnected = !!resolveBlogTarget({ name: c.name }, { blogApiUrl: blogProfile?.blogApiUrl })
+    const blogActive = blogConnected && !!(blogProfile?.blogEnabled || blogProfile?.blogMirrorFrom)
+    const blogLast = [lastBlogSent?.sentAt, lastMirror?.createdAt].filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+    const blogCron = lastRun('blog-article')
+    const blogStatus: AgentStatus = !blogActive ? 'sleep' : blogCron && !blogCron.ok && blogCron.finishedAt && blogCron.startedAt.getTime() > (blogLast?.getTime() ?? 0) ? 'alert' : blogLast && now.getTime() - blogLast.getTime() < RECENT_MS ? 'work' : 'sleep'
+    const slotsBlog: ScheduleSlot[] = [{ day: 2, from: 9 * 60, to: 10 * 60 }]
     const on = !!(profile?.autoEnabled || profile?.newsEnabled)
     const off = on ? '' : ' (piloto automático apagado)'
     const research = statusOf(['topic-research'])
@@ -168,7 +183,17 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       { id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
         lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
       ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
-      ghost(`${c.id}-community`, personName(ci, 5), 'Comunidad: responde comentarios (próximamente)', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
+      {
+        id: `${c.id}-blog`, name: 'Luis', role: 'Redactor del blog', color: COLORS.blog, status: blogStatus,
+        schedule: blogProfile?.blogEnabled ? 'Martes · 9:00 AM (un artículo por semana, como borrador)' : blogProfile?.blogMirrorFrom ? 'Cada vez que se publica un post en redes' : 'Sin configurar',
+        model: 'Sonnet',
+        lastReport: !blogConnected
+          ? 'Sin blog conectado: en Command Center → Equipo → Blog de esta empresa, guarda la dirección y la clave en Railway.'
+          : short(`${blogReady} ${blogReady === 1 ? 'artículo listo' : 'artículos listos'} en la cola · ${blogSent} enviados${lastBlogSent ? ` · último: «${lastBlogSent.title}»` : ''}${blogProfile?.blogMirrorFrom ? ' · copia lo que se publica en redes' : ''}.`),
+        lastAt: blogLast?.toISOString() ?? null,
+        nextRun: blogProfile?.blogEnabled ? nextRunText(slotsBlog, now) : null,
+        slots: blogProfile?.blogEnabled ? slotsBlog : [], href: '/command-center', doing: 'Mandando un artículo al blog…',
+      },
     ]
     departments.push({
       id: `mkt-${c.id}`,

@@ -5,10 +5,13 @@ import { teamUser } from '@/lib/team-auth'
 export const maxDuration = 300
 
 // Empresas con blog y si su conexión está lista.
-export async function GET() {
+export async function GET(req: NextRequest) {
   const u = await teamUser()
   if (u instanceof NextResponse) return u
-  return NextResponse.json({ companies: await listBlogCompanies() })
+  const all = await listBlogCompanies()
+  const given = new URL(req.url).searchParams.get('companyId')
+  // Con ?companyId= se devuelve solo esa empresa (o ninguna si todavía no tiene el blog activado).
+  return NextResponse.json({ companies: given ? all.filter((c) => c.id === given) : all })
 }
 
 // Luis escribe ahora un artículo para una empresa (con tema opcional) y lo manda como borrador.
