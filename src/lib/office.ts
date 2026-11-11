@@ -31,7 +31,7 @@ export interface OfficeAgent {
 export interface OfficeDepartment {
   id: string
   name: string
-  kind: 'monitoring' | 'marketing' | 'direction' | 'blogs'
+  kind: 'monitoring' | 'marketing' | 'direction'
   accent: string
   agents: OfficeAgent[]
   stats: { label: string; value: number }[]
@@ -162,42 +162,11 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
     const slotsChecker: ScheduleSlot[] = [{ day: 6, from: 10 * 60, to: 11 * 60 }, { day: 1, from: 11 * 60, to: 12 * 60 }, { day: 4, from: 11 * 60, to: 12 * 60 }]
     const slotsAnalyst: ScheduleSlot[] = [{ day: 6, from: 8 * 60, to: 9 * 60 }]
 
-    const agents: OfficeAgent[] = [
-      { canRun: true, id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Martes y viernes · 7:00 AM', model: 'Haiku + búsqueda web',
-        lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando temas y noticias de la semana…' },
-      { canRun: true, id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias lunes y jueves, 10:00 AM', model: 'Sonnet',
-        lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
-      { canRun: true, id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
-        lastReport: fc?.summary ? short(fc.summary) : 'Todavía no ha verificado posts.', lastAt: lastChecked?.factCheckedAt?.toISOString() ?? null, nextRun: nextRunText(slotsChecker, now), slots: slotsChecker, href: '/command-center', doing: 'Comparando montos y fechas con IRS.gov…' },
-      { canRun: true, id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
-        lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
-      ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
-      ghost(`${c.id}-community`, personName(ci, 5), 'Comunidad: responde comentarios (próximamente)', 'Puesto reservado: leerá los comentarios, responderá los simples y te pasará los que necesiten una persona.'),
-    ]
-    departments.push({
-      id: `mkt-${c.id}`,
-      name: c.name,
-      kind: 'marketing',
-      accent: /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : '#7aa2ff',
-      agents,
-      stats: [{ label: 'por aprobar', value: pending }, { label: 'programados', value: queued }, { label: 'publicados (7 días)', value: published }],
-      note: pending ? `${pending} post${pending === 1 ? '' : 's'} esperando tu aprobación. Nada sale sin que lo revises.` : 'Nada pendiente por aprobar.',
-    })
-  }
-
-  // ── Creación de blogs: un agente por empresa (Luis para Reports Systems), cada uno con su blog, su cola y su estado ──
-  if (companies.length > 0) {
-    const legacyName = (process.env.BLOG_COMPANY_NAME || 'Reports Systems').toLowerCase()
-    const ordered = [...companies].sort((a, b) => Number(b.name.toLowerCase().includes(legacyName)) - Number(a.name.toLowerCase().includes(legacyName)))
     const BLOG_NAMES = ['Luis', 'Valeria', 'Santiago', 'Daniela', 'Mateo']
     const slotsBlog: ScheduleSlot[] = [{ day: 2, from: 9 * 60, to: 10 * 60 }]
     const blogCron = lastRun('blog-article')
-    const blogAgents: OfficeAgent[] = []
-    let readyTotal = 0
-    let sentTotal = 0
-    let connectedTotal = 0
-    for (let i = 0; i < ordered.length; i++) {
-      const c = ordered[i]
+    const legacyName = (process.env.BLOG_COMPANY_NAME || 'Reports Systems').toLowerCase()
+    const i = c.name.toLowerCase().includes(legacyName) ? 0 : ci + 1
       const [blogProfile, blogReady, blogSent, lastBlogSent, lastMirror] = await Promise.all([
         prisma.brandProfile.findUnique({ where: { companyId: c.id }, select: { blogEnabled: true, blogApiUrl: true, blogMirrorFrom: true } }),
         prisma.blogArticle.groupBy({ by: ['translationKey'], where: { companyId: c.id, status: 'ready' } }).then((g) => g.length),
@@ -209,10 +178,8 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
       const active = connected && !!(blogProfile?.blogEnabled || blogProfile?.blogMirrorFrom)
       const last = [lastBlogSent?.sentAt, lastMirror?.createdAt].filter((d): d is Date => !!d).sort((x, y) => y.getTime() - x.getTime())[0] ?? null
       const status: AgentStatus = !active ? 'sleep' : blogCron && !blogCron.ok && blogCron.finishedAt && blogCron.startedAt.getTime() > (last?.getTime() ?? 0) ? 'alert' : last && now.getTime() - last.getTime() < RECENT_MS ? 'work' : 'sleep'
-      readyTotal += blogReady
-      sentTotal += blogSent
-      if (connected) connectedTotal++
-      blogAgents.push({
+      
+      const blogAgent: OfficeAgent = {
         canRun: true, id: `blog-${c.id}`, name: BLOG_NAMES[i % BLOG_NAMES.length], role: `Blog de ${c.name}`, color: COLORS.blog, status,
         schedule: blogProfile?.blogEnabled ? 'Martes · 9:00 AM (un artículo por semana, como borrador)' : blogProfile?.blogMirrorFrom ? 'Cada vez que se publica un post en redes' : 'Sin configurar',
         model: 'Sonnet',
@@ -223,16 +190,28 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
         nextRun: blogProfile?.blogEnabled ? nextRunText(slotsBlog, now) : null,
         slots: blogProfile?.blogEnabled ? slotsBlog : [],
         href: `/command-center?tab=team&company=${c.id}`, doing: 'Mandando un artículo al blog…',
-      })
-    }
+      }
+
+    const agents: OfficeAgent[] = [
+      { canRun: true, id: `${c.id}-research`, name: personName(ci, 0), role: 'Investigador de temas', color: COLORS.research, status: on ? research.status : 'sleep', schedule: 'Martes y viernes · 7:00 AM', model: 'Haiku + búsqueda web',
+        lastReport: topicList ? short(`Temas propuestos: ${topicList}`) : `Todavía no ha propuesto temas${off}.`, lastAt: topics?.createdAt.toISOString() ?? research.at?.toISOString() ?? null, nextRun: nextRunText(slotsResearch, now), slots: slotsResearch, href: '/command-center', doing: 'Buscando temas y noticias de la semana…' },
+      { canRun: true, id: `${c.id}-writer`, name: personName(ci, 1), role: 'Redactor de contenido', color: COLORS.writer, status: on ? writer.status : 'sleep', schedule: 'Sábado 9:00 AM (semana) · noticias lunes y jueves, 10:00 AM', model: 'Sonnet',
+        lastReport: lastPost ? short(`Último post: "${lastPost.topic}"`) : `Todavía no ha escrito posts${off}.`, lastAt: lastPost?.createdAt.toISOString() ?? writer.at?.toISOString() ?? null, nextRun: nextRunText(slotsWriter, now), slots: slotsWriter, href: '/command-center', doing: 'Escribiendo un post para todas las redes…' },
+      { canRun: true, id: `${c.id}-checker`, name: personName(ci, 2), role: 'Verificador de datos', color: COLORS.checker, status: on ? (writer.status === 'work' ? 'work' : writer.status === 'alert' ? 'alert' : 'sleep') : 'sleep', schedule: 'Justo después de cada post nuevo', model: 'Sonnet + búsqueda web',
+        lastReport: fc?.summary ? short(fc.summary) : 'Todavía no ha verificado posts.', lastAt: lastChecked?.factCheckedAt?.toISOString() ?? null, nextRun: nextRunText(slotsChecker, now), slots: slotsChecker, href: '/command-center', doing: 'Comparando montos y fechas con IRS.gov…' },
+      { canRun: true, id: `${c.id}-analyst`, name: personName(ci, 3), role: 'Analista de métricas', color: COLORS.analyst, status: on ? analyst.status : 'sleep', schedule: 'Sábados · 8:00 AM', model: 'Haiku',
+        lastReport: metrics ? short(String((metrics.content as { summary?: string }).summary ?? 'Informe listo.')) : 'Aún sin informe: necesita 3 posts publicados con números.', lastAt: metrics?.createdAt.toISOString() ?? analyst.at?.toISOString() ?? null, nextRun: nextRunText(slotsAnalyst, now), slots: slotsAnalyst, href: '/command-center', doing: 'Leyendo alcance, likes y guardados de la semana…' },
+      blogAgent,
+      ghost(`${c.id}-video`, personName(ci, 4), 'Videos con avatar de la marca (próximamente)', 'Puesto reservado: se activa cuando elijamos el servicio de video y probemos costos.'),
+    ]
     departments.push({
-      id: 'blogs',
-      name: 'Creación de blogs',
-      kind: 'blogs',
-      accent: '#ff9f6b',
-      agents: blogAgents,
-      stats: [{ label: 'artículos en cola', value: readyTotal }, { label: 'enviados', value: sentTotal }, { label: 'blogs conectados', value: connectedTotal }],
-      note: connectedTotal === 0 ? 'Ningún blog está conectado todavía: toca a un agente y pulsa "Abrir su trabajo".' : 'Cada agente cuida el blog de una empresa. Todo llega como borrador; tú lo revisas y lo publicas.',
+      id: `mkt-${c.id}`,
+      name: c.name,
+      kind: 'marketing',
+      accent: /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : '#7aa2ff',
+      agents,
+      stats: [{ label: 'por aprobar', value: pending }, { label: 'programados', value: queued }, { label: 'publicados (7 días)', value: published }],
+      note: pending ? `${pending} post${pending === 1 ? '' : 's'} esperando tu aprobación. Nada sale sin que lo revises.` : 'Nada pendiente por aprobar.',
     })
   }
 
