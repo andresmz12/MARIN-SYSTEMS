@@ -46,7 +46,7 @@ function Box({ title, hint, children }: { title: string; hint?: string; children
   )
 }
 
-export function TeamPanel({ companies, initialCompanyId }: { companies: CEOCompany[]; initialCompanyId?: string }) {
+export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { companies: CEOCompany[]; initialCompanyId?: string; mode?: 'history' | 'agents' }) {
   const { showToast } = useToast()
   // Si no viene una empresa elegida, se abre en Reports Systems (donde está la cola de artículos de siempre) y, si no existe, en la primera.
   const [companyId, setCompanyId] = useState(initialCompanyId && companies.some((c) => c.id === initialCompanyId) ? initialCompanyId : (companies.find((c) => /reports\s*systems/i.test(c.name)) ?? companies[0])?.id ?? '')
@@ -131,13 +131,16 @@ export function TeamPanel({ companies, initialCompanyId }: { companies: CEOCompa
 
   return (
     <div className="space-y-4">
+      {mode !== 'agents' && (<div className="contents">
       <div className="flex flex-wrap items-center gap-3">
         <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setTeam(null); setScript(null); setReplies(null) }} className="bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100">
           {companies.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
         </select>
         <p className="text-sm text-zinc-300">Gasto aproximado de IA este mes: <b className="text-white">{usd(team.totalMonth)}</b> <span className="text-xs text-zinc-500">(estimado por tokens; la cifra real está en tu consola de Anthropic)</span></p>
       </div>
+      </div>)}
 
+      {mode !== 'agents' && (<>
       {(() => {
         const { spent, limit } = team.budget
         const pct = Math.min(100, Math.round((spent / limit) * 100))
@@ -252,7 +255,9 @@ export function TeamPanel({ companies, initialCompanyId }: { companies: CEOCompa
           </ul>
         )}
       </Box>
+      </>)}
 
+      {mode === 'agents' && (<>
       <Box title="🧠 Lo que aprendió el equipo" hint="Reglas que Fernanda y los demás siguen al escribir. Escríbelas tú o apágalas cuando ya no apliquen.">
         <div className="flex flex-wrap gap-2">
           <input value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="Ej: no uses signos de admiración en los títulos" maxLength={300} className="flex-1 min-w-[220px] bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
@@ -501,6 +506,7 @@ export function TeamPanel({ companies, initialCompanyId }: { companies: CEOCompa
           </div>
         )}
       </Box>
+      </>)}
     </div>
   )
 }

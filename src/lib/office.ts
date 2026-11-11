@@ -189,7 +189,7 @@ export async function buildOffice(userId: string, now = new Date()): Promise<Off
         lastAt: last?.toISOString() ?? null,
         nextRun: blogProfile?.blogEnabled ? nextRunText(slotsBlog, now) : null,
         slots: blogProfile?.blogEnabled ? slotsBlog : [],
-        href: `/command-center?tab=team&company=${c.id}`, doing: 'Mandando un artículo al blog…',
+        href: `/command-center?company=${c.id}`, doing: 'Mandando un artículo al blog…',
       }
 
     const agents: OfficeAgent[] = [

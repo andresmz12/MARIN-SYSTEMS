@@ -27,6 +27,7 @@ export default function CommandCenterPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     if (q.get('tab') === 'team') { setTab(TEAM); setTeamCompany(q.get('company') ?? undefined) }
+    else if (q.get('company')) setTab(q.get('company') as string) // desde la oficina: abre la empresa
   }, [])
 
   const loadCompanies = useCallback(async () => {
@@ -130,7 +131,19 @@ export default function CommandCenterPage() {
       ) : showManage ? (
         <CompanyManager companies={companies} onChanged={loadCompanies} />
       ) : (
-        current && <ContentReviewQueue key={current.id} company={current} onOpenCompanies={() => setTab(MANAGE)} />
+        current && (
+          <div className="space-y-5">
+            <details open className="rounded-xl border border-zinc-800 bg-zinc-900/40">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-100">
+                👥 Equipo de {current.name} <span className="ml-1 text-xs font-normal text-zinc-500">blog, respuestas a comentarios, videos, reglas · toca para abrir o cerrar</span>
+              </summary>
+              <div className="p-3 sm:p-4">
+                <TeamPanel key={current.id} mode="agents" companies={[current]} initialCompanyId={current.id} />
+              </div>
+            </details>
+            <ContentReviewQueue key={current.id} company={current} onOpenCompanies={() => setTab(MANAGE)} />
+          </div>
+        )
       )}
     </div>
   )
