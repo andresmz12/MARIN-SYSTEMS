@@ -2025,12 +2025,48 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
     const blockedWalk = (x: number, z: number) => !nav.isFree({ x, z }) || others.some((q) => { const dd = Math.hypot(x - q.x, z - q.z); return dd < 0.62 && dd < Math.hypot(me.x - q.x, me.z - q.z) }) || (partyAmt < 0.6 && discoDoor !== null && inRect({ x, z }, discoDoor))
     let yaw = (Math.PI * 5) / 4 // se mira desde el lado en que las personas dan la cara
     let pitch = 0.6
+    let lastFcs = ''
     let zoom = 1
+    const pan = { x: 0, z: 0 } // desplazamiento libre de la vista
+    let viewHNow = 20
+    const panBy = (dxPx: number, dyPx: number) => {
+      const upp = viewHNow / Math.max(1, host.clientHeight)
+      const sp = Math.max(0.35, Math.sin(pitch))
+      pan.x += -Math.cos(yaw) * dxPx * upp + -Math.sin(yaw) * (dyPx * upp) / sp
+      pan.z += Math.sin(yaw) * dxPx * upp + -Math.cos(yaw) * (dyPx * upp) / sp
+      const lim = Math.max(fw, fd) * 0.7
+      pan.x = Math.max(-lim, Math.min(lim, pan.x))
+      pan.z = Math.max(-lim, Math.min(lim, pan.z))
+    }
+    const camCmd = (c: string) => {
+      const st = 40
+      if (c === 'left') panBy(st, 0); else if (c === 'right') panBy(-st, 0)
+      else if (c === 'up') panBy(0, st); else if (c === 'down') panBy(0, -st)
+      else if (c === 'zin') zoom = Math.min(2.4, zoom * 1.15); else if (c === 'zout') zoom = Math.max(0.6, zoom / 1.15)
+      else if (c === 'rotl') yaw += 0.2; else if (c === 'rotr') yaw -= 0.2
+      else if (c === 'reset') { pan.x = 0; pan.z = 0; zoom = 1; yaw = (Math.PI * 5) / 4; pitch = 0.6 }
+    }
+    const onCamEvt = (e: Event) => camCmd((e as CustomEvent<string>).detail)
+    window.addEventListener('office-cam', onCamEvt)
+    let hover = false
+    canvas.addEventListener('pointerenter', () => { hover = true })
+    canvas.addEventListener('pointerleave', () => { hover = false })
+    const camKey = (e: KeyboardEvent) => {
+      if (!hover || walkOn || followed) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const m: Record<string, string> = { arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right', arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', q: 'rotl', e: 'rotr', '+': 'zin', '=': 'zin', '-': 'zout', '0': 'reset' }
+      const c = m[e.key.toLowerCase()]
+      if (c) { e.preventDefault(); camCmd(c) }
+    }
+    window.addEventListener('keydown', camKey)
+    let dragRot = false
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault())
     const cur = { ...focusOf('all') }
     const pts = new Map<number, [number, number]>()
     let drag: { x: number; y: number } | null = null
     let pinch = 0
-    const onDown = (e: PointerEvent) => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY } }
+    const onDown = (e: PointerEvent) => { dragRot = e.button === 2 || e.shiftKey; canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY } }
     const onMove = (e: PointerEvent) => {
       if (!pts.has(e.pointerId)) return
       pts.set(e.pointerId, [e.clientX, e.clientY])
@@ -2039,6 +2075,9 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         const d = Math.hypot(v[0][0] - v[1][0], v[0][1] - v[1][1])
         if (pinch) zoom = Math.max(0.6, Math.min(2.4, (zoom * d) / pinch))
         pinch = d
+        const mx = (v[0][0] + v[1][0]) / 2, my = (v[0][1] + v[1][1]) / 2
+        if (drag && !walkOn && !followed) { panBy(mx - drag.x, my - drag.y) }
+        drag = { x: mx, y: my }
         return
       }
       if (!drag) return
@@ -2054,8 +2093,10 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
         drag = { x: e.clientX, y: e.clientY }
         return
       }
-      yaw -= (e.clientX - drag.x) * 0.006
-      pitch = Math.max(0.35, Math.min(1.1, pitch + (e.clientY - drag.y) * 0.004))
+      if (dragRot) {
+        yaw -= (e.clientX - drag.x) * 0.006
+        pitch = Math.max(0.35, Math.min(1.1, pitch + (e.clientY - drag.y) * 0.004))
+      } else panBy(e.clientX - drag.x, e.clientY - drag.y)
       drag = { x: e.clientX, y: e.clientY }
     }
     let downAt: [number, number] | null = null
@@ -2078,7 +2119,7 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       else closeRef.current() // tocar el piso vacío quita la selección (nombre, anillo y tarjeta)
     }
     const onUp = (e: PointerEvent) => { if (!fpOn) pick(e); pts.delete(e.pointerId); pinch = 0; drag = null }
-    const onWheel = (e: WheelEvent) => { e.preventDefault(); if (fpOn) return; zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
+    const onWheel = (e: WheelEvent) => { if (fpOn) { e.preventDefault(); return } if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoom = Math.max(0.6, Math.min(2.4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))) }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
@@ -2460,14 +2501,17 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       cur.tz += (f.tz - cur.tz) * 0.1
       cur.span += (f.span - cur.span) * 0.1
       const viewH = Math.max(cur.span * 0.5 + 1.5, (cur.span * 0.76) / aspect) / zoom
+      viewHNow = viewH
       camera.left = (-viewH * aspect) / 2
       camera.right = (viewH * aspect) / 2
       camera.top = viewH / 2
       camera.bottom = -viewH / 2
       camera.updateProjectionMatrix()
       const R = 80
-      camera.position.set(cur.tx + Math.sin(yaw) * Math.cos(pitch) * R, Math.sin(pitch) * R, cur.tz + Math.cos(yaw) * Math.cos(pitch) * R)
-      camera.lookAt(cur.tx, 0.8, cur.tz)
+      if (lastFcs !== fcs) { lastFcs = fcs; pan.x = 0; pan.z = 0 }
+      const ox = cur.tx + pan.x, oz = cur.tz + pan.z
+      camera.position.set(ox + Math.sin(yaw) * Math.cos(pitch) * R, Math.sin(pitch) * R, oz + Math.cos(yaw) * Math.cos(pitch) * R)
+      camera.lookAt(ox, 0.8, oz)
 
       actors.forEach((o) => {
         const s = st(o.id)
@@ -2672,6 +2716,8 @@ export function OfficeScene({ departments, focus, selectedId, statusOf, minutes,
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onUp)
       canvas.removeEventListener('wheel', onWheel)
+      window.removeEventListener('office-cam', onCamEvt)
+      window.removeEventListener('keydown', camKey)
       window.removeEventListener('keydown', kd)
       window.removeEventListener('keyup', ku)
       window.removeEventListener('blur', clearKeys)

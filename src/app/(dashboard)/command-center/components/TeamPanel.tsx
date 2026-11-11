@@ -147,7 +147,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
         const tone = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-500'
         const rows = team.agents.filter((a) => a.costMonth > 0).sort((a, b) => b.costMonth - a.costMonth)
         return (
-          <Box title="💰 Gasto de IA este mes" hint="Cálculo aproximado por tokens. Al llegar al tope, la IA se detiene sola hasta que lo subas.">
+          <Box title="💰 Gasto de IA este mes" hint="Aproximado. Al llegar al tope, la IA se detiene.">
             <div className="space-y-1">
               <div className="flex items-baseline justify-between text-sm text-zinc-200">
                 <span><b className="text-white">${spent.toFixed(2)}</b> de ${limit.toFixed(2)}</span>
@@ -203,7 +203,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Box title="🎯 Mezcla de contenido" hint="Qué tipos de post salieron en los últimos 30 días. La tanda del sábado elige los que menos han salido.">
+        <Box title="🎯 Mezcla de contenido" hint="Tipos de post de los últimos 30 días.">
           {(() => {
             const total = team.mix.reduce((a, b) => a + b.count, 0)
             return total === 0 ? <p className="text-sm text-zinc-500">Todavía no hay posts con tipo. Aparecerán con la próxima tanda.</p> : (
@@ -220,7 +220,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
           })()}
           {team.mixUntyped > 0 && <p className="text-[11px] text-zinc-500">{team.mixUntyped} posts anteriores no tienen tipo.</p>}
         </Box>
-        <Box title="🏆 Los que mejor funcionaron" hint="Por guardados, compartidos y comentarios. Reutilízalos 14 días después de publicarlos, con otro enfoque y los datos revisados.">
+        <Box title="🏆 Los que mejor funcionaron" hint="Por guardados, compartidos y comentarios.">
           {team.topPosts.length === 0 ? <p className="text-sm text-zinc-500">Aparecerán cuando lleguen las métricas (el paso de Make que sigue).</p> : (
             <ul className="space-y-2">
               {team.topPosts.map((p) => {
@@ -243,7 +243,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
         </Box>
       </div>
 
-      <Box title="📋 Qué hicieron" hint="Lo último que hizo cada agente, de más nuevo a más viejo.">
+      <Box title="📋 Qué hicieron" hint="Lo último de cada agente.">
         {team.activity.length === 0 ? <p className="text-sm text-zinc-500">Todavía no hay actividad registrada. Aparecerá cuando corran las tareas automáticas.</p> : (
           <ul className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
             {team.activity.map((a) => (
@@ -258,7 +258,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
       </>)}
 
       {mode === 'agents' && (<>
-      <Box title="🧠 Lo que aprendió el equipo" hint="Reglas que Fernanda y los demás siguen al escribir. Escríbelas tú o apágalas cuando ya no apliquen.">
+      <Box title="🧠 Lo que aprendió el equipo" hint="Reglas que siguen al escribir.">
         <div className="flex flex-wrap gap-2">
           <input value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="Ej: no uses signos de admiración en los títulos" maxLength={300} className="flex-1 min-w-[220px] bg-zinc-800/70 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-zinc-100" />
           <button
@@ -283,7 +283,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
       </Box>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Box title="💬 María: respuestas a comentarios" hint="Pega un comentario o mensaje y te propone 3 respuestas. No envía nada: tú copias la que te guste.">
+        <Box title="💬 María: respuestas a comentarios" hint="Pega un comentario y te da 3 respuestas. Tú copias la que quieras.">
           <div className="flex gap-2">
             <select value={network} onChange={(e) => setNetwork(e.target.value)} className="bg-zinc-800/70 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-zinc-200">
               {['Instagram', 'Facebook', 'LinkedIn', 'WhatsApp'].map((n) => <option key={n}>{n}</option>)}
@@ -308,7 +308,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
           )}
         </Box>
 
-        <Box title="🧾 Isabel: fechas límite de impuestos" hint="Busca en fuentes oficiales (IRS y similares) las fechas de los próximos 75 días para negocios pequeños e independientes.">
+        <Box title="🧾 Isabel: fechas límite de impuestos" hint="Fechas de impuestos de los próximos 75 días.">
           <button disabled={busy === 'isabel'} onClick={async () => { const d = (await call('/api/ceo/team/isabel', { method: 'POST', body: JSON.stringify({ companyId }) }, 'isabel')) as Team['deadlines']; if (d) { setDeadlines(d); await load() } }} className="px-3 py-1.5 rounded-lg text-sm text-indigo-200 border border-indigo-500/40 hover:bg-indigo-500/10 disabled:opacity-40">
             {busy === 'isabel' ? 'Buscando… (1 a 2 min)' : deadlines ? 'Actualizar fechas' : 'Buscar fechas'}
           </button>
@@ -328,7 +328,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
         </Box>
       </div>
 
-      <Box title={`📝 Luis · Blog de ${blog?.company || companies.find((c) => c.id === companyId)?.name || 'la empresa'}`} hint="Todo el blog de esta empresa en un solo lugar: conexión, perfil, artículos y envío. Todo llega como BORRADOR; tú lo revisas y lo publicas desde tu panel del blog.">
+      <Box title={`📝 Luis · Blog de ${blog?.company || companies.find((c) => c.id === companyId)?.name || 'la empresa'}`} hint="Conexión, artículos y envío. Todo llega como borrador.">
         <div className="space-y-1">
           <p className="text-[11px] uppercase tracking-wide text-zinc-500">1 · Conexión del blog</p>
         <ul className="space-y-3">
@@ -471,7 +471,7 @@ export function TeamPanel({ companies, initialCompanyId, mode = 'history' }: { c
         )}
       </Box>
 
-      <Box title="🎬 Tomás: prompts de video para Veo" hint="Elige un post y te prepara los prompts, clip por clip, para crear el reel en Veo. Tú generas los clips; él no crea el video.">
+      <Box title="🎬 Tomás: prompts de video para Veo" hint="Elige un post y te prepara los prompts para Veo.">
         <div className="space-y-1.5">
           <p className="text-xs text-zinc-300">Personaje de los videos <span className="text-zinc-500">(la misma descripción va en todos los clips, en inglés; sube también la misma foto de referencia en Veo)</span></p>
           <textarea value={character} onChange={(e) => setCharacter(e.target.value)} rows={3} maxLength={1200} placeholder="Ej: a friendly Latina woman in her mid-30s, shoulder-length dark brown wavy hair, warm brown eyes, navy blazer over a white top, gold stud earrings" className="w-full bg-zinc-800/70 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100" />

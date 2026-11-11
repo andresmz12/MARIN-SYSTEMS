@@ -279,7 +279,20 @@ export function OfficeView({ embedded = false }: { embedded?: boolean }) {
           >
             {full ? '✕ Salir' : '⛶ Pantalla completa'}
           </button>
-          <p className="absolute bottom-2 left-3 rounded bg-[#0d1220]/80 px-2 py-1 text-[11px] text-zinc-400">Arrastra para girar · rueda o pellizco para acercar · toca a un agente o a tu oficina</p>
+          {!walk && !followId && (
+            <div className="absolute bottom-10 right-3 flex flex-col items-center gap-1 rounded-xl border border-zinc-700 bg-[#0d1220]/85 p-2 text-zinc-100 select-none">
+              {[['up', '▲'], ['left', '◀'], ['right', '▶'], ['down', '▼']].map(([c, t]) => (
+                <button key={c} type="button" onPointerDown={(e) => { e.preventDefault(); const go = () => window.dispatchEvent(new CustomEvent('office-cam', { detail: c })); go(); const id = window.setInterval(go, 60); const stop = () => { window.clearInterval(id); window.removeEventListener('pointerup', stop) }; window.addEventListener('pointerup', stop) }}
+                  className={`h-8 w-8 rounded-md border border-zinc-600 text-xs hover:border-indigo-400 ${c === 'up' ? '' : ''}`} aria-label={`Mover ${c}`}>{t}</button>
+              ))}
+              <div className="flex gap-1">
+                {[['zout', '−'], ['zin', '+'], ['rotl', '↺'], ['rotr', '↻'], ['reset', '⌖']].map(([c, t]) => (
+                  <button key={c} type="button" onClick={() => window.dispatchEvent(new CustomEvent('office-cam', { detail: c }))} className="h-8 w-8 rounded-md border border-zinc-600 text-sm hover:border-indigo-400" title={c === 'reset' ? 'Centrar' : undefined}>{t}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="absolute bottom-2 left-3 rounded bg-[#0d1220]/80 px-2 py-1 text-[11px] text-zinc-400">Arrastra para mover · clic derecho o Shift+arrastrar para girar · Ctrl+rueda o dos dedos para acercar · toca a un agente</p>
         </div>
 
         <aside className="space-y-3">
