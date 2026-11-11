@@ -37,7 +37,8 @@ export async function PUT(req: NextRequest) {
   if (url && !/^(https:\/\/[^\s/]+|http:\/\/localhost(:\d+)?)$/i.test(url)) return NextResponse.json({ error: 'La dirección debe ser algo como https://miblog.com (sin ruta al final)' }, { status: 400 })
   if (b.mirrorFrom) {
     const src = await prisma.cEOCompany.findFirst({ where: { id: b.mirrorFrom, userId: u.userId }, select: { id: true } })
-    if (!src || src.id === company.id) return NextResponse.json({ error: 'La empresa de origen no es válida' }, { status: 400 })
+    // Puede ser otra empresa o la misma (lo que publica ISM va al blog de ISM).
+    if (!src) return NextResponse.json({ error: 'La empresa de origen no es válida' }, { status: 400 })
   }
   const existing = await prisma.brandProfile.findFirst({ where: { companyId: company.id } })
   const mirrorFrom = b.mirrorFrom || null

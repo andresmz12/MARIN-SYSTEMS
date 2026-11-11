@@ -74,7 +74,7 @@ De **11 PM a 7 AM (hora de Colombia)** la app no vigila las apps ni envía aviso
 ### Blogs de destino (mandar lo mismo a otro blog)
 
 - Cada empresa puede tener un blog (misma API: `POST /api/blog/posts`). La **dirección** se guarda en Command Center → Equipo → "Blogs de destino"; la **clave** (secreta, de solo borradores) va en Railway como `BLOG_API_KEY_<NOMBRE_DE_LA_EMPRESA>` (por ejemplo `BLOG_API_KEY_MY_PROFIT_AND_LOSS`).
-- **Espejo:** se elige de qué empresa copiar. Desde ese momento, cada post publicado en redes se manda tal cual como **borrador** al blog (sin IA; viñetas ✅/• pasan a lista, los hashtags a etiquetas, la imagen a portada, y se agrega el llamado a la acción del perfil si existe). Máximo 3 cada 30 minutos; no manda lo publicado antes de activarlo ni repite uno ya enviado. Textos de menos de 200 caracteres no se envían (el blog los rechaza).
+- **Espejo:** se elige de qué empresa copiar (puede ser otra o la misma: lo que publica ISM puede ir al blog de ISM). Desde ese momento, cada post publicado en redes se manda tal cual como **borrador** al blog (sin IA; viñetas ✅/• pasan a lista, los hashtags a etiquetas, la imagen a portada, y se agrega el llamado a la acción del perfil si existe). Máximo 3 cada 30 minutos; no manda lo publicado antes de activarlo ni repite uno ya enviado. Textos de menos de 200 caracteres no se envían (el blog los rechaza).
 - **Envío manual:** en "Publicados esta semana", el menú **📰 Enviar al blog…** manda ese post al blog elegido.
 
 ### Artículos listos (los escribe el dueño con otra IA)

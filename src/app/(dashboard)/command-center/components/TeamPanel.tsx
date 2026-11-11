@@ -334,7 +334,7 @@ export function TeamPanel({ companies }: { companies: CEOCompany[] }) {
                   <input value={url} onChange={(ev) => setDestEdit((x) => ({ ...x, [c.id]: { ...x[c.id], url: ev.target.value } }))} placeholder="Dirección del blog, ej: https://miblog.com" className="flex-1 min-w-[220px] bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200" />
                   <select value={from} onChange={(ev) => setDestEdit((x) => ({ ...x, [c.id]: { ...x[c.id], from: ev.target.value } }))} className="bg-zinc-800/70 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200" title="Qué empresa publica lo que se va a copiar a este blog">
                     <option value="">No copiar automáticamente</option>
-                    {dest.filter((o) => o.id !== c.id).map((o) => <option key={o.id} value={o.id}>Copiar lo que publique {o.name}</option>)}
+                    {dest.map((o) => <option key={o.id} value={o.id}>{o.id === c.id ? `Copiar lo que publique ${o.name} (esta misma empresa)` : `Copiar lo que publique ${o.name}`}</option>)}
                   </select>
                   <button
                     disabled={!dirty || busy === `dest-${c.id}`}
