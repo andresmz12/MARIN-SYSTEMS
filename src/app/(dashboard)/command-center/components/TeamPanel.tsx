@@ -48,7 +48,8 @@ function Box({ title, hint, children }: { title: string; hint?: string; children
 
 export function TeamPanel({ companies, initialCompanyId }: { companies: CEOCompany[]; initialCompanyId?: string }) {
   const { showToast } = useToast()
-  const [companyId, setCompanyId] = useState(initialCompanyId && companies.some((c) => c.id === initialCompanyId) ? initialCompanyId : companies[0]?.id ?? '')
+  // Si no viene una empresa elegida, se abre en Reports Systems (donde está la cola de artículos de siempre) y, si no existe, en la primera.
+  const [companyId, setCompanyId] = useState(initialCompanyId && companies.some((c) => c.id === initialCompanyId) ? initialCompanyId : (companies.find((c) => /reports\s*systems/i.test(c.name)) ?? companies[0])?.id ?? '')
   const [team, setTeam] = useState<Team | null>(null)
   const [error, setError] = useState(false)
   const [lesson, setLesson] = useState('')
