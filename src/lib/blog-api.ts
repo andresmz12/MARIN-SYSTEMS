@@ -7,13 +7,16 @@ export interface BlogTarget { baseUrl: string; key: string; envVar: string }
 export const blogEnvName = (companyName: string) =>
   `BLOG_API_KEY_${companyName.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`
 
+const ISM_ALIAS = /\bism\b/i
 const LEGACY_NAME = () => (process.env.BLOG_COMPANY_NAME || 'Reports Systems').toLowerCase()
 
 /** Dirección y clave del blog de una empresa; null si todavía no está la clave en Railway. */
 export function resolveBlogTarget(company: { name: string }, profile: { blogApiUrl?: string | null } | null): BlogTarget | null {
   const envVar = blogEnvName(company.name)
   const legacy = company.name.toLowerCase().includes(LEGACY_NAME())
-  const key = process.env[envVar] || (legacy ? process.env.BLOG_API_KEY : undefined)
+  // La clave de MyProfit (el sistema de ISM) puede estar guardada con el nombre de la app: ISM también la acepta.
+  const alias = ISM_ALIAS.test(company.name) ? process.env.BLOG_API_KEY_MY_PROFIT_AND_LOSS : undefined
+  const key = process.env[envVar] || (legacy ? process.env.BLOG_API_KEY : undefined) || alias
   const url = profile?.blogApiUrl || (legacy ? process.env.BLOG_API_URL || 'https://reportssystems.com' : '')
   if (!key || !url) return null
   return { baseUrl: url.replace(/\/$/, ''), key, envVar }
