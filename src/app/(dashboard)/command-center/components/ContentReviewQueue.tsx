@@ -19,6 +19,8 @@ interface Props {
   company: CEOCompany
   /** Lleva a la pestaña Empresas (donde se crea el perfil de marca). */
   onOpenCompanies?: () => void
+  /** Contenido de la sub-pestaña Equipo. */
+  teamSlot?: React.ReactNode
 }
 
 interface AutoState {
@@ -35,8 +37,9 @@ function localImagePath(url: string): string {
   try { return new URL(url).pathname } catch { return url }
 }
 
-export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
+export function ContentReviewQueue({ company, onOpenCompanies, teamSlot }: Props) {
   const { showToast } = useToast()
+  const [view, setView] = useState<'approve' | 'sched' | 'auto' | 'team'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'team' ? 'team' : 'approve'))
   const [posts, setPosts] = useState<GeneratedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -800,6 +803,25 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
 
   return (
     <div className="space-y-5">
+      <div className="flex gap-2 overflow-x-auto pb-1 [&>button]:shrink-0">
+        {([
+          ['approve', '✅ Por aprobar', pending.length, false],
+          ['sched', '📅 Programados y publicados', scheduled.length + failed.length, failed.length > 0],
+          ['auto', '🤖 Automático y marca', 0, !setupDone],
+          ['team', '👥 Equipo', 0, false],
+        ] as [typeof view, string, number, boolean][]).map(([k, label, count, warn]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`relative whitespace-nowrap rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${view === k ? 'border-indigo-400/60 bg-indigo-500/20 text-indigo-100' : 'border-zinc-800 bg-zinc-900/50 text-zinc-300 hover:border-zinc-600'}`}
+          >
+            {label}
+            {count > 0 && <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${warn ? 'bg-red-500/30 text-red-200' : 'bg-zinc-700 text-zinc-100'}`}>{count}</span>}
+            {count === 0 && warn && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-amber-400" />}
+          </button>
+        ))}
+      </div>
+      {view === 'auto' && (<>
       {!setupDone ? (
         <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -1144,7 +1166,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
       )}
         </div>
       </details>
+      </>)}
 
+      {view === 'approve' && (<>
       {missingImages.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
           <div className="flex-1 min-w-[200px]">
@@ -1639,7 +1663,9 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           ))}
         </div>
       )}
+      </>)}
 
+      {view === 'sched' && (<>
       <PublishBoard posts={posts} onRetry={publishNow} busyId={busyId} canPublish={publishOn} publishPlatforms={publishPlatforms} />
 
       {scheduled.length > 0 && (
@@ -1824,6 +1850,8 @@ export function ContentReviewQueue({ company, onOpenCompanies }: Props) {
           </div>
         )
       })()}
+      </>)}
+      {view === 'team' && teamSlot}
     </div>
   )
 }
