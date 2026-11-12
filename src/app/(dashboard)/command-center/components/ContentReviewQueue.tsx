@@ -39,6 +39,7 @@ function localImagePath(url: string): string {
 
 export function ContentReviewQueue({ company, onOpenCompanies, teamSlot }: Props) {
   const { showToast } = useToast()
+  const [ttTick, setTtTick] = useState(0)
   const [view, setView] = useState<'approve' | 'sched' | 'auto' | 'team'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'team' ? 'team' : 'approve'))
   const [posts, setPosts] = useState<GeneratedPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -1666,6 +1667,47 @@ export function ContentReviewQueue({ company, onOpenCompanies, teamSlot }: Props
       </>)}
 
       {view === 'sched' && (<>
+      {(() => {
+        // Un contenido por fila (primera tarjeta del grupo), aunque ya esté publicado en otras redes.
+        const seen = new Set<string>()
+        const rows = posts
+          .filter((p) => !['rejected', 'failed'].includes(p.status) && p.platform !== 'tiktok' && !seen.has(p.groupId ?? p.id) && !!seen.add(p.groupId ?? p.id))
+          .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+          .slice(0, 15)
+        if (rows.length === 0) return null
+        const doneKey = 'tiktok-manual-done'
+        const readDone = (): string[] => { try { return JSON.parse(localStorage.getItem(doneKey) ?? '[]') } catch { return [] } }
+        const toggleDone = (id: string) => { try { const d = readDone(); localStorage.setItem(doneKey, JSON.stringify(d.includes(id) ? d.filter((x) => x !== id) : [...d, id])) } catch {} setTtTick((n) => n + 1) }
+        const done = readDone()
+        const imgs = (p: GeneratedPost) => (p.slideImageUrls?.length ? p.slideImageUrls : p.imageUrl ? [p.imageUrl] : [])
+        const download = async (p: GeneratedPost) => {
+          const list = imgs(p)
+          for (let i = 0; i < list.length; i++) {
+            const a = document.createElement('a')
+            a.href = localImagePath(list[i]); a.download = `tiktok-${i + 1}.jpg`
+            document.body.appendChild(a); a.click(); a.remove()
+            await new Promise((r) => setTimeout(r, 350))
+          }
+        }
+        return (
+          <div className="space-y-2 rounded-xl border border-pink-500/30 bg-pink-500/5 p-4" data-tt={ttTick}>
+            <h3 className="text-sm font-semibold text-pink-200">🎵 Sacar info para TikTok (manual)</h3>
+            <p className="text-xs text-zinc-400">Sirve para cualquier post, aunque ya esté publicado en otras redes. Copia el texto, descarga las imágenes y súbelo en TikTok.</p>
+            {rows.map((post) => {
+              const n = imgs(post).length
+              const isDone = done.includes(post.groupId ?? post.id)
+              return (
+                <div key={post.id} className={`flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 ${isDone ? 'opacity-60' : ''}`}>
+                  <span className="min-w-[160px] flex-1 truncate text-sm text-zinc-200">{isDone ? '✅ ' : ''}{post.topic}<span className="ml-2 text-[11px] text-zinc-500">{post.status === 'published' ? 'publicado' : post.status === 'pending_review' ? 'por aprobar' : 'programado'}</span></span>
+                  <button onClick={() => copyText(composePostText('tiktok', post.copy, post.hashtags), 'Texto copiado')} className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500">Copiar texto</button>
+                  {n > 0 && <button onClick={() => download(post)} className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500">Descargar {n > 1 ? `${n} imágenes` : 'imagen'}</button>}
+                  <button onClick={() => toggleDone(post.groupId ?? post.id)} className="rounded-md border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10">{isDone ? 'Quitar ✓' : 'Ya lo subí'}</button>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
       <PublishBoard posts={posts} onRetry={publishNow} busyId={busyId} canPublish={publishOn} publishPlatforms={publishPlatforms} />
 
       {scheduled.length > 0 && (
