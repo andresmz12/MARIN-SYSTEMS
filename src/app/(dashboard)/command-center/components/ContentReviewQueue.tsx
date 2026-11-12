@@ -697,7 +697,7 @@ export function ContentReviewQueue({ company, onOpenCompanies, teamSlot }: Props
       if (!res.ok) { showToast(d.error ?? 'No se pudo corregir', 'error'); return }
       setEdits((e) => { const { [id]: _, ...rest } = e; return rest })
       setImgText((m) => { const { [id]: _, ...rest } = m; return rest })
-      showToast(d.remaining?.length ? `Corregido, pero quedan ${d.remaining.length} puntos: revísalos.` : 'Corregido. Lee el texto y la imagen antes de aprobar.', d.remaining?.length ? 'info' : 'success')
+      showToast(d.remaining?.length ? `Corregido, pero aún queda${d.remaining.length === 1 ? '' : 'n'} ${d.remaining.length}: ${d.remaining.map((r) => r.message).join('; ').slice(0, 160)}. Edítalo tú o vuelve a pulsar Corregir con IA.` : 'Corregido. Lee el texto y la imagen antes de aprobar.', d.remaining?.length ? 'info' : 'success')
       await load()
     } catch {
       showToast('No se pudo corregir', 'error')
