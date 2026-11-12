@@ -33,7 +33,7 @@ async function handlePOST(req: NextRequest, { params }: { params: { id: string }
     const guidance = imageOnly
       ? `Este post YA está escrito y aprobado en su contenido. Mantén exactamente los mismos datos y el mismo tema: "${post.topic}". Texto del post: "${post.copy.slice(0, 900)}".${note?.trim() ? ` Ajuste pedido para la imagen: ${note.trim().slice(0, 300)}.` : ''} Solo necesito una propuesta distinta para la imagen (escena y textos de la imagen).`
       : note?.trim()
-      ? `Reescribe este post: "${post.topic}". Ajuste pedido por el dueño: ${note.trim().slice(0, 300)}.`
+      ? `Reescribe este post: "${post.topic}". Ajuste pedido por el dueño: ${note.trim().slice(0, 1500)}.`
       : `Reescribe este post con un enfoque distinto sobre: "${post.topic}".`
 
     const references = referenceLines(profile.references)

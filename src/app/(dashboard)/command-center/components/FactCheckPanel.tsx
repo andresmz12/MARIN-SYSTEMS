@@ -32,6 +32,31 @@ export function FactCheckPanel({ post, onDone }: { post: GeneratedPost; onDone: 
     }
   }
 
+  // Reescribe el post corrigiendo lo que el verificador marcó, y lo vuelve a verificar.
+  async function fix() {
+    if (!fc) return
+    const bad = fc.items.filter((it) => it.status !== 'confirmado')
+    const note = [
+      'Corrige el post según la verificación de datos. No cambies lo que está confirmado.',
+      fc.summary ? `Resumen del verificador: ${fc.summary}` : '',
+      ...bad.map((it) => `- ${it.claim}${it.note ? ` (${it.note})` : ''}`),
+      'Usa solo datos de una misma temporada/año tributario, quita o suaviza lo que no tenga fuente oficial confirmada y no inventes cifras.',
+    ].filter(Boolean).join('\n')
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/ceo/content/${post.id}/regenerate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) })
+      const d = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) throw new Error(d.error ?? 'No se pudo corregir')
+      await fetch(`/api/ceo/content/${post.id}/fact-check`, { method: 'POST' }).catch(() => {})
+      showToast('Post corregido y verificado de nuevo. Revísalo.', 'success')
+      onDone()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo corregir', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (!fc) {
     return (
       <button
@@ -52,6 +77,11 @@ export function FactCheckPanel({ post, onDone }: { post: GeneratedPost; onDone: 
           {busy ? 'Verificando…' : 'Verificar de nuevo'}
         </button>
       </div>
+      {fc.verdict !== 'ok' && (
+        <button onClick={fix} disabled={busy} className="w-full rounded-md border border-current px-3 py-2 text-sm font-semibold hover:bg-white/5 disabled:opacity-50">
+          {busy ? 'Corrigiendo… (1 a 2 min)' : '✨ Corregir con estas observaciones'}
+        </button>
+      )}
       {fc.summary && <p className="text-xs text-zinc-300">{fc.summary}</p>}
       <ul className="space-y-1">
         {fc.items.map((it, i) => (
