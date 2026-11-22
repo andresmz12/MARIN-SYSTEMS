@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       if (groups.length === 0) return reply({ state: 'idle', message: 'No hay posts pendientes sin verificar: todo está al día.' })
       running.add(agentId)
       void runLogged('manual-fact-check', () => runAs('felipe', async () => {
-        for (const g of groups) await factCheckGroup(g)
+        for (const g of groups) await factCheckGroup(g, { autoFix: true })
         return { company: company.name, groups: groups.length }
       }, companyId)).catch((e) => console.error('[agents/run] verificador falló:', e)).finally(() => running.delete(agentId))
       return reply({ state: 'started', message: `Está verificando los datos de ${groups.length} ${groups.length === 1 ? 'contenido' : 'contenidos'}…` })

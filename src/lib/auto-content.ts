@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto'
 import { getISOWeek } from 'date-fns'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import type { GeneratedContent } from '@/lib/ai'
+import { generateMarketingContent, type GeneratedContent } from '@/lib/ai'
+import { imagePlatformOf } from '@/lib/image-prompt'
 import { factCheckPost } from '@/lib/agents-ai'
 import { agentEnabled, logActivity, runAs } from '@/lib/agent-ledger'
 import { knowledgeFor } from '@/lib/knowledge'
@@ -96,7 +97,7 @@ export async function latestInsights(companyId: string): Promise<string[]> {
  * Verificador de datos sobre un grupo de posts ya creado: guarda el resultado en todas las filas
  * del grupo. Es de mejor esfuerzo: si falla, el post sigue su camino y el dueño lo ve sin verificar.
  */
-export async function factCheckGroup(groupId: string): Promise<void> {
+export async function factCheckGroup(groupId: string, opts: { autoFix?: boolean } = {}): Promise<void> {
   const post = await prisma.generatedPost.findFirst({
     where: { groupId },
     include: { company: { select: { name: true } } },
@@ -123,4 +124,53 @@ export async function factCheckGroup(groupId: string): Promise<void> {
     where: { groupId },
     data: { factCheck: result as never, factCheckedAt: new Date() },
   })
+  // Si hay datos incorrectos o dudosos, el post se corrige solo (una vez) y se vuelve a verificar.
+  if (opts.autoFix && result.verdict !== 'ok' && post.status === 'pending_review') {
+    const fixed = await autoFixGroup(groupId, result).catch((e) => { console.error('[auto-fix] falló:', e); return false })
+    if (fixed) await factCheckGroup(groupId, { autoFix: false })
+  }
+}
+
+type CheckResult = NonNullable<Awaited<ReturnType<typeof factCheckPost>>>
+
+/** Reescribe el post corrigiendo lo que marcó el verificador. Guarda la versión anterior. Devuelve true si cambió algo. */
+async function autoFixGroup(groupId: string, check: CheckResult): Promise<boolean> {
+  const post = await prisma.generatedPost.findFirst({ where: { groupId }, include: { company: true, brandProfile: true } })
+  if (!post) return false
+  const bad = check.items.filter((it) => it.status !== 'confirmado')
+  const note = [
+    'Corrige el post según la verificación de datos. No cambies lo que está confirmado.',
+    check.summary ? `Resumen del verificador: ${check.summary}` : '',
+    ...bad.map((it) => `- ${it.claim}${it.note ? ` (${it.note})` : ''}`),
+    'Usa solo datos de una misma temporada/año tributario, revisa que los ejemplos con cifras sean matemáticamente correctos, quita o suaviza lo que no tenga fuente oficial confirmada y no inventes cifras.',
+  ].filter(Boolean).join('\n')
+  const profile = post.brandProfile
+  const references = referenceLines(profile.references)
+  const feedback = await recentFeedback(post.companyId)
+  const generated = await runAs('fernanda', () => generateMarketingContent({
+    companyName: post.company.name,
+    platform: imagePlatformOf(post),
+    contentType: post.contentType,
+    topic: `Reescribe este post: "${post.topic}". Ajuste pedido: ${note.slice(0, 1500)}.${post.sourceUrl ? ` Es una noticia oficial: ${post.sourceUrl}. No inventes datos.` : ''}`,
+    research: true,
+    tone: profile.tone,
+    targetAudience: profile.targetAudience,
+    contentPillars: Array.isArray(profile.contentPillars) ? (profile.contentPillars as string[]) : [],
+    references: references.length > 0 ? references : undefined,
+    feedback: feedback.length > 0 ? feedback : undefined,
+    voiceSamples: Array.isArray(profile.voiceSamples) ? (profile.voiceSamples as string[]) : undefined,
+    forbiddenWords: Array.isArray(profile.forbiddenWords) ? (profile.forbiddenWords as string[]) : undefined,
+  }))
+  if (generated.copy.includes('[Contenido de ')) return false // la IA falló: el post queda como estaba
+  const previousVersion = { copy: post.copy, hashtags: post.hashtags, cta: post.cta, contentNotes: post.contentNotes, imagePrompt: post.imagePrompt, imageText: post.imageText ?? null, facts: post.facts, topic: post.topic, savedAt: new Date().toISOString() }
+  await prisma.generatedPost.updateMany({
+    where: { groupId, status: 'pending_review' },
+    data: {
+      previousVersion: previousVersion as never,
+      copy: generated.copy, hashtags: generated.hashtags, cta: generated.cta, contentNotes: generated.contentNotes,
+      imagePrompt: generated.imagePrompt, imageText: (generated.imageText ?? undefined) as never, facts: generated.facts,
+    },
+  })
+  await logActivity('felipe', 'fact-check', `Corrigió solo «${post.topic.slice(0, 60)}» tras la verificación (${bad.length} observaciones)`, { companyId: post.companyId })
+  return true
 }

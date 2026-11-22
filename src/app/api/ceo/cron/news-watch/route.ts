@@ -183,7 +183,7 @@ async function handler(req: Request) {
             })
           await prisma.generatedPost.createMany({ data: drafts })
           const gid = drafts[0]?.groupId
-          if (gid) await factCheckGroup(gid).catch((e) => console.error('[cron/news-watch] verificación falló:', e))
+          if (gid) await factCheckGroup(gid, { autoFix: true }).catch((e) => console.error('[cron/news-watch] verificación falló:', e))
           created += platforms.length
           const pending = await prisma.generatedPost.count({ where: { companyId: profile.companyId, status: 'pending_review' } })
           const notify = await sendContentReadyEmail({ companyName: name, count: 1, pendingTotal: pending, newsTitle: item.title })

@@ -176,7 +176,7 @@ async function handler(req: Request) {
         const groups = Array.from(new Set(drafts.map((d) => d.groupId).filter((g): g is string => !!g)))
         for (const g of groups) {
           if (Date.now() - startedAt > FACT_CHECK_BUDGET_MS) break
-          await factCheckGroup(g).catch((e) => console.error('[cron/auto-content] verificación falló:', e))
+          await factCheckGroup(g, { autoFix: true }).catch((e) => console.error('[cron/auto-content] verificación falló:', e))
         }
 
         if (created > 0) {

@@ -61,7 +61,7 @@ async function handlePOST(_req: NextRequest, { params }: { params: { id: string 
   })
   await prisma.generatedPost.createMany({ data: drafts })
   const gid = drafts[0]?.groupId
-  if (gid) await factCheckGroup(gid).catch((e) => console.error('[recycle] verificación falló:', e))
+  if (gid) await factCheckGroup(gid, { autoFix: true }).catch((e) => console.error('[recycle] verificación falló:', e))
   return NextResponse.json({ ok: true, scheduledDate: slot.toISOString(), topic: generated.topic })
 }
 
