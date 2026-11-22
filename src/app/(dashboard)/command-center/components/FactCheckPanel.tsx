@@ -13,7 +13,7 @@ const VERDICT = {
 const ITEM_ICON: Record<string, string> = { confirmado: '✅', dudoso: '⚠️', incorrecto: '⛔', sin_fuente: '❔' }
 
 // Resultado del agente verificador de datos de un post, con botón para (re)verificar.
-export function FactCheckPanel({ post, onDone }: { post: GeneratedPost; onDone: () => void }) {
+export function FactCheckPanel({ post, onDone, autoFix = true }: { post: GeneratedPost; onDone: () => void; autoFix?: boolean }) {
   const { showToast } = useToast()
   const [busy, setBusy] = useState(false)
   const fc = post.factCheck
@@ -22,8 +22,10 @@ export function FactCheckPanel({ post, onDone }: { post: GeneratedPost; onDone: 
     setBusy(true)
     try {
       const res = await fetch(`/api/ceo/content/${post.id}/fact-check`, { method: 'POST' })
-      const d = await res.json().catch(() => ({})) as { error?: string }
+      const d = await res.json().catch(() => ({})) as { error?: string; factCheck?: NonNullable<GeneratedPost['factCheck']> }
       if (!res.ok) throw new Error(d.error ?? 'No se pudo verificar')
+      // Si encontró datos malos o dudosos, los corrige solo (una vez) y vuelve a verificar.
+      if (d.factCheck && d.factCheck.verdict !== 'ok' && autoFix) { await fix(d.factCheck); return }
       onDone()
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'No se pudo verificar', 'error')
@@ -33,7 +35,8 @@ export function FactCheckPanel({ post, onDone }: { post: GeneratedPost; onDone: 
   }
 
   // Reescribe el post corrigiendo lo que el verificador marcó, y lo vuelve a verificar.
-  async function fix() {
+  async function fix(fcIn?: NonNullable<GeneratedPost['factCheck']>) {
+    const fc = fcIn ?? post.factCheck
     if (!fc) return
     const bad = fc.items.filter((it) => it.status !== 'confirmado')
     const note = [
@@ -78,7 +81,7 @@ export function FactCheckPanel({ post, onDone }: { post: GeneratedPost; onDone: 
         </button>
       </div>
       {fc.verdict !== 'ok' && (
-        <button onClick={fix} disabled={busy} className="w-full rounded-md border border-current px-3 py-2 text-sm font-semibold hover:bg-white/5 disabled:opacity-50">
+        <button onClick={() => fix()} disabled={busy} className="w-full rounded-md border border-current px-3 py-2 text-sm font-semibold hover:bg-white/5 disabled:opacity-50">
           {busy ? 'Corrigiendo… (1 a 2 min)' : '✨ Corregir con estas observaciones'}
         </button>
       )}
